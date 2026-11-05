@@ -40,8 +40,11 @@ const PERSONNES = [
 // 1 et 2. Iris Ombrelle, réservée à la table 1 pour la soirée, y anime à
 // chaque tour ; Théo Pervenche, réservé à la table 2 au seul tour 2, y anime
 // ce tour-là. organisations : false pour une seule organisation ;
-// etiquettes : false pour aucune ; titres : false pour aucun animateur.
-function chargeAnimateurs({ organisations = true, etiquettes = true, titres = true } = {}) {
+// etiquettes : false pour aucune ; titres : false pour aucun animateur ;
+// seul : true pour un seul titre, celui de la table 1, qu'Iris Ombrelle
+// tient au seul tour 1, où elle seule est présente, les huit autres ne
+// venant qu'aux tours 2 et 3 — elle anime, et personne n'est concerné.
+function chargeAnimateurs({ organisations = true, etiquettes = true, titres = true, seul = false } = {}) {
   const charge = creerCharge({ id: 'evt-animateurs', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 3 });
   charge.participants = PERSONNES.map(([nom, prenom, organisation, liste], rang) => ({
     id: rang + 1,
@@ -61,6 +64,11 @@ function chargeAnimateurs({ organisations = true, etiquettes = true, titres = tr
       { participant: 1, table: 1, siege: null, portee: 'tous', tour: null },
       { participant: 2, table: 2, siege: null, portee: 'tour', tour: 2 },
     ];
+  }
+  if (seul) {
+    charge.titres = [{ table: 1, siege: 1, libelle: 'Animation' }];
+    charge.reservations = [{ participant: 1, table: 1, siege: null, portee: 'tour', tour: 1 }];
+    for (const participant of charge.participants) participant.presence = participant.id === 1 ? [1] : [2, 3];
   }
   charge.reglages.rencontrerAnimateurs = true;
   charge.prochainsIds = { participant: 10, table: 4, proposition: 1 };
@@ -93,6 +101,9 @@ describe('animateurs rencontrés : le profil trié (§ 12.13, B22, D37)', () => 
     forge.animateurs.profil = null;
     forge.animateurs.repartition = null;
     assert.deepEqual(modeleAnimateurs(forge, t), { cas: 'aucun' });
+    const seul = detailDe({ seul: true });
+    assert.equal(seul.animateurs.profil, null);
+    assert.deepEqual(modeleAnimateurs(seul, t), { cas: 'aucun' });
     assert.equal(modeleAnimateurs(null, t), null);
   });
 
@@ -163,9 +174,25 @@ describe('animateurs rencontrés : le profil trié (§ 12.13, B22, D37)', () => 
 });
 
 describe('diversité par animateur : la soirée en graphique, chaque tour au jumeau (§ 12.13, B22, D38)', () => {
-  test('sans animateur, la vue cède la place à sa phrase', () => {
-    assert.deepEqual(modeleDiversite(detailDe({ titres: false }), t), { cas: 'aucunAnimateur' });
+  test('sans animateur, ou sans personne concernée, la vue cède la place à sa phrase', () => {
+    assert.deepEqual(modeleDiversite(detailDe({ titres: false }), t), { cas: 'aucun' });
+    // Un animateur seul présent au tour qu'il anime : la diversité porte sa
+    // ligne, mais personne n'est concerné par les animateurs.
+    const seul = detailDe({ seul: true });
+    assert.equal(seul.animateurs.profil, null);
+    assert.deepEqual(seul.animateurs.diversite.lignes.map(({ id }) => id), [1]);
+    assert.deepEqual(modeleDiversite(seul, t), { cas: 'aucun' });
+    const forge = structuredClone(detailDe());
+    forge.animateurs.profil = null;
+    forge.animateurs.repartition = null;
+    assert.deepEqual(modeleDiversite(forge, t), { cas: 'aucun' });
     assert.equal(modeleDiversite(null, t), null);
+  });
+
+  test('les deux vues cèdent la place à la même phrase, qui nomme les deux cas', () => {
+    assert.equal(t('qualite.diversite.aucun'), t('qualite.animateurs.aucun'));
+    assert.match(t('qualite.diversite.aucun'), /concernée/);
+    assert.match(t('qualite.diversite.aucun'), /aucun animateur/);
   });
 
   test('deux colonnes juxtaposées, organisations puis étiquettes, chacune son axe ; les valeurs de la soirée ; le moins varié en tête', () => {

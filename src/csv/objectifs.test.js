@@ -4,9 +4,10 @@
 // Épreuves du CSV des objectifs de table (§ 10.4, A19, A20, A21) : la table
 // des en-têtes et son association, l'aperçu et ses refus globaux, les refus
 // d'une ligne dans l'ordre de A20, la règle lue dans sa liste fermée, la
-// réconciliation des étiquettes, l'import appliqué selon le mode, l'export
-// et l'aller-retour, le fichier d'exemple et la boucle de son CSV des refus,
-// la ligne à remplir, que l'import passe, et le modèle à télécharger.
+// réconciliation des étiquettes, l'import appliqué selon le mode et refusé
+// sous un aperçu calculé pour un autre nombre de tours, l'export et
+// l'aller-retour, le fichier d'exemple et la boucle de son CSV des refus, la
+// ligne à remplir, que l'import passe, et le modèle à télécharger.
 // Les noms, les étiquettes et les événements sont inventés.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -186,7 +187,7 @@ describe('objectifs : la table des en-têtes (§ 10.4)', () => {
 });
 
 describe('objectifs : les refus globaux de l’aperçu (§ 10.1, § 10.4)', () => {
-  test('les refus du § 10.1 hors NOM_NON_ASSOCIE, chacun sans ligne ni fusion, le mode gardé', () => {
+  test('les refus du § 10.1 hors NOM_NON_ASSOCIE, chacun sans ligne ni fusion, le mode et le nombre de tours gardés', () => {
     const cas = [
       ['table;objectif\r\n1;fin\u{0000}ance\r\n', 'CARACTERE_NUL', null],
       ['', 'AUCUN_ENTETE', null],
@@ -201,6 +202,7 @@ describe('objectifs : les refus globaux de l’aperçu (§ 10.1, § 10.4)', () =
       assert.equal(apercu.refusGlobal, code, JSON.stringify(texte));
       assert.equal(apercu.refusGlobalLigne, ligne, code);
       assert.equal(apercu.mode, 'remplacer');
+      assert.equal(apercu.tours, 4, code);
       for (const cle of ['lignes', 'fusionsEtiquettes', 'multilignes']) assert.deepEqual(apercu[cle], [], `${code} ${cle}`);
       if (code !== 'AUCUNE_LIGNE_VALIDE') assert.deepEqual(apercu.refusees, [], code);
     }
@@ -520,6 +522,39 @@ describe('objectifs : ce que remplacer touche, et l’import appliqué (§ 10.4)
     leve(() => appliquerImportObjectifs(charge, ambigu, 'mettreAJour'), 'AMBIGUITE', { champs: ['regle'] });
     assert.throws(() => appliquerImportObjectifs(charge, valide, 'remplacer'), TypeError);
     assert.throws(() => appliquerImportObjectifs(charge, valide, 'ajouter'), TypeError);
+  });
+
+  test("un aperçu calculé pour un autre nombre de tours, la colonne tour associée : APERCU_TOURS_CHANGES, après PLAN_BLOQUE, avant le refus global de l'aperçu ; sans colonne tour, l'aperçu s'applique", () => {
+    const leve = (appel, code, details, message) =>
+      assert.throws(
+        appel,
+        (erreur) => erreur instanceof ErreurCsv && erreur.code === code && JSON.stringify(erreur.details) === JSON.stringify(details),
+        message,
+      );
+    const quatre = evenement();
+    const avecTours = (tours, etat = 'brouillon') => ({ ...quatre, evenement: { ...quatre.evenement, tours, etat } });
+    for (const mode of MODES_IMPORT_OBJECTIFS) {
+      // Lu sous quatre tours, le tour 4 est admis ; sous deux, il sortirait
+      // de la soirée et rendrait le fichier illisible.
+      const apercu = apercevoirObjectifs(csv('table;tour;objectif', '1;4;finance'), quatre, { mode });
+      assert.equal(apercu.tours, 4, mode);
+      leve(() => appliquerImportObjectifs(avecTours(2), apercu, mode), 'APERCU_TOURS_CHANGES', { tours: 2, toursApercu: 4 }, mode);
+      const refuse = apercevoirObjectifs(csv('table;tour;objectif', '9;4;finance'), quatre, { mode });
+      assert.equal(refuse.refusGlobal, 'AUCUNE_LIGNE_VALIDE', mode);
+      assert.equal(refuse.tours, 4, mode);
+      leve(() => appliquerImportObjectifs(avecTours(2), refuse, mode), 'APERCU_TOURS_CHANGES', { tours: 2, toursApercu: 4 }, mode);
+      leve(() => appliquerImportObjectifs(avecTours(2, 'bloque'), apercu, mode), 'PLAN_BLOQUE', {}, mode);
+      // Lu sous deux tours, le tour 3 est refusé ; sous quatre, il ne l'est
+      // plus : l'aperçu ne vaut pas davantage.
+      const deux = apercevoirObjectifs(csv('table;tour;objectif', '1;1;finance', '1;3;Montréal'), avecTours(2), { mode });
+      assert.deepEqual(refus(deux), [[3, 'TOUR_HORS_SOIREE']], mode);
+      leve(() => appliquerImportObjectifs(quatre, deux, mode), 'APERCU_TOURS_CHANGES', { tours: 4, toursApercu: 2 }, mode);
+      const sansTour = apercevoirObjectifs(csv('table;objectif', '1;finance'), quatre, { mode });
+      assert.equal(appliquerImportObjectifs(avecTours(2), sansTour, mode).resume.ajoutes, 1, mode);
+      assert.deepEqual(appliquerImportObjectifs(quatre, apercu, mode).charge.tables[0].objectifs, [
+        { portee: 'tour', tour: 4, regle: null, etiquettes: ['finance'] },
+      ]);
+    }
   });
 });
 

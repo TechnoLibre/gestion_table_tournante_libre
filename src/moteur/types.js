@@ -38,6 +38,16 @@
  *                                   rapporte aux organisations des présents ;
  *                                   un nom qu'aucun présent ne porte, ou celui
  *                                   de sa propre organisation, ne pose rien
+ * @property {string[]} [inclusionsOrganisation]  organisations dont la
+ *                                   personne doit rencontrer un membre au
+ *                                   moins une fois (§ 4) ; absent = aucune.
+ *                                   L'égalité de chaînes les rapporte aux
+ *                                   organisations des présents ; la sienne ne
+ *                                   pose rien
+ * @property {number[]} [inclusionsParticipant]  identifiants des autres
+ *                                   participants, exclus compris, que la
+ *                                   personne doit rencontrer au moins une
+ *                                   fois (§ 4) ; absent = aucun
  *
  * @typedef {Object} Table
  * @property {number} id             entier ≥ 1, unique
@@ -108,6 +118,23 @@
  *                                   nulle
  * @property {number} pairesEnConflit   paires de présents en conflit ; 0 rend
  *                                   le critère des conflits sans objet
+ * @property {Int32Array} inclusionDebut  N + 1 cases : les lignes actives
+ *                                   de la personne p vont, dans
+ *                                   inclusionCible, de inclusionDebut[p] à
+ *                                   inclusionDebut[p + 1]
+ * @property {Int32Array} inclusionCible  cible de chaque ligne active (§ 4) :
+ *                                   −1 − g pour l'organisation g, par groupe
+ *                                   croissant, puis l'index d'une personne,
+ *                                   croissant, personne par personne
+ * @property {number} inclusionsActives   lignes actives ; 0 rend les mesures
+ *                                   des inclusions null
+ * @property {Array<{p: number,
+ *                   cible: {organisation: string}|{participant: number},
+ *                   raison: string}>} inclusionsHorsAtteinte
+ *           lignes hors d'atteinte, par index de source croissant ; la cible
+ *           porte un libellé ou un identifiant, raison l'une de 'exclue',
+ *           'sansPresent', 'conflit', 'sansTourCommun', 'tablesImposees',
+ *           'pleine'
  * @property {Int32Array} debutEtiquettes N + 1 cases : les étiquettes de la
  *                                   personne p vont, dans etiquettes, de
  *                                   debutEtiquettes[p] à debutEtiquettes[p + 1] ;

@@ -37,6 +37,16 @@
 // d'organisation (participants/liste_conflits.js) : le groupe de ses cases,
 // sa légende, le groupe sans choix et sa commande ;
 // participants.fiche.conflits* la rubrique de la fiche.
+// participants.inclusions.* porte la saisie des inclusions
+// (participants/liste_inclusions.js) : le groupe et la légende de chacun de
+// ses deux choix multiples, le groupe sans choix, la recherche des
+// personnes et la phrase quand rien n'y répond, la commande, et le libellé
+// d'une personne incluse ; participants.fiche.inclusions* et
+// participants.fiche.aucuneInclusion* les deux rubriques de la fiche, et
+// participants.fiche.inclusionsHorsAtteinte l'information qu'elles posent
+// sous chaque liste ; participants.fiche.inclusionsPlacement.* la rubrique
+// « Inclusions du placement », et participants.inclusionsPlacement.* la
+// colonne du même nom de la grille.
 // participants.fiche.logo et participants.fiche.aucunLogo portent la rubrique
 // « Logo » de la fiche ; participants.logo.* ses commandes — « Logo », nommée
 // par la personne, « Retirer le logo » —, sa vignette, qui agrandit, l'image
@@ -44,31 +54,44 @@
 // dont l'image manque au dossier de l'événement ou ne se lit pas.
 // participants.informations.* porte le bloc des informations de la fiche
 // (InformationsFiche.svelte) : « Modifier », nommée par la personne, le
-// formulaire, nommé de même, « Enregistrer », « Annuler », et l'avis de ce
-// que les listes de conflits ont suivi (suiviDesConflits, informations.js),
-// ses parties séparées d'un point-virgule.
+// formulaire, nommé de même, « Enregistrer », « Annuler », la case et la
+// valeur de l'animation réservée, et l'avis de ce que les listes de
+// conflits, puis celles d'inclusions d'organisation, ont suivi
+// (suiviDesListes, informations.js), ses parties séparées d'un
+// point-virgule. participants.animation.* porte la cellule
+// de la colonne « Animation » (celluleAnimation, grille.js) : les numéros
+// des tables animées, ou « à désigner ». participants.export.homonymes est
+// l'avis d'un export dont des inclusions visent une personne de même nom
+// qu'une autre (inclusionsVersHomonymes), leur nombre en tête.
+// participants.formulaire.ajoutee est le message du formulaire d'ajout, qui
+// nomme la personne ajoutée (nomAjoute, grille.js).
 
-import { cite, enumeration, toursNommes } from '../../application/libelles/aides.js';
+import { cite, enumeration, nomDuTour, numeroNomme, tourDansPhrase, tourOuNom, toursNommes } from '../../application/libelles/aides.js';
 
 // Un nombre suivi de son nom, au singulier pour 0 et 1.
 const compte = (n, singulier, pluriel) => `${n} ${n <= 1 ? singulier : pluriel}`;
 
-// La portée d'une réservation : tous les tours, ou le tour désigné.
-const portee = ({ portee: genre, tour }) => (genre === 'tous' ? 'tous les tours' : `tour ${tour}`);
+// La portée d'une réservation : tous les tours, ou le tour désigné. Un
+// tour se nomme sous nomsTours, les noms des tours de l'événement
+// (aides.js).
+const portee = ({ portee: genre, tour, nomsTours }) => (genre === 'tous' ? 'tous les tours' : tourOuNom(tour, nomsTours));
 
 // Les tours antérieurs d'une personne revenue, entre parenthèses : « (déjà
 // au tour 1) », « (déjà aux tours 1 et 2) », « (déjà aux tours 1, 2 et
 // 3) » ; rien sans tour.
-function dejaAux(tours) {
+function dejaAux(tours, nomsTours) {
   if (tours.length === 0) return '';
-  if (tours.length === 1) return ` (déjà au tour ${tours[0]})`;
-  return ` (déjà aux tours ${tours.slice(0, -1).join(', ')} et ${tours.at(-1)})`;
+  const termes = tours.map((tour) => numeroNomme(tour, nomsTours));
+  if (tours.length === 1) return ` (déjà au tour ${termes[0]})`;
+  return ` (déjà aux tours ${termes.slice(0, -1).join(', ')} et ${termes.at(-1)})`;
 }
 
 // Les rencontres antérieures d'une paire revue, entre parenthèses : « (déjà
 // à la table 1 au tour 1, à la table 2 au tour 3) » ; rien sans rencontre.
-const dejaReunis = (deja) =>
-  deja.length === 0 ? '' : ` (déjà ${deja.map(({ tour, numero }) => `à la table ${numero} au tour ${tour}`).join(', ')})`;
+const dejaReunis = (deja, nomsTours) =>
+  deja.length === 0
+    ? ''
+    : ` (déjà ${deja.map(({ tour, numero }) => `à la table ${numero} au ${tourDansPhrase(tour, nomsTours)}`).join(', ')})`;
 
 // Le texte court de chaque règle dans la marque d'une personne en conflit
 // et dans la colonne « Conflits du placement ».
@@ -86,8 +109,11 @@ export const TABLE = new Map([
   ['participants.colonne.organisation', 'Organisation'],
   ['participants.colonne.conflits', "Conflit d'organisation"],
   ['participants.colonne.conflitsPlacement', 'Conflits du placement'],
+  ['participants.colonne.inclusions', 'Inclusions'],
+  ['participants.colonne.inclusionsPlacement', 'Inclusions du placement'],
   ['participants.colonne.courriel', 'Courriel'],
   ['participants.colonne.titrePressenti', 'Titre pressenti'],
+  ['participants.colonne.animation', 'Animation'],
   ['participants.colonne.exclu', 'Exclusion'],
   ['participants.colonne.presence', 'Présence'],
   ['participants.colonne.notes', 'Notes'],
@@ -111,6 +137,7 @@ export const TABLE = new Map([
   // --- Le formulaire d'ajout (§ 10.2) ---------------------------------------
   ['participants.formulaire.titre', 'Ajouter une personne'],
   ['participants.formulaire.ajouter', 'Ajouter'],
+  ['participants.formulaire.ajoutee', ({ nom }) => `Personne ajoutée : ${nom}`],
   ['participants.formulaire.orthographe', 'Cette organisation existe déjà sous l\u{2019}orthographe'],
   ['participants.formulaire.reprendre', 'Reprendre cette orthographe'],
 
@@ -129,12 +156,20 @@ export const TABLE = new Map([
   ['participants.grille.presente', 'présente'],
   ['participants.grille.vide', 'Aucun participant. Ajoutez une personne, ou collez une liste dans la grille.'],
   ['participants.grille.aucunResultat', 'Aucune personne ne correspond au filtre.'],
+  ['participants.grille.montrerInclusions', 'Montrer les inclusions'],
+
+  // --- La colonne « Animation » et la marque de l'animation réservée -------
+  ['participants.animation.tables', ({ numeros }) => numeros.join(', ')],
+  ['participants.animation.aDesigner', 'à désigner'],
+  ['participants.informations.animationReservee', 'Animation réservée'],
+  ['participants.informations.animationOui', 'oui'],
+  ['participants.informations.animationNon', 'non'],
 
   // --- La présence par tour : cellule, groupe, cases d'une saisie ----------
   ['participants.presence.tous', 'tous'],
-  ['participants.presence.tours', ({ tours }) => toursNommes(tours)],
+  ['participants.presence.tours', ({ tours, nomsTours }) => toursNommes(tours, nomsTours)],
   ['participants.presence.editeur', ({ nom }) => `Présence de ${nom}, une case par tour`],
-  ['participants.presence.case', ({ tour }) => `Tour ${tour}`],
+  ['participants.presence.case', ({ tour, nomsTours }) => nomDuTour(tour, nomsTours)],
   ['participants.presence.caseCourte', ({ tour }) => String(tour)],
   ['participants.presence.tousLesTours', 'Tous les tours'],
   ['participants.presence.appliquer', 'Appliquer'],
@@ -144,6 +179,27 @@ export const TABLE = new Map([
   ['participants.conflits.legende', 'Organisations à éviter'],
   ['participants.conflits.aucuneAutre', "Aucune autre organisation dans l'événement."],
   ['participants.conflits.appliquer', 'Appliquer'],
+
+  // --- Les inclusions : les deux choix multiples d'une saisie --------------
+  [
+    'participants.inclusions.editeurOrganisations',
+    ({ nom }) => `Inclusions d'organisation de ${nom}, une case par organisation`,
+  ],
+  ['participants.inclusions.editeurParticipants', ({ nom }) => `Inclusions de participant de ${nom}, une case par personne`],
+  ['participants.inclusions.legendeOrganisations', 'Organisations à rencontrer'],
+  ['participants.inclusions.legendeParticipants', 'Personnes à rencontrer'],
+  ['participants.inclusions.aucuneOrganisation', "Aucune autre organisation dans l'événement."],
+  ['participants.inclusions.aucunParticipant', "Aucune autre personne dans l'événement."],
+  ['participants.inclusions.recherche', 'Chercher une personne'],
+  ['participants.inclusions.aucunResultat', ({ texte }) => `Aucune personne ne correspond à « ${texte.trim()} ».`],
+  ['participants.inclusions.appliquer', 'Appliquer'],
+  // Une personne incluse : son nom, l'identifiant d'un homonyme, la marque
+  // d'une exclue ; un identifiant que l'événement n'a plus, seul.
+  [
+    'participants.inclusions.cible',
+    ({ nom, id, homonyme, exclue }) => `${nom}${homonyme ? ` (n° ${id})` : ''}${exclue ? ' (exclue)' : ''}`,
+  ],
+  ['participants.inclusions.inconnue', ({ id }) => `n° ${id}`],
 
   // --- La liste groupée par une colonne ou plusieurs ------------------------
   ['participants.groupe.grouperPar', 'Grouper par'],
@@ -162,10 +218,10 @@ export const TABLE = new Map([
   // --- Les conflits du placement montré, dans la liste groupée (§ 7.5) -----
   ['participants.conflit.groupe', ({ nombre }) => `en conflit : ${compte(nombre, 'conflit', 'conflits')}`],
   ['participants.conflit.personne', ({ regles }) => `en conflit : ${regles.map((regle) => REGLES_COURTES.get(regle)).join(', ')}`],
-  ['participants.conflit.lieu', ({ tour, numero }) => `Tour ${tour}, table ${numero} :`],
+  ['participants.conflit.lieu', ({ tour, numero, nomsTours }) => `${nomDuTour(tour, nomsTours)}, table ${numero} :`],
   ['participants.conflit.et', 'et'],
   ['participants.conflit.avec', 'avec'],
-  ['participants.conflit.tour', ({ tour }) => `tour ${tour} :`],
+  ['participants.conflit.tour', ({ tour, nomsTours }) => `${tourOuNom(tour, nomsTours)} :`],
   ...[...REGLES_COURTES].map(([regle, texte]) => [`participants.conflit.regle.${regle}`, texte]),
   // Dans la colonne, « se revoient » nomme qui, « revient à une table » dit
   // laquelle ; sans nom ni table, le texte court reste.
@@ -190,11 +246,11 @@ export const TABLE = new Map([
   ['participants.conflit.raison.separerOrganisations', '\u{2014} même organisation'],
   [
     'participants.conflit.raison.nouveauxVoisins',
-    ({ deja }) => `\u{2014} se revoient${dejaReunis(deja)}`,
+    ({ deja, nomsTours }) => `\u{2014} se revoient${dejaReunis(deja, nomsTours)}`,
   ],
   [
     'participants.conflit.raison.nouvelleTable',
-    ({ numero, deja }) => `\u{2014} revient à la table ${numero}${dejaAux(deja.map(({ tour }) => tour))}`,
+    ({ numero, deja, nomsTours }) => `\u{2014} revient à la table ${numero}${dejaAux(deja.map(({ tour }) => tour), nomsTours)}`,
   ],
 
   // --- Les commandes de la section ------------------------------------------
@@ -204,6 +260,19 @@ export const TABLE = new Map([
   ['participants.commande.supprimer', 'Supprimer'],
   ['participants.commande.exporter', 'Exporter la liste'],
   ['participants.commande.fermerFiche', 'Fermer la fiche'],
+
+  // --- L'avis de l'export : les inclusions qui visent un homonyme (§ 10.2) ---
+  [
+    'participants.export.homonymes',
+    ({ n }) => {
+      const pronom = n <= 1 ? 'la' : 'les';
+      return (
+        `${compte(n, 'inclusion vise', 'inclusions visent')} une personne dont une autre porte le même nom : le ` +
+        `fichier ${pronom} nomme ainsi, et l'import ${pronom} refuserait. Distinguez ces personnes par leur nom, ` +
+        'dans leur fiche, avant de réimporter le fichier.'
+      );
+    },
+  ],
 
   // --- La suppression d'une personne qui porte des réservations (§ 2.1) -----
   ['participants.suppression.titre', ({ personne }) => `Supprimer ${personne} et ses réservations ?`],
@@ -240,6 +309,13 @@ export const TABLE = new Map([
   ['participants.fiche.presenceLegende', 'Présente aux tours'],
   ['participants.fiche.conflits', "Conflits d'organisation"],
   ['participants.fiche.aucunConflit', "Aucun conflit d'organisation."],
+  ['participants.fiche.inclusionsOrganisation', "Inclusions d'organisation"],
+  ['participants.fiche.aucuneInclusionOrganisation', "Aucune inclusion d'organisation."],
+  ['participants.fiche.inclusionsParticipant', 'Inclusions de participant'],
+  ['participants.fiche.aucuneInclusionParticipant', 'Aucune inclusion de participant.'],
+  // Les inclusions de la liste que le diagnostic dit hors d'atteinte, chacune
+  // par sa cible et sa raison (qualite.inclusions.parce).
+  ['participants.fiche.inclusionsHorsAtteinte', "Hors d'atteinte, aucun placement ne peut les satisfaire :"],
   ['participants.fiche.absente', 'absente'],
   ['participants.fiche.logo', 'Logo'],
   ['participants.fiche.aucunLogo', 'Aucun logo.'],
@@ -262,6 +338,18 @@ export const TABLE = new Map([
       return `Les conflits d'organisation suivent ce changement : ${parties.join(' ; ')}.`;
     },
   ],
+  [
+    'participants.informations.inclusionsSuivies',
+    ({ renommee, retirees, propres }) => {
+      const parties = [];
+      if (renommee !== null) parties.push(`${cite(renommee.de)} devient ${cite(renommee.vers)}`);
+      if (retirees.length > 0) parties.push(`${enumeration(retirees.map(cite))} ${retirees.length === 1 ? 'les quitte' : 'les quittent'}`);
+      if (propres > 0) {
+        parties.push(compte(propres, 'inclusion de sa propre organisation retirée', 'inclusions de leur propre organisation retirées'));
+      }
+      return `Les inclusions d'organisation suivent ce changement : ${parties.join(' ; ')}.`;
+    },
+  ],
 
   // --- Le logo de la fiche (§ 8.9, § 10.2) ----------------------------------
   ['participants.logo.choisir', 'Logo'],
@@ -282,12 +370,12 @@ export const TABLE = new Map([
   ['participants.fiche.rencontres.personne', 'Personne rencontrée'],
   ['participants.fiche.rencontres.fois', 'Fois'],
   ['participants.fiche.rencontres.tours', 'Tours'],
-  ['participants.fiche.rencontres.tour', ({ tour, table }) => `tour ${tour}, table ${table}`],
+  ['participants.fiche.rencontres.tour', ({ tour, table, nomsTours }) => `${tourOuNom(tour, nomsTours)}, table ${table}`],
   // Les tours d'une rencontre, [{tour, table}] dans l'ordre reçu, chacun
   // par participants.fiche.rencontres.tour, séparés par « ; ».
   [
     'participants.fiche.rencontres.toursListe',
-    ({ tours }, texte) => tours.map((etape) => texte('participants.fiche.rencontres.tour', etape)).join(' ; '),
+    ({ tours, nomsTours }, texte) => tours.map((etape) => texte('participants.fiche.rencontres.tour', { ...etape, nomsTours })).join(' ; '),
   ],
   ['participants.fiche.rencontres.aucune', 'Elle ne rencontre personne dans ce placement.'],
   [
@@ -306,6 +394,41 @@ export const TABLE = new Map([
     'participants.fiche.conflitsPlacement.nonEvalue',
     'Les conflits de ce placement ne se comptent pas : il ne décrit plus la soirée, ou la configuration est incohérente.',
   ],
+
+  // --- La rubrique « Inclusions du placement » de la fiche (§ 7.5, § 10.2) ---
+  // Les inclusions de la personne dans le placement que le plan montre, sous
+  // la ligne de source de la rubrique « Rencontres » : ses comptes, sa liste
+  // au-delà du plafond, puis la phrase de chaque avis qui la nomme
+  // (qualite.inclusions.*).
+  ['participants.fiche.inclusionsPlacement.titre', 'Inclusions du placement'],
+  [
+    'participants.fiche.inclusionsPlacement.compte',
+    ({ satisfaites, actives }) => `${compte(satisfaites, 'inclusion satisfaite', 'inclusions satisfaites')} sur ${actives}.`,
+  ],
+  [
+    'participants.fiche.inclusionsPlacement.auDela',
+    ({ atteignables, possibles }) =>
+      "Sa liste dépasse ce qu'elle peut rencontrer : " +
+      `${compte(atteignables, 'de ses inclusions au plus peut être satisfaite', 'de ses inclusions au plus peuvent être satisfaites')}, et ` +
+      (possibles === 0
+        ? 'toutes ses inclusions encore possibles sont atteintes'
+        : compte(possibles, "inclusion encore possible n'est pas atteinte", 'inclusions encore possibles ne sont pas atteintes')) +
+      ". Ce n'est pas un avis.",
+  ],
+  ['participants.fiche.inclusionsPlacement.aucune', 'Aucune inclusion active ne la nomme.'],
+  [
+    'participants.fiche.inclusionsPlacement.nonMesurable',
+    'Ce placement ne se mesure pas : ses inclusions ne se comptent pas. La page Qualité en donne les raisons.',
+  ],
+  ['participants.fiche.inclusionsPlacement.exclue', 'Exclue : ses inclusions attendent sa réintégration.'],
+
+  // --- La colonne « Inclusions du placement » de la grille (§ 10.2) ----------
+  // Ses inclusions satisfaites sur ses actives, sa liste au-delà du plafond,
+  // puis l'autre partie de chaque avis qui la nomme, après « sans ».
+  ['participants.inclusionsPlacement.compte', ({ satisfaites, actives }) => `${satisfaites} sur ${actives}`],
+  ['participants.inclusionsPlacement.auDela', 'liste au-delà du plafond'],
+  ['participants.inclusionsPlacement.sans', 'sans '],
+  ['participants.inclusionsPlacement.nonCompte', 'non comptées'],
 
   // --- Les étiquettes de la fiche (§ 4.5, § 10.2) ---------------------------
   ['participants.etiquettes.champ', 'Ajouter des étiquettes, séparées par une virgule'],

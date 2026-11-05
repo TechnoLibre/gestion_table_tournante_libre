@@ -12,7 +12,9 @@
   //
   // Les énoncés se regroupent par cartesDiagnostic, sans changer d'ordre : la
   // séparation vidée de son sens, une carte par organisation en collision,
-  // celle des organisations en conflit, puis le reste de l'événement. Chaque
+  // celle des organisations en conflit, le reste de l'événement, puis les
+  // inclusions qu'aucun plan ne satisfait, chaque personne nommée par son
+  // nom affiché sur la charge (nomDe, propositions/modele.js). Chaque
   // groupe a son intitulé, qui nomme sa liste (aria-labelledby) : celui d'une
   // organisation est sa pastille, de la teinte que teintesOrganisations donne
   // à son rang sur toute la liste des participants, exclus compris, et porte
@@ -70,6 +72,7 @@
   import { diagnostiquerCharge } from '../../application/diagnostic.js';
   import { presencesPartielles } from '../../application/places.js';
   import { planchersConflits } from '../../application/planchers_conflits.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import Chargement from '../accueil/Chargement.svelte';
   import { teintesOrganisations } from '../organisations.js';
   import Carte from '../primitives/Carte.svelte';
@@ -77,6 +80,7 @@
   import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import Refus from '../primitives/Refus.svelte';
+  import { nomDe } from '../propositions/modele.js';
   import { cartesDiagnostic, criteresDuDiagnostic, enonces, expliquer, numeroDeCharge, remedeAgit } from './phrases.js';
   import { propositionChoisie } from './proposition.js';
 
@@ -87,12 +91,16 @@
     ['separation', 'diagnostic.carte.separation'],
     ['conflits', 'diagnostic.carte.conflits'],
     ['ensemble', 'diagnostic.carte.ensemble'],
+    ['inclusions', 'diagnostic.carte.inclusions'],
   ]);
 
   const t = getContext('t');
   const seance = getContext('seance');
   const ui = getContext('ui') ?? null;
   const suivi = getContext('solveur') ?? null;
+  // Les noms des tours, que les énoncés lisent (aides.js) : leurs détails
+  // portent les tours par leur numéro.
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
   const uid = $props.id();
 
   const charge = $derived($seance.charge);
@@ -118,6 +126,7 @@
           absentes: presencesPartielles(charge).length,
           conflits: planchersConflits(charge),
           exacts,
+          nomDe: (id) => nomDe(charge, id),
         }),
   );
   const cartes = $derived(cartesDiagnostic(liste));
@@ -139,8 +148,8 @@
   function explicationDe(enonce) {
     const { concretement, levier } = expliquer(enonce, { diagnostic: resultat.diagnostic, tours: charge.evenement.tours });
     return {
-      concretement: concretement.map(({ cle, details }) => t(cle, details)).join(' '),
-      levier: levier === null ? null : t(levier.cle, levier.details),
+      concretement: concretement.map(({ cle, details }) => t(cle, { nomsTours, ...details })).join(' '),
+      levier: levier === null ? null : t(levier.cle, { nomsTours, ...levier.details }),
     };
   }
 
@@ -159,7 +168,7 @@
   <ul aria-labelledby={id}>
     {#each carte.enonces as enonce, n (n)}
       <li data-enonce={enonce.cle} data-plancher-objectifs={enonce.grandeur}>
-        <p class="enonce"><span data-phrase>{t(enonce.cle, enonce.details)}</span></p>
+        <p class="enonce"><span data-phrase>{t(enonce.cle, { nomsTours, ...enonce.details })}</span></p>
         {#if !compact}
           {@const explication = explicationDe(enonce)}
           {#if explication.concretement !== ''}
@@ -172,7 +181,7 @@
             {@const action = actionDe(enonce.remede)}
             <p class="remede">
               {#if remedeAgit(enonce.remede)}<span class="amorce">{t('diagnostic.amorce.pourChanger')}</span>{' '}{/if}<span data-remede
-                >{t(enonce.remede.cle, enonce.remede.details)}</span
+                >{t(enonce.remede.cle, { nomsTours, ...enonce.remede.details })}</span
               >
             </p>
             {#if action !== null}
@@ -253,16 +262,16 @@
         <div class="choisie" role="group" aria-labelledby="{uid}-choisie" data-proposition-choisie={choisie.genre}>
           <h3 id="{uid}-choisie" class="intitule intertitre">{t('diagnostic.carte.proposition')}</h3>
           <div class="bloc" data-bloc-proposition="laquelle">
-            <p>{t(choisie.laquelle.cle, choisie.laquelle.details)}</p>
+            <p>{t(choisie.laquelle.cle, { nomsTours, ...choisie.laquelle.details })}</p>
             {#if choisie.statut !== null}
-              <p>{t(choisie.statut.cle, choisie.statut.details)}</p>
+              <p>{t(choisie.statut.cle, { nomsTours, ...choisie.statut.details })}</p>
             {/if}
           </div>
           {#each choisie.blocs as bloc (bloc.nom)}
             <div class="bloc" data-bloc-proposition={bloc.nom}>
               <h4 class="titre-bloc">{t(bloc.titre)}</h4>
               {#each bloc.phrases as phrase, n (n)}
-                <p>{t(phrase.cle, phrase.details)}</p>
+                <p>{t(phrase.cle, { nomsTours, ...phrase.details })}</p>
               {/each}
             </div>
           {/each}

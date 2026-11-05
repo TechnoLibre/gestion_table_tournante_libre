@@ -15,14 +15,17 @@
  *   la filiation que rend derivationDe (src/application/depart.js) : le
  *   numéro du départ, ses tours figés croissants, [] sans tour figé, et vrai
  *   quand le départ est encore dans la liste
- * @param {{t: Function, format: {nombre: Function}}} outils  la traduction,
- *   et la mise en forme qui écrit chaque numéro de tour
+ * @param {{t: Function, format: {nombre: Function}, nomsTours?: Array<string|null>}} outils
+ *   la traduction, la mise en forme qui écrit chaque numéro de tour, et les
+ *   noms des tours de l'événement (nomsDesTours), dont chaque tour figé qui
+ *   en a un suit son numéro
  * @returns {string|null}
  */
-export function texteFiliation(derivation, { t, format }) {
+export function texteFiliation(derivation, { t, format, nomsTours }) {
   if (derivation === null) return null;
   const { depart, toursFiges, departPresent } = derivation;
   if (!departPresent) return t('propositions.filiation.departAbsent', { depart });
   if (toursFiges.length === 0) return t('propositions.filiation.derivee', { depart });
-  return t('propositions.filiation.deriveeFiges', { depart, tours: toursFiges.map((tour) => format.nombre(tour)) });
+  const terme = (tour) => t('propositions.filiation.tourFige', { numero: format.nombre(tour), nom: nomsTours?.[tour - 1] ?? null });
+  return t('propositions.filiation.deriveeFiges', { depart, tours: toursFiges.map(terme) });
 }

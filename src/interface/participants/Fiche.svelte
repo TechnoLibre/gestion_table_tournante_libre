@@ -4,12 +4,12 @@
 <script>
   // La fiche d'une personne à l'écran (§ 4, § 4.2, § 4.5, § 7.4, § 10.2) :
   // nom, prénom, organisation, courriel, titre pressenti, notes, statut
-  // calculé, son logo, ses étiquettes, ses conflits d'organisation, sa
-  // présence par tour, ses réservations, et sa table et son siège à chaque
-  // tour du retenu, ou son absence à ce tour ; un tour que le retenu ne
-  // porte pas se dit hors du retenu. La fiche replie, ne tronque jamais :
-  // un nom de deux cents caractères s'y lit entier, sur autant de lignes
-  // qu'il en faut.
+  // calculé, son logo, ses étiquettes, ses conflits d'organisation, ses
+  // inclusions, sa présence par tour, ses réservations, et sa table et son
+  // siège à chaque tour du retenu, ou son absence à ce tour ; un tour que
+  // le retenu ne porte pas se dit hors du retenu. La fiche replie, ne
+  // tronque jamais : un nom de deux cents caractères s'y lit entier, sur
+  // autant de lignes qu'il en faut.
   // Chaque donnée occupe son propre nœud de texte, et rien n'y est
   // interprété comme du balisage.
   //
@@ -17,8 +17,8 @@
   // l'instance du moteur ; l'itinéraire, celui d'itineraire (grille.js), lu
   // tour par tour dans etatPlaces : la fiche ne recalcule ni l'un ni
   // l'autre. Ses contrôles de saisie sont le formulaire des informations,
-  // le champ des étiquettes, les cases des conflits et celles de la
-  // présence.
+  // le champ des étiquettes, les cases des conflits, celles des inclusions
+  // et celles de la présence.
   //
   // Le bloc des informations (InformationsFiche.svelte,
   // data-informations-fiche), en tête : les six valeurs de texte et le
@@ -73,7 +73,16 @@
   // remède, le brouillon gardé ; une écriture venue d'ailleurs arrive par
   // recevoir, et une autre personne repart de sa liste.
   //
-  // La rubrique « Présence » (data-presence-fiche), entre les conflits et
+  // Les rubriques « Inclusions d'organisation » et « Inclusions de
+  // participant » (RubriqueInclusions.svelte, data-inclusions-fiche), l'une
+  // sous l'autre entre les conflits et la présence, se saisissent de même,
+  // chacune sous sa commande ; elles se recréent à chaque personne ({#key}).
+  // Sous chaque liste, les inclusions de cette sorte que le diagnostic de la
+  // configuration (diagnostiquerCharge) dit hors d'atteinte, chacune avec
+  // sa raison (horsDAtteinteDePersonne, qualite/inclusions.js) : une
+  // information, que la saisie ne refuse pas.
+  //
+  // La rubrique « Présence » (data-presence-fiche), entre les inclusions et
   // les réservations : la présence enregistrée, « tous » ou ses tours
   // nommés (affichagePresence, presence.js), puis une case par tour
   // (CasesPresence), « Tous les tours » et « Appliquer ». Cocher, décocher et
@@ -125,8 +134,23 @@
   // source, et dit qu'aucun placement ne se mesure. Du texte seul : aucune
   // couleur, aucune commande, en lecture et sur un plan bloqué comme en
   // écriture.
+  //
+  // La rubrique « Inclusions du placement » (§ 7.5,
+  // data-rubrique-inclusions-placement), juste après celle des conflits,
+  // porte les inclusions de la personne dans le même placement, lues par
+  // inclusionsDuPlacement et inclusionsDePersonne (qualite/inclusions.js) —
+  // celles du tableau des propositions et de la liste de travail du plan :
+  // la ligne de source des rencontres, ses inclusions satisfaites sur ses
+  // inclusions actives, la phrase d'une liste au-delà du plafond, puis la
+  // phrase de chaque avis qui la concerne (PhraseInclusion), qu'elle le
+  // porte, qu'elle soit la personne incluse ou qu'elle demande aussi la
+  // rencontre que l'autre porte par son organisation ; sans rien de cela,
+  // une phrase le dit. Une personne exclue, un placement qui ne se mesure
+  // pas : une phrase aussi. Sans placement, ou quand aucune inclusion n'est
+  // active, la rubrique est absente. Du texte seul, aucune commande.
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { conflitsDuPlacement } from '../../application/conflits_placement.js';
+  import { diagnostiquerCharge } from '../../application/diagnostic.js';
   import { nomAffiche } from '../../application/personnes.js';
   import { etatPlaces, presenceSaisie, statuts } from '../../application/places.js';
   import { cleDeMode } from '../mode.js';
@@ -136,15 +160,20 @@
   import Pastille from '../primitives/Pastille.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { creerGeste } from '../primitives/geste.js';
+  import { nomDe } from '../propositions/modele.js';
+  import { horsDAtteinteDePersonne, inclusionsDePersonne, inclusionsDuPlacement } from '../qualite/inclusions.js';
   import { rubriqueRencontres } from '../qualite/paires.js';
+  import PhraseInclusion from '../qualite/PhraseInclusion.svelte';
   import { effetDe } from '../raccourcis.js';
   import { organisationsDe } from '../../application/conflits_organisation.js';
   import { cleNormalisee } from '../../application/csv.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import CasesPresence from './CasesPresence.svelte';
   import ChoixMultiple from './ChoixMultiple.svelte';
   import { cleDeRaison, lignesDePersonne } from './conflits.js';
   import InformationsFiche from './InformationsFiche.svelte';
   import LogoFiche from './LogoFiche.svelte';
+  import RubriqueInclusions from './RubriqueInclusions.svelte';
   import { ajoutEtiquettes, etiquettesDeLaFiche, retraitEtiquette, saisieApresAjout, signauxOrthographe } from './etiquettes.js';
   import { cleDeStatut, commandeDeCellule, itineraire, ligneVoisine, reservationsDe } from './grille.js';
   import { choixDeConflits, commandeDeConflits, lectureConflits, saisieApresBasculeConflit, saisieConflitsEnregistree } from './liste_conflits.js';
@@ -172,6 +201,16 @@
   const conflitsPlacement = $derived(
     lignesDePersonne(conflitsDuPlacement(charge, { proposition: $ui.proposition }), charge.participants, participant.id),
   );
+  // Le nom affiché d'une personne de la charge, exclue comprise.
+  const nommer = (id) => nomDe(charge, id);
+  // Les inclusions du même placement, et ce qu'elles disent de la personne
+  // quand il se mesure ; les inclusions hors d'atteinte du diagnostic, une
+  // liste vide quand la configuration ne se normalise pas.
+  const inclusionsPlacement = $derived(inclusionsDuPlacement(charge, $ui.proposition));
+  const siennes = $derived(
+    inclusionsPlacement.statut === 'mesuree' ? inclusionsDePersonne(inclusionsPlacement.inclusions, participant.id, nommer) : null,
+  );
+  const horsDAtteinte = $derived(diagnostiquerCharge(charge).diagnostic?.inclusions.horsDAtteinte ?? []);
 
   // La fiche et son champ d'ajout, montés : le défilement vise la fiche,
   // le focus d'après un retrait ses commandes de retrait ou le champ.
@@ -213,6 +252,9 @@
   // tenu par une machine de champ.js propre à la personne et au nombre de
   // tours ; le refus posé sous les cases, et l'envoi en cours.
   const tours = $derived(charge.evenement.tours);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js), et
+  // que l'itinéraire et les réservations posent tels quels.
+  const nomsTours = $derived(nomsDesTours(charge));
   const presenceEnregistree = $derived(saisieEnregistree(participant, tours));
   const vuePresence = $derived(affichagePresence(presenceSaisie(participant)));
   let machinePresence = untrack(() => creerMachineChamp({ stockee: presenceEnregistree, lire: lecturePresence(tours) }));
@@ -501,7 +543,7 @@
           <span class="signe"><Icone nom="triangle" /></span>
           <div>
             {#each signaux as signal, rang (rang)}
-              <p>{t(signal.code, signal.details)}</p>
+              <p>{t(signal.code, { nomsTours, ...signal.details })}</p>
             {/each}
           </div>
         </div>
@@ -547,17 +589,33 @@
     </form>
   </section>
 
+  {#key participant.id}
+    <RubriqueInclusions
+      {participant}
+      {charge}
+      sorte="organisation"
+      horsDAtteinte={horsDAtteinteDePersonne(horsDAtteinte, participant.id, 'organisation', nommer)}
+    />
+    <RubriqueInclusions
+      {participant}
+      {charge}
+      sorte="participant"
+      horsDAtteinte={horsDAtteinteDePersonne(horsDAtteinte, participant.id, 'participant', nommer)}
+    />
+  {/key}
+
   <section class="presence" data-presence-fiche aria-labelledby={`${uid}-titre-presence`}>
     <h4 id={`${uid}-titre-presence`}>{t('participants.fiche.presence')}</h4>
     {#if vuePresence.sorte === 'tous'}
       <p class="resume" data-presence="tous">{t(vuePresence.cle)}</p>
     {:else}
-      <p class="resume" data-presence="partielle">{t(vuePresence.cle, vuePresence.details)}</p>
+      <p class="resume" data-presence="partielle">{t(vuePresence.cle, { nomsTours, ...vuePresence.details })}</p>
     {/if}
     <form novalidate onsubmit={appliquer}>
       <CasesPresence
         cases={casesDeSaisie(saisiePresence, tours)}
         nom={nomAffiche(participant)}
+        {nomsTours}
         invalide={refusPresence !== null}
         decrit={refusPresence === null ? undefined : idRefusPresence}
         basculer={basculerPresence}
@@ -601,6 +659,8 @@
           <td>
             {#if reservation.portee === 'tous'}
               {t('participants.fiche.tousLesTours')}
+            {:else if nomsTours[reservation.tour - 1] !== null}
+              <span>{nomsTours[reservation.tour - 1]}</span>
             {:else}
               <span>{t('participants.fiche.auTour')}</span> <span>{reservation.tour}</span>
             {/if}
@@ -630,7 +690,7 @@
       <tbody>
         {#each etapes as etape (etape.tour)}
           <tr data-itineraire-tour={etape.tour}>
-            <td>{etape.tour}</td>
+            <td>{nomsTours[etape.tour - 1] ?? etape.tour}</td>
             {#if etape.reserve}
               <td colspan="2">{t('participants.fiche.enReserve')}</td>
             {:else if etape.absente}
@@ -666,7 +726,7 @@
         <ul class="conflits-placement">
           {#each conflitsPlacement as conflit (conflit.cle)}
             <li>
-              <span>{t('participants.conflit.lieu', { tour: conflit.tour, numero: conflit.numero })}</span>
+              <span>{t('participants.conflit.lieu', { tour: conflit.tour, numero: conflit.numero, nomsTours })}</span>
               {#if conflit.avec.length === 0}
                 <span class="valeur">{nomAffiche(participant)}</span>
               {:else}
@@ -675,13 +735,44 @@
                         >{t('participants.conflit.et')}</span
                       >{' '}{/if}{/if}<span class="valeur">{nom}</span>{/each}
               {/if}
-              <span>{t(cleDeRaison(conflit.regle), { numero: conflit.numero, deja: conflit.deja })}</span>
+              <span>{t(cleDeRaison(conflit.regle), { numero: conflit.numero, deja: conflit.deja, nomsTours })}</span>
             </li>
           {/each}
         </ul>
       {/if}
     {/if}
   </section>
+
+  {#if inclusionsPlacement.statut !== 'sansPlacement' && inclusionsPlacement.statut !== 'sansObjet'}
+    <section class="rencontres" data-rubrique-inclusions-placement aria-labelledby={`${uid}-titre-inclusions-placement`}>
+      <h4 id={`${uid}-titre-inclusions-placement`}>{t('participants.fiche.inclusionsPlacement.titre')}</h4>
+      <p class="source">
+        <span>{t('participants.fiche.rencontres.intitule')}</span>
+        <span class="placement">{t(rencontres.source.cle, rencontres.source.details)}</span>
+      </p>
+      {#if participant.exclu}
+        <p>{t('participants.fiche.inclusionsPlacement.exclue')}</p>
+      {:else if siennes === null}
+        <p>{t('participants.fiche.inclusionsPlacement.nonMesurable')}</p>
+      {:else}
+        {#if siennes.compte !== null}
+          <p data-inclusions-compte>{t('participants.fiche.inclusionsPlacement.compte', siennes.compte)}</p>
+        {/if}
+        {#if siennes.auDela !== null}
+          <p data-inclusions-au-dela>{t('participants.fiche.inclusionsPlacement.auDela', siennes.auDela)}</p>
+        {/if}
+        {#if siennes.avis.length > 0}
+          <ul class="inclusions-placement">
+            {#each siennes.avis as avis, rang (rang)}
+              <li><PhraseInclusion {avis} /></li>
+            {/each}
+          </ul>
+        {:else if siennes.compte === null}
+          <p>{t('participants.fiche.inclusionsPlacement.aucune')}</p>
+        {/if}
+      {/if}
+    </section>
+  {/if}
 
   {#if rencontres.statut !== 'sansPlacement'}
     <section class="rencontres" data-rubrique-rencontres aria-labelledby={`${uid}-titre-rencontres`}>
@@ -718,7 +809,7 @@
                   {/if}
                 </th>
                 <td class="fois">{rencontre.fois}</td>
-                <td>{t('participants.fiche.rencontres.toursListe', { tours: rencontre.tours })}</td>
+                <td>{t('participants.fiche.rencontres.toursListe', { tours: rencontre.tours, nomsTours })}</td>
               </tr>
             {/each}
           </tbody>
@@ -922,7 +1013,8 @@
     font-weight: bold;
   }
 
-  .conflits-placement {
+  .conflits-placement,
+  .inclusions-placement {
     margin: 0;
     padding-left: var(--espace-5);
   }

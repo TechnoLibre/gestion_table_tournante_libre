@@ -6,20 +6,18 @@
   // puis la barre, la tête et la surface de travail de toute section
   // (SurfaceEvenement.svelte), sans trait autour d'elles. La barre porte la
   // place fixe, le libellé de mode, Défaire et Refaire, puis les outils — la
-  // suite des états du plan — et les actions — « Imprimer… », l'action
-  // principale de l'en-tête. Sous la barre, la tête de l'événement : son
+  // suite des états du plan. Sous la barre, la tête de l'événement : son
   // en-tête — nom et résumé — et la navigation des sections, dans l'ordre
   // du § 2.1. La barre et la tête forment la carte d'en-tête. Seule la
   // bande précède la barre dans l'écran, à hauteur constante : ce que la
   // tête montre ne déplace pas la place fixe. Aucune section n'en exige une
   // autre : la navigation les offre toutes, et la séance refuse elle-même
-  // ce qui ne peut pas se faire. Le plein écran du plan efface les outils,
-  // les actions et la tête, jamais la bande, la barre ni sa place fixe.
-  //
-  // « Imprimer… » ouvre l'aperçu avant impression (§ 11.7) sur le plan, au
-  // tour montré : toute impression passe par lui. Vivante dans tout mode,
-  // elle n'écrit rien. L'ouverture et le rendu de l'aperçu, qu'attend
-  // tick(), passent par l'indicateur d'activité (activite.js).
+  // ce qui ne peut pas se faire. Le plein écran du plan efface les outils
+  // et la tête, jamais la bande, la barre ni sa place fixe. Toute impression
+  // passe par la section de l'impression, où vit l'aperçu (§ 11.7) : son
+  // onglet, quand elle n'est pas déjà ouverte, l'ouvre sous l'indicateur
+  // d'activité (activite.js), qui couvre aussi le rendu de l'aperçu,
+  // qu'attend tick().
   //
   // La navigation groupe les sections par phase (PHASES, sections.js) —
   // préparer, placer, produire — : chaque phase est un groupe nommé par son
@@ -58,6 +56,7 @@
   // ne les rend pas. L'oubli se fait avant le rendu des sections, qui ne
   // lisent jamais un départ absent.
   import { getContext, tick } from 'svelte';
+  import { suivre } from '../activite.js';
   import SectionBadges from '../badges/SectionBadges.svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
   import SectionGeneration from '../generation/SectionGeneration.svelte';
@@ -66,17 +65,15 @@
   import SectionPlan from '../plan/SectionPlan.svelte';
   import SectionPropositions from '../propositions/SectionPropositions.svelte';
   import SectionTables from '../tables/SectionTables.svelte';
-  import { suivre } from '../activite.js';
   import Avertissements from './Avertissements.svelte';
   import BandeMode from './BandeMode.svelte';
-  import Commande from '../primitives/Commande.svelte';
   import SectionDifferee from './SectionDifferee.svelte';
   import SurfaceEvenement from './SurfaceEvenement.svelte';
   import EnteteEvenement from './EnteteEvenement.svelte';
   import EtatsPlan from './EtatsPlan.svelte';
   import SupportRompu from './SupportRompu.svelte';
   import { avertissementsOrdonnes } from './modele.js';
-  import { PHASES, cleDeSection } from './sections.js';
+  import { PHASES, SECTION_IMPRESSION, cleDeSection } from './sections.js';
 
   // chargeurs : { qualite } — la demande unique de la section de la qualité,
   // que rend creerChargeurSection (differe.js).
@@ -105,12 +102,13 @@
   // sans annonce, aucune hauteur ni aucun trait ne lui est gardé.
   const annoncer = $derived($seance.supportRompu !== null || avertissementsOrdonnes($seance).length > 0);
 
-  // « Imprimer… » : l'aperçu au tour montré au clic, ouvert et rendu sous
+  // L'onglet d'une section. Celui de l'impression, hors d'elle, monte
+  // l'aperçu et ses passes de mesure : l'ouverture et ce rendu passent par
   // l'indicateur d'activité.
-  function ouvrirApercu() {
-    const tour = $ui.tour;
+  function ouvrirSection(nom) {
+    if (nom !== SECTION_IMPRESSION || $ui.section === nom) return ui.allerA(nom);
     return suivre(async () => {
-      ui.ouvrirApercu({ vue: 'plan', tour });
+      ui.allerA(nom);
       await tick();
     });
   }
@@ -124,15 +122,6 @@
 
 {#snippet outils()}
   <EtatsPlan />
-{/snippet}
-
-{#snippet actions()}
-  <Commande
-    cle="impression.commande.ouvrir"
-    nom="apercu"
-    variante="principale"
-    executer={ouvrirApercu}
-  />
 {/snippet}
 
 {#snippet tete()}
@@ -156,7 +145,7 @@
               data-commande="section"
               data-cible={nom}
               aria-current={$ui.section === nom ? 'page' : undefined}
-              onclick={() => ui.allerA(nom)}>{t(cleDeSection(nom))}</button
+              onclick={() => ouvrirSection(nom)}>{t(cleDeSection(nom))}</button
             >
           {/each}
         </div>
@@ -174,7 +163,7 @@
 
 <div class="evenement" data-ecran="evenement">
   <BandeMode />
-  <SurfaceEvenement outils={$ui.pleinEcran ? null : outils} actions={$ui.pleinEcran ? null : actions} tete={$ui.pleinEcran ? null : tete} annonces={annoncer ? annonces : null}>
+  <SurfaceEvenement outils={$ui.pleinEcran ? null : outils} tete={$ui.pleinEcran ? null : tete} annonces={annoncer ? annonces : null}>
     {#if Section !== null}
       <Section />
     {:else if demander !== null}
@@ -222,7 +211,7 @@
   nav {
     display: flex;
     flex-wrap: wrap;
-    gap: 0 var(--espace-5);
+    gap: 0 var(--espace-4);
   }
 
   .phase {

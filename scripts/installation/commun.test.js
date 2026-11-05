@@ -171,6 +171,11 @@ describe('installation : .node-version, dépendances, consentement', { skip: SOU
     assert.equal(bash('gtt_confirmer "Question ?"', { GTT_OUI: '1' }).statut, 0);
   });
 
+  test('gtt_demander ne lit que le terminal : GTT_OUI=1 n’y répond pas', () => {
+    assert.equal(bash('gtt_demander "Question ?"').statut, 1);
+    assert.equal(bash('gtt_demander "Question ?"', { GTT_OUI: '1' }).statut, 1);
+  });
+
   test('chaque famille qui pose des paquets a ses outils, ses bibliothèques d’Electron et ses outils de développement', () => {
     for (const famille of ['debian', 'fedora', 'suse', 'arch']) {
       for (const liste of ['gtt_paquets_outils', 'gtt_paquets_electron', 'gtt_paquets_developpement']) {

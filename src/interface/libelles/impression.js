@@ -3,17 +3,14 @@
 
 // Les libellés de l'aperçu avant impression et de la feuille imprimée
 // (§ 11.7, § 8.5, § 11.2, § 18.6), et ceux de la question du papier, que
-// l'aperçu et la section des badges partagent. Chaque clé commence par
+// l'aperçu et la planche de badges partagent. Chaque clé commence par
 // « impression. ». Une donnée — le nom de l'événement, une date, un
 // horodatage, la version — n'entre dans aucun de ces textes : la feuille la
 // pose dans son propre nœud, à côté.
 export const TABLE = new Map([
-  // --- L'écran et sa barre (§ 11.7) ------------------------------------------
-  ['impression.titre', 'Aperçu avant impression'],
+  // --- La barre de l'aperçu (§ 11.7) -----------------------------------------
   ['impression.barre', "Commandes de l'aperçu"],
-  ['impression.commande.ouvrir', 'Imprimer…'],
   ['impression.commande.imprimer', 'Imprimer'],
-  ['impression.commande.fermer', "Fermer l'aperçu"],
   ['impression.groupe.reglages', 'Réglages de la vue'],
   ['impression.groupe.sortie', 'Papier et impression'],
 
@@ -25,11 +22,23 @@ export const TABLE = new Map([
   ['impression.tour.titre', 'Tour imprimé'],
   ['impression.tour.option', ({ tour }) => `Tour ${tour}`],
   ['impression.listes', 'Listes de noms'],
+  // L'organisation à droite de chaque nom des listes ; listes masquées, la
+  // bascule reste offerte, inactive, et dit pourquoi.
+  ['impression.organisations', 'Organisation'],
+  ['impression.organisationsSansListes', 'Imprimez les listes de noms pour y voir les organisations'],
   ['impression.decoupe.titre', 'Pages du plan'],
   ['impression.decoupe.auto', 'Découpage proposé'],
   ['impression.decoupe.unePage', 'Tout sur une page'],
   ['impression.decoupe.decoupe', 'Découper en pages'],
+  ['impression.parColonne', 'Une colonne par page'],
   ['impression.parTour', 'Une feuille par tour'],
+  ['impression.dessinTable', 'Dessiner la table'],
+  // Le tri de la liste d'accueil (cleTri) : par organisation, par nom, par
+  // prénom.
+  ['impression.tri.titre', 'Trier par'],
+  ['impression.tri.organisation', 'Organisation'],
+  ['impression.tri.nom', 'Nom'],
+  ['impression.tri.prenom', 'Prénom'],
 
   // --- La question du papier (§ 8.5, § 11.2) -----------------------------------
   ['impression.papier.question', 'Sur quel papier imprimez-vous ?'],

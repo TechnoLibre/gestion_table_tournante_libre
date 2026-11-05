@@ -14,7 +14,7 @@
 // (stockage/presence.js), la seule. Aucune fonction ne modifie ce qu'elle
 // reçoit.
 import { ordreDesReservations } from '../csv/import.js';
-import { SIEGES_MAX, capacite } from '../stockage/document.js';
+import { SIEGES_MAX, capacite, nomsDesTours } from '../stockage/document.js';
 import { presencesSousTours } from '../stockage/presence.js';
 import { controlerCapacites } from './capacite.js';
 import { ordreDesObjectifs } from './objectifs.js';
@@ -135,14 +135,15 @@ export function bilanChangementDefaut(charge, sieges, { realigner = false } = {}
  * la présence se viderait perd le champ, et figure dans presencesRognees
  * (presencesSousTours). Une hausse ne rogne rien : une présence énumérée ne
  * s'étend pas. Sous un tour, nombre que le changement de tours refuse,
- * aucune présence ne se rogne.
+ * aucune présence ne se rogne. nomsRetires, les noms des tours au-delà,
+ * {tour, nom}, par tour croissant ; un tour sans nom n'y figure pas.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {number} tours
  * @returns {{reservationsDetruites: Array<{participant: number, table: number, tour: number}>,
  *            objectifsDetruits: Array<{table: number, tour: number}>, propositionsTouchees: number[],
  *            retenuTouche: boolean, presencesRognees: Array<{participant: number, avant: number[], apres: number[]|null}>,
- *            presencesVidees: number[]}}
+ *            presencesVidees: number[], nomsRetires: Array<{tour: number, nom: string}>}}
  * @throws {TypeError} tours qui n'est pas un entier
  */
 export function bilanTours(charge, tours) {
@@ -167,6 +168,9 @@ export function bilanTours(charge, tours) {
     retenuTouche: charge.retenu !== null && touche(charge.retenu),
     presencesRognees: rognees,
     presencesVidees: videes,
+    nomsRetires: nomsDesTours(charge)
+      .map((nom, rang) => ({ tour: rang + 1, nom }))
+      .filter(({ tour, nom }) => tour > tours && nom !== null),
   };
 }
 

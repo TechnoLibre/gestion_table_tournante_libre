@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La machine d'une commande, et les remèdes d'un refus (§ 2.1, § 8.5,
-// § 14.6), purs : Commande.svelte et Refus.svelte les câblent. Seul le
-// remède ecrireAilleurs passe par l'indicateur d'activité de la page
-// (activite.js), qui hors d'une page ne fait qu'attendre une microtâche.
+// § 14.6), purs : Commande.svelte et Refus.svelte les câblent. Les remèdes
+// ouvrirSecours et ecrireAilleurs passent par l'indicateur d'activité de la
+// page (activite.js), qui hors d'une page ne fait qu'attendre une
+// microtâche.
 //
 // Une commande sans confirmation exécute à chaque clic. Une commande à
 // confirmer s'arme au premier clic — son libellé devient celui de la
@@ -35,7 +36,9 @@
 // régler un choix de la navigation — le départ d'une génération dérivée —, ou
 // par un geste que l'écran fournit : choisirPlace se choisit sur le plan,
 // enregistrerSous reprend la planche que l'écran a demandée. renommer ferme
-// l'événement : la liste des événements porte « Renommer » sur chacun.
+// l'événement : la liste des événements porte « Renommer » sur chacun, et
+// l'accueil y porte le focus sur la ligne de l'événement fermé, dont il
+// prend la clé par prendreRenommage.
 
 import { COMMANDES } from '../../application/commandes.js';
 import { suivre } from '../activite.js';
@@ -179,6 +182,37 @@ export function libelleRemede(remede) {
   return { cle: `communs.remede.${geste}`, details: {} };
 }
 
+// La clé de l'événement que le remède renommer a fermé, par séance, jusqu'à
+// ce que l'accueil la prenne.
+const RENOMMAGES = new WeakMap();
+
+/**
+ * La clé de l'événement dont le remède renommer demande le renommage sur la
+ * séance, posée avant la fermeture — la liste se monte pendant elle ; null
+ * sans demande. La demande se prend une seule fois.
+ *
+ * @param {object} seance
+ * @returns {string|null}
+ */
+export function prendreRenommage(seance) {
+  const cle = RENOMMAGES.get(seance) ?? null;
+  RENOMMAGES.delete(seance);
+  return cle;
+}
+
+// renommer : la clé de l'événement ouvert retenue, puis la fermeture ; une
+// fermeture refusée oublie la clé, l'événement restant ouvert.
+async function fermerPourRenommer(seance) {
+  const cle = seance.etat().evenement?.cle ?? null;
+  if (cle !== null) RENOMMAGES.set(seance, cle);
+  try {
+    return await seance.fermer();
+  } catch (erreur) {
+    RENOMMAGES.delete(seance);
+    throw erreur;
+  }
+}
+
 // Ce que fait un geste du remède, par la séance ou par l'état de navigation ;
 // null quand ce qui le ferait manque.
 function executionDuGeste(remede, seance, ui) {
@@ -188,11 +222,11 @@ function executionDuGeste(remede, seance, ui) {
     case 'debloquer':
       return () => seance.debloquer();
     case 'ouvrirSecours':
-      return () => seance.ouvrirSecours(seance.etat().evenement.cle, remede.source);
+      return () => suivre(() => seance.ouvrirSecours(seance.etat().evenement.cle, remede.source));
     case 'ecrireAilleurs':
       return () => suivre(() => seance.ecrireAilleurs(remede.racine ?? null));
     case 'renommer':
-      return () => seance.fermer();
+      return () => fermerPourRenommer(seance);
     case 'afficherTour':
       if (ui === null) return null;
       return () => {
@@ -217,19 +251,20 @@ function executionDuGeste(remede, seance, ui) {
 }
 
 /**
- * L'action qu'offre un remède : de quoi poser une Commande à côté du refus.
- * Un geste que gestes fournit passe par lui, avant tout autre chemin ;
+ * L'action qu'offre un remède : de quoi poser une Commande à côté du refus. Un
+ * geste que gestes fournit passe par lui, avant tout autre chemin ;
  * choisirPlace et enregistrerSous n'en ont pas d'autre. Un remède de commande
- * s'exécute par seance.executer, tel quel ; modifier, debloquer,
- * ouvrirSecours et ecrireAilleurs par la méthode de la séance de même nom —
- * passerEnEcriture pour modifier, la clé de l'événement ouvert pour
- * ouvrirSecours, l'indicateur d'activité pour ecrireAilleurs, qui recopie
- * l'événement (activite.js) ; renommer par seance.fermer, qui rend la liste
- * des événements, où chacun se renomme ; afficherTour et ouvrirSection par
- * l'état de navigation, ui, comme les deux gestes d'un départ refusé :
- * repartirDeZero retire le départ (ui.retirerDepart), libererTour décoche son
- * tour des tours figés du départ (ui.reglerToursFiges), et ne change rien
- * sans départ.
+ * s'exécute par seance.executer, tel quel ; modifier, debloquer, ouvrirSecours
+ * et ecrireAilleurs par la méthode de la séance de même nom — passerEnEcriture
+ * pour modifier, la clé de l'événement ouvert pour ouvrirSecours —, les deux
+ * derniers sous l'indicateur d'activité (activite.js), car ouvrirSecours ouvre
+ * une version de secours et ecrireAilleurs recopie l'événement ; renommer par
+ * seance.fermer, qui rend la liste des événements, où chacun se renomme, la
+ * clé de l'événement fermé retenue pour l'accueil (prendreRenommage) ;
+ * afficherTour et ouvrirSection par l'état de navigation, ui, comme les deux
+ * gestes d'un départ refusé : repartirDeZero retire le départ
+ * (ui.retirerDepart), libererTour décoche son tour des tours figés du départ
+ * (ui.reglerToursFiges), et ne change rien sans départ.
  *
  * @param {Object|null} remede
  * @param {{seance: Object, ui?: Object|null, gestes?: Object<string, (remede: Object) => unknown>}} dependances

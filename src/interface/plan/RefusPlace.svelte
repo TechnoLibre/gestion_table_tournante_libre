@@ -28,6 +28,7 @@
   // d'une place sur le plan —, que Refus reçoit tels quels. « Fermer » se
   // désigne par data-commande="fermerPose".
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import Refus from '../primitives/Refus.svelte';
   import { libellePlace } from './gestes.js';
   import { placerBulle } from './vue_plan.js';
@@ -35,6 +36,9 @@
   let { pose, zone, fermer, gestes = {} } = $props();
 
   const t = getContext('t');
+  const seance = getContext('seance');
+  // Les noms des tours, que le texte d'un avertissement lit (aides.js).
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
   const libelle = $derived(libellePlace(pose));
 
   let largeur = $state(0);
@@ -57,7 +61,7 @@
     <Refus refus={pose.refus} lever={fermer} {gestes} />
   {/if}
   {#each pose.avertissements as avertissement, rang (rang)}
-    <p class="avertissement" role="status" data-avertissement={avertissement.code}>{t(avertissement.code, avertissement.details)}</p>
+    <p class="avertissement" role="status" data-avertissement={avertissement.code}>{t(avertissement.code, { nomsTours, ...avertissement.details })}</p>
   {/each}
   <button type="button" class="fermer" data-commande="fermerPose" onclick={fermer}>{t('plan.refus.fermer')}</button>
 </div>

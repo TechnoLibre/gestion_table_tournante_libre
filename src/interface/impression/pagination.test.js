@@ -4,12 +4,13 @@
 // La pagination des listes imprimées (§ 11.7), sans DOM : des hauteurs
 // mesurées, la hauteur utile d'une page et celle de l'en-tête que chaque
 // page répète, et les pages qu'elles donnent — aux bords exacts, une ligne
-// plus haute qu'une page, une liste vide, plusieurs feuilles bout à bout ;
-// le texte d'une ligne plus haute qu'une page coupé en morceaux qui
-// tiennent chacun sur une page, entre les mots, et ses pages de suite.
+// plus haute qu'une page, une liste vide, plusieurs feuilles bout à bout,
+// une ligne liée qui ne finit pas une page ; le texte d'une ligne plus haute
+// qu'une page coupé en morceaux qui tiennent chacun sur une page, entre les
+// mots, et ses pages de suite.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
-import { couperTexte, mesurerPlace, morcelerPages, paginer, paginerFeuilles, trancher } from './pagination.js';
+import { couperTexte, hauteurDuMorceau, mesurerPlace, morcelerPages, paginer, paginerFeuilles, trancher } from './pagination.js';
 
 describe('paginer : les lignes d’une liste en pages', () => {
   test('une somme exactement égale à la hauteur utile, en-tête compris, tient sur une page ; + 0,01 en donne deux', () => {
@@ -95,6 +96,79 @@ describe('paginer : les lignes d’une liste en pages', () => {
   });
 });
 
+describe('paginer : une ligne liée à la suivante ne finit pas une page', () => {
+  const options = { hauteurUtile: 100, hauteurEntete: 10 };
+
+  test('une ligne liée qui finirait la page passe sur la suivante avec la ligne qui la suit', () => {
+    assert.deepEqual(paginer([30, 30, 20, 30], options), [
+      { debut: 0, fin: 3, seule: false },
+      { debut: 3, fin: 4, seule: false },
+    ]);
+    assert.deepEqual(paginer([30, 30, 20, 30], { ...options, liees: [2] }), [
+      { debut: 0, fin: 2, seule: false },
+      { debut: 2, fin: 4, seule: false },
+    ]);
+    // Deux lignes liées de suite vont ensemble avec la ligne qui les suit.
+    assert.deepEqual(paginer([30, 30, 5, 5, 30], { ...options, liees: [2, 3] }), [
+      { debut: 0, fin: 2, seule: false },
+      { debut: 2, fin: 5, seule: false },
+    ]);
+  });
+
+  test('une ligne liée que sa suivante accompagne sur la page, ou que rien ne suit, ne change rien', () => {
+    assert.deepEqual(paginer([20, 20, 20, 20], { ...options, liees: [0, 2] }), [{ debut: 0, fin: 4, seule: false }]);
+    assert.deepEqual(paginer([30, 30, 25, 5], { ...options, liees: [3] }), [{ debut: 0, fin: 4, seule: false }]);
+    assert.deepEqual(paginer([30, 30, 30, 20], { ...options, liees: [3] }), [
+      { debut: 0, fin: 3, seule: false },
+      { debut: 3, fin: 4, seule: false },
+    ]);
+  });
+
+  test('une ligne liée en tête de page reste sur la sienne : la ligne qui la suit, plus haute que ce qu’elle laisse, y est coupée, seule vrai', () => {
+    // La ligne de 85 tiendrait seule sous l'en-tête, pas sous sa ligne liée :
+    // elle se coupe sous elle plutôt que de l'abandonner en bas de page.
+    assert.deepEqual(paginer([20, 10, 85, 20], { ...options, liees: [1] }), [
+      { debut: 0, fin: 1, seule: false },
+      { debut: 1, fin: 3, seule: true },
+      { debut: 3, fin: 4, seule: false },
+    ]);
+    assert.deepEqual(paginer([10, 300], { ...options, liees: [0] }), [{ debut: 0, fin: 2, seule: true }]);
+  });
+
+  test('une ligne liée plus haute qu’une page est seule sur la sienne, et la ligne qui la suit commence la suivante', () => {
+    assert.deepEqual(paginer([20, 200, 20], { ...options, liees: [1] }), [
+      { debut: 0, fin: 1, seule: false },
+      { debut: 1, fin: 2, seule: true },
+      { debut: 2, fin: 3, seule: false },
+    ]);
+  });
+
+  test('chaque ligne sur une page et une seule ; une page ne finit sur une ligne liée que si elle finit la liste ou y est coupée', () => {
+    const hauteurs = Array.from({ length: 311 }, (_, i) => (i % 37 === 5 ? 130 : 4 + ((i * 7) % 11)));
+    const liees = hauteurs.map((_, i) => i).filter((i) => i % 5 === 0 || i % 37 === 4);
+    const { hauteurUtile, hauteurEntete } = { hauteurUtile: 120, hauteurEntete: 13 };
+    const pages = paginer(hauteurs, { hauteurUtile, hauteurEntete, liees });
+    assert.equal(pages[0].debut, 0);
+    assert.equal(pages.at(-1).fin, hauteurs.length);
+    for (let i = 1; i < pages.length; i += 1) assert.equal(pages[i].debut, pages[i - 1].fin);
+    for (const { debut, fin, seule } of pages) {
+      const somme = hauteurs.slice(debut, fin).reduce((a, b) => a + b, hauteurEntete);
+      assert.equal(seule, somme > hauteurUtile, `${debut}..${fin} : ${somme}`);
+      // Sur une page coupée, seule la dernière ligne passe ce qui reste.
+      if (seule) assert.ok(somme - hauteurs[fin - 1] <= hauteurUtile, `${debut}..${fin}`);
+      if (fin < hauteurs.length && liees.includes(fin - 1)) assert.ok(seule, `${debut}..${fin} finit sur une ligne liée`);
+    }
+    assert.ok(pages.some(({ debut, fin, seule }) => seule && fin - debut > 1), 'une page coupée sous une ligne liée');
+  });
+
+  test('des lignes liées hors des rangs de la liste lèvent RangeError ; autre chose qu’une liste, TypeError', () => {
+    for (const liees of [[-1], [3], [1.5], ['1']]) {
+      assert.throws(() => paginer([1, 2, 3], { ...options, liees }), RangeError, JSON.stringify(liees));
+    }
+    assert.throws(() => paginer([1, 2, 3], { ...options, liees: 'abc' }), TypeError);
+  });
+});
+
 describe('paginerFeuilles : plusieurs listes, chacune sur ses propres pages', () => {
   test('chaque feuille commence une page ; ses pages se suivent, son en-tête retranché de chacune', () => {
     const pages = paginerFeuilles(
@@ -110,6 +184,22 @@ describe('paginerFeuilles : plusieurs listes, chacune sur ses propres pages', ()
       { rang: 1, feuille: 0, debut: 3, fin: 4, seule: false },
       { rang: 2, feuille: 1, debut: 0, fin: 0, seule: false },
       { rang: 3, feuille: 2, debut: 0, fin: 2, seule: false },
+    ]);
+  });
+
+  test('les lignes liées de chaque feuille ne valent que pour elle', () => {
+    const pages = paginerFeuilles(
+      [
+        { entete: 10, lignes: [30, 30, 20, 30], liees: [2] },
+        { entete: 10, lignes: [30, 30, 20, 30] },
+      ],
+      100,
+    );
+    assert.deepEqual(pages, [
+      { rang: 0, feuille: 0, debut: 0, fin: 2, seule: false },
+      { rang: 1, feuille: 0, debut: 2, fin: 4, seule: false },
+      { rang: 2, feuille: 1, debut: 0, fin: 3, seule: false },
+      { rang: 3, feuille: 1, debut: 3, fin: 4, seule: false },
     ]);
   });
 
@@ -259,6 +349,26 @@ describe('morcelerPages : une ligne seule, continuée sur autant de pages que de
       { rang: 4, feuille: 0, debut: 2, fin: 3, seule: false, morceau: null },
       { rang: 5, feuille: 1, debut: 0, fin: 1, seule: true, morceau: null },
     ]);
+  });
+
+  test('une page coupée sous une ligne liée : la coupure vise sa dernière ligne, et chaque morceau garde la page entière, la ligne liée répétée', () => {
+    const pages = paginerFeuilles([{ entete: 10, lignes: [20, 10, 300], liees: [1] }], 100);
+    assert.deepEqual(morcelerPages(pages, [{ feuille: 0, ligne: 2, bornes: [0, 40, 95] }]), [
+      { rang: 0, feuille: 0, debut: 0, fin: 1, seule: false, morceau: null },
+      { rang: 1, feuille: 0, debut: 1, fin: 3, seule: true, morceau: { debut: 0, fin: 40 } },
+      { rang: 2, feuille: 0, debut: 1, fin: 3, seule: true, morceau: { debut: 40, fin: 95 } },
+    ]);
+    // Une coupure de la ligne liée, qui n'est pas la dernière, ne change rien.
+    assert.deepEqual(
+      morcelerPages(pages, [{ feuille: 0, ligne: 1, bornes: [0, 4, 9] }]),
+      pages.map((page) => ({ ...page, morceau: null })),
+    );
+  });
+
+  test('hauteurDuMorceau : la hauteur utile, moins l’en-tête et les lignes liées qui précèdent la ligne coupée', () => {
+    const feuille = { entete: 10, lignes: [20, 7, 5, 300] };
+    assert.equal(hauteurDuMorceau(feuille, { debut: 1, fin: 4 }, 100), 78);
+    assert.equal(hauteurDuMorceau(feuille, { debut: 3, fin: 4 }, 100), 90);
   });
 
   test('sans coupure, ou d’un seul morceau, une ligne seule garde sa page ; une coupure d’une ligne qui n’est pas seule ne change rien', () => {

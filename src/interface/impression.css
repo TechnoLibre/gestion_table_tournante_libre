@@ -14,10 +14,12 @@
    l'impression d'un autre écran par le navigateur le rend tel qu'il est,
    jamais en page blanche. Sous l'aperçu, tout élément qui n'est ni le
    document, ni dans lui, ni l'un de ses ancêtres, disparaît : le bandeau,
-   la barre de l'aperçu, la feuille gabarit. Les ancêtres du document
-   perdent marges, retraits, bords et hauteurs imposées : la première
-   feuille commence au coin de la première page, et la hauteur d'un
-   ancêtre ne tronque jamais le document à une page. */
+   la navigation et la tête de l'événement, la partie « Badges » de la
+   section de l'impression, les titres, la barre de l'aperçu, la feuille
+   gabarit. Les ancêtres du document perdent marges, retraits, bords,
+   hauteurs imposées et confinement : la première feuille commence au coin
+   de la première page, et ni la hauteur d'un ancêtre ni une zone de
+   défilement conteneur de taille ne tronquent le document à une page. */
 
 @page gtt-a4-portrait {
   size: A4 portrait;
@@ -55,6 +57,8 @@
     padding: 0 !important;
     border: 0 !important;
     overflow: visible !important;
+    contain: none !important;
+    container-type: normal !important;
   }
 
   [data-impression] {

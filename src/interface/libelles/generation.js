@@ -12,7 +12,7 @@
 // détails reçus sont des nombres, ou le nom d'un critère du registre, que le
 // texte écrit sous son nom complet, mobilier.critere.<nom>.
 import { creerFormat } from '../../application/format.js';
-import { auxToursNommes, cite, compte, enumeration, toursNommes } from '../../application/libelles/aides.js';
+import { auxToursNommes, cite, compte, enumeration, nomDuTour, tourDansPhrase, toursNommes } from '../../application/libelles/aides.js';
 
 // Le nom complet d'un critère, cité (§ 5.7) : celui que l'application donne
 // à mobilier.critere.<nom>, le même que le journal écrit.
@@ -42,8 +42,9 @@ function ecartees(identiques) {
   return ` ; ${compte(identiques, 'placement identique à une proposition présente, écarté', 'placements identiques à des propositions présentes, écartés')}`;
 }
 
-// « du tour 1 », « des tours 1 et 2 » : des tours nommés après « de ».
-const desTours = (tours) => `${tours.length === 1 ? 'du' : 'des'} ${toursNommes(tours)}`;
+// « du tour 1 », « des tours 1 et 2 » : des tours nommés après « de », sous
+// nomsTours (aides.js).
+const desTours = (tours, nomsTours) => `${tours.length === 1 ? 'du' : 'des'} ${toursNommes(tours, nomsTours)}`;
 
 // « figé » accordé au nombre de tours.
 const figes = (tours) => (tours.length === 1 ? 'figé' : 'figés');
@@ -224,6 +225,15 @@ export const TABLE = new Map([
       "palier avant de regarder les paliers suivants. Colonne « Conflits d'organisation (paire et tour) » des " +
       'propositions.',
   ],
+  [
+    'generation.priorites.explication.inclusionsNonSatisfaites',
+    'Les rencontres que les inclusions demandent et que le placement ne fait pas : une inclusion est satisfaite dès ' +
+      "que la personne partage une table, à un tour, avec la personne incluse ou avec un membre de l'organisation " +
+      'incluse. Une rencontre demandée des deux côtés compte une fois ; une liste qui demande plus de personnes que ' +
+      "la personne n'en peut rencontrer ne compte pas, et une inclusion qu'un conflit d'organisation contredit non " +
+      'plus. La recherche et le classement le veulent aussi bas que possible à son palier avant de regarder les ' +
+      'paliers suivants. Colonne « Inclusions non satisfaites » des propositions.',
+  ],
 
   // --- Les cœurs de calcul, un réglage du poste pour la séance (§ 5.10) --------
   // disponibles : les processeurs logiques du poste, hyperthreads compris.
@@ -288,10 +298,11 @@ export const TABLE = new Map([
 
   // --- Le départ d'une génération dérivée (§ 5.7, C6) -----------------------------
   // depart : l'identifiant de la proposition choisie, écrit tel quel comme
-  // tout numéro de proposition ; tour : le numéro d'un tour.
+  // tout numéro de proposition ; tour : le numéro d'un tour, nommé sous
+  // nomsTours.
   ['generation.depart.titre', ({ depart }) => `Départ : proposition n° ${depart}`],
   ['generation.depart.legende', 'Tours à figer'],
-  ['generation.depart.tour', ({ tour }) => `Tour ${tour}`],
+  ['generation.depart.tour', ({ tour, nomsTours }) => nomDuTour(tour, nomsTours)],
   [
     'generation.depart.note',
     'Un tour figé est repris tel quel du départ ; la génération ne refait que les autres, et part du plan du départ.',
@@ -303,22 +314,22 @@ export const TABLE = new Map([
   // supprimée, que participant nomme.
   ['generation.depart.ecarts', ({ depart }) => `Depuis n° ${depart} :`],
   ['generation.depart.personne', ({ personne, participant }) => personne ?? `La personne n° ${participant}, supprimée`],
-  ['generation.depart.retiree', ({ tours }) => ` — retirée ${desTours(tours)}`],
+  ['generation.depart.retiree', ({ tours, nomsTours }) => ` — retirée ${desTours(tours, nomsTours)}`],
   // Une exclue ou une supprimée assise aux tours figés du départ.
   [
     'generation.depart.rencontresFigees',
-    ({ tours }) => ` ; ses rencontres ${desTours(tours)}, ${figes(tours)}, ne comptent plus`,
+    ({ tours, nomsTours }) => ` ; ses rencontres ${desTours(tours, nomsTours)}, ${figes(tours)}, ne comptent plus`,
   ],
   [
     'generation.depart.aAsseoirFige',
-    ({ tours }) => ` — assise à la meilleure chaise libre ${desTours(tours)}, ${figes(tours)}`,
+    ({ tours, nomsTours }) => ` — assise à la meilleure chaise libre ${desTours(tours, nomsTours)}, ${figes(tours)}`,
   ],
   [
     'generation.depart.enReserveFige',
-    ({ tour, cause }) =>
-      ` — en réserve au tour ${tour}, figé : ${cause === 'siege' ? 'son siège réservé est pris' : "sa table n'a plus de chaise libre"}`,
+    ({ tour, cause, nomsTours }) =>
+      ` — en réserve au ${tourDansPhrase(tour, nomsTours)}, figé : ${cause === 'siege' ? 'son siège réservé est pris' : "sa table n'a plus de chaise libre"}`,
   ],
-  ['generation.depart.aAsseoir', ({ tours }) => ` — à asseoir ${auxToursNommes(tours)}`],
+  ['generation.depart.aAsseoir', ({ tours, nomsTours }) => ` — à asseoir ${auxToursNommes(tours, nomsTours)}`],
 
   // --- Les commandes ----------------------------------------------------------------
   ['generation.commande.generer', 'Générer'],

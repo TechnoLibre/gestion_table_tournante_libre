@@ -11,7 +11,7 @@
 #   ./create_exe.sh --reconstruire   l'écrase sans demander
 #
 # Sans terminal, la question reçoit « non » : l'exécutable existant reste, sauf
-# sous --reconstruire ou GTT_OUI=1.
+# sous --reconstruire. GTT_OUI=1 n'y répond pas.
 set -euo pipefail
 cd -- "$(dirname -- "$0")"
 . scripts/installation/commun.sh
@@ -37,14 +37,16 @@ esac
 
 # Un exécutable de cette version déjà construit : la question remplace le
 # refus de scripts/construire_windows.sh, et « oui » lui passe --reconstruire.
-# Le nom vient de deriver, appliqué à version.json, comme dans ce script.
+# Seul l'opérateur au terminal y répond (gtt_demander) : écraser un numéro qui
+# a peut-être quitté la machine ne se consent pas d'avance. Le nom vient de
+# deriver, appliqué à version.json, comme dans ce script.
 if [ "$reconstruire" = 0 ]; then
   nom="$(scripts/installation/avec_node.sh node -e "
     const { deriver } = require('./scripts/version.js');
     console.log(deriver(require('./version.json').version).nomFichier);
   ")"
   if [ -e "dist-electron/$nom" ]; then
-    gtt_confirmer "dist-electron/$nom existe déjà. L'écraser ?" \
+    gtt_demander "dist-electron/$nom existe déjà. L'écraser ?" \
       || gtt_refuser "dist-electron/$nom reste. Un numéro ne désigne qu'un binaire (§ 18.2) : changer la version pour un exécutable qui a déjà quitté cette machine."
     reconstruire=1
   fi

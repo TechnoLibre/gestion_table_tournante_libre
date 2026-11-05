@@ -24,7 +24,10 @@
   // champ — retient « Générer » : rien ne part tant qu'il est posé.
   //
   // La graine est pré-remplie de controleur.grainePropose() au montage, puis,
-  // à chaque lancement, de la graine suivante. Pendant le calcul, la section
+  // à chaque lancement, de la graine suivante. Une graine tapée qui n'est pas
+  // la graine proposée est une saisie que le lancement n'a pas encore prise :
+  // un geste ouvert (geste.js), qui suspend le compte d'inactivité de la
+  // séance (§ 8.4), jusqu'au lancement suivant. Pendant le calcul, la section
   // porte aria-busy="true" et montre l'avancement ; « Générer » reste offert,
   // et le contrôleur refuse un second lancement. Une annulation n'est pas un
   // refus : l'état prêt revient, et l'issue le dit. Le contrôleur vit plus
@@ -92,6 +95,7 @@
   import { ErreurAnnulee } from '../../application/generation.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
+  import { creerGeste } from '../primitives/geste.js';
   import Infobulle from '../primitives/Infobulle.svelte';
   import { evaluation, explicationDeColonne, texteCellule } from '../propositions/modele.js';
   import Avancement from './Avancement.svelte';
@@ -106,11 +110,12 @@
   const generation = getContext('generation');
   const ui = getContext('ui');
 
-  // La graine saisie, et son refus ; la question d'une génération longue,
-  // { estimation } ; ce que rend la dernière génération lancée d'ici ; le
-  // dernier refus du départ, { refus, depart }, depart étant l'état du
-  // départ qu'il juge.
-  let graine = $state(String(generation.grainePropose()));
+  // La graine proposée, la graine saisie, et son refus ; la question d'une
+  // génération longue, { estimation } ; ce que rend la dernière génération
+  // lancée d'ici ; le dernier refus du départ, { refus, depart }, depart étant
+  // l'état du départ qu'il juge.
+  let proposee = $state(String(generation.grainePropose()));
+  let graine = $state(proposee);
   let refusGraine = $state.raw(null);
   let question = $state.raw(null);
   let rendu = $state.raw(null);
@@ -122,7 +127,8 @@
   let enCoursAvant = false;
   const desabonner = generation.subscribe((etat) => {
     if (etat.enCours && !enCoursAvant) {
-      graine = String(generation.grainePropose());
+      proposee = String(generation.grainePropose());
+      graine = proposee;
       refusGraine = null;
       question = null;
       rendu = null;
@@ -131,6 +137,11 @@
     enCoursAvant = etat.enCours;
   });
   onDestroy(desabonner);
+
+  // Le geste suit la graine tapée que le lancement n'a pas prise.
+  const geste = creerGeste(seance);
+  $effect(() => geste.tenir(graine !== proposee));
+  onDestroy(() => geste.liberer());
 
   const charge = $derived($seance.charge);
 

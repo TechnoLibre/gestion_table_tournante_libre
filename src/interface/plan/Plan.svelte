@@ -22,10 +22,20 @@
   // transform. Un ResizeObserver sur la racine relit le cadre à chaque
   // changement de taille : tant que la vue est null, il la calcule par
   // vueInitiale, du cadrage que la séance a mémorisé ; ensuite par
-  // vueApresCadre. Ni l'une ni l'autre ne s'écrit : seul un geste de
-  // l'opérateur — molette, « Zoom + », « Zoom − », « Ajuster » — confie sa
-  // vue à seance.demanderCadrage, qui l'écrit, différée, dans
-  // reglages_locaux.json, jamais dans l'événement.
+  // vueApresCadre. La vue initiale précède le montage de PlanDessin, donc
+  // ses mesures et les rangées du plan écarté : les premières mesures la
+  // recalculent par vueInitiale sur le dessin écarté, quand il s'écarte et
+  // qu'aucun geste n'a encore posé de vue. Aucune ne s'écrit : seul un
+  // geste de l'opérateur — molette, « Zoom + », « Zoom − », « Ajuster »,
+  // « Voir sur le plan » — confie sa vue à seance.demanderCadrage, qui
+  // l'écrit, différée, dans reglages_locaux.json, jamais dans l'événement.
+  //
+  // « Voir sur le plan » (§ 7.1) pose ui.centrerEvidence : dès que la vue
+  // existe, la chaise de la personne mise en évidence vient au centre du
+  // cadre, au zoom où sa table dessine ses chaises, sans dézoomer une vue
+  // plus proche (vuePourVoir), puis la demande se retire ; sans chaise au
+  // tour montré, la vue ne bouge pas. Le menu d'une personne la met en
+  // évidence sans demande : la vue reste où l'opérateur la regarde.
   //
   // Le cadre se relit au moment du geste, par getBoundingClientRect de la
   // racine : un défilement de la page le déplace sans changer sa taille.
@@ -34,6 +44,20 @@
   // gabarit —, celui de la molette non passif, pour que la page ne défile
   // pas sous un zoom. touch-action: none sur la racine et la surface : le
   // navigateur ne prend aucun glissement du doigt pour un défilement.
+  //
+  // Le plan écarté (§ 7.4) : listes demandées et organisation montrée, les
+  // rangées de tables s'écartent sur le dessin juste assez pour qu'aucune
+  // organisation repliée ne pousse un bloc de noms sur celui du dessous
+  // (rangeesEcartees), à tout zoom — franchir K_LISTES ne déplace aucune
+  // table. Les rangées se calculent sur le modèle des tables à leur position
+  // enregistrée, aux mesures que PlanDessin rend, puis le modèle dessiné les
+  // reçoit ; rien ne s'écrit. Tout ce qui lit le dessin lit le modèle
+  // dessiné, ou les mêmes rangées : l'englobant de la vue, « Voir sur le
+  // plan », la désignation d'une chaise, l'infobulle, le clavier. Le
+  // glissement d'une table part de son centre sur le dessin, et le centre
+  // lâché revient à une position enregistrée par les rangées de l'appui
+  // (positionDepuisDessin) : lâchée sur une rangée du dessin, la table prend
+  // son ordonnée enregistrée.
   //
   // diagnostic : celui que rend diagnostiquer, que SectionPlan passe, ou
   // null — le bandeau ne porte alors que la phrase des conflits (§ 7.5).
@@ -93,7 +117,9 @@
   // suivant.
   import { getContext, tick, untrack } from 'svelte';
   import { controlerCapacite } from '../../application/capacite.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import { constante } from '../../geometrie/constantes.js';
+  import { positionDepuisDessin } from '../../geometrie/tables.js';
   import { ajuster as vueAjustee, ecranDepuisDessin, transformDe } from '../../geometrie/vue.js';
   import { evaluation } from '../propositions/modele.js';
   import { effetDe } from '../raccourcis.js';
@@ -106,7 +132,7 @@
   import { REPOS, cleFantome, geste, memoriser } from './gestes.js';
   import Infobulle from './Infobulle.svelte';
   import Legende from './Legende.svelte';
-  import { detailConflits, legendeConflits, modeleDessin } from './modele.js';
+  import { detailConflits, legendeConflits, modeleDessin, rangeesEcartees } from './modele.js';
   import PlanDessin from './PlanDessin.svelte';
   import RefusPlace from './RefusPlace.svelte';
   import {
@@ -118,6 +144,7 @@
     sourceMontree,
     vueApresCadre,
     vueInitiale,
+    vuePourVoir,
     zoomerBouton,
     zoomerMolette,
   } from './vue_plan.js';
@@ -145,6 +172,8 @@
   // chaque appui, jamais dans un pointermove. C'est aussi la zone où
   // l'infobulle et le refus posé sur une place se tiennent.
   let origineSvg = $state.raw({ gauche: 0, haut: 0, largeur: 0, hauteur: 0 });
+  // Les mesures des listes que PlanDessin rend, null sans elles.
+  let mesures = $state.raw(null);
   // L'élément actif du clavier, {table, siege|null}, ou null ; la racine a
   // le focus ; le focus vient du clavier.
   let actif = $state.raw(null);
@@ -164,10 +193,11 @@
   let legendeOuverte = $state(false);
 
   const charge = $derived($seance.charge);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived(nomsDesTours(charge));
   const tours = $derived(charge.evenement.tours);
   const etat = $derived(etatTour);
   const tour = $derived(etat.tour);
-  const englobantPlan = $derived(englobantDuTour(etat));
   const nomDe = $derived(nomDeCharge(charge));
   const organisationDe = $derived(organisationDeCharge(charge));
   // Les règles actives, que la légende montre : celles que les réglages
@@ -179,26 +209,38 @@
   // Le placement que le plan montre, que la barre de vue nomme.
   const source = $derived(sourceMontree(etat, $ui.proposition, charge.retenu !== null));
   // La personne mise en évidence, que la barre de vue nomme (evidenceDe) :
-  // {id, nom, absente}, nom null pour une personne que la charge n'a plus,
-  // absente vrai quand elle est absente au tour montré ; null sans mise en
-  // évidence.
+  // {id, nom, absente, reserve}, nom null pour une personne que la charge
+  // n'a plus, absente vrai quand elle est absente au tour montré, reserve
+  // quand elle y est dans la réserve ; null sans mise en évidence.
   const evidence = $derived($ui.miseEnEvidence === null ? null : evidenceDe($ui.miseEnEvidence, nomDe, etat));
   // L'élément actif que le dessin marque : sous un focus venu du clavier.
   const actifMontre = $derived(aLeFocus && auClavier ? actif : null);
-  const modele = $derived(
-    vue === null
-      ? null
-      : modeleDessin(etat, {
-          k: vue.k,
-          listes: $ui.listes,
-          miseEnEvidence: $ui.miseEnEvidence,
-          nomDe,
-          diagnostic,
-          poignee,
-          selection,
-          actif: actifMontre,
-        }),
+  // Le modèle de dessin, les tables posées où les rangées les dessinent.
+  const dessiner = (rangees) =>
+    modeleDessin(etat, {
+      k: vue.k,
+      listes: $ui.listes,
+      miseEnEvidence: $ui.miseEnEvidence,
+      nomDe,
+      organisations: $ui.organisations,
+      organisationDe,
+      diagnostic,
+      poignee,
+      selection,
+      actif: actifMontre,
+      nomsTours,
+      rangees,
+    });
+  // Le modèle des tables à leur position enregistrée, puis les rangées du
+  // plan écarté, aucune quand rien ne s'écarte, puis le modèle dessiné.
+  const modeleEnregistre = $derived(vue === null ? null : dessiner([]));
+  const rangees = $derived(
+    modeleEnregistre === null || mesures === null || !$ui.listes || !$ui.organisations
+      ? []
+      : rangeesEcartees(modeleEnregistre, t, { ...mesures, largeur: constante('LARGEUR_BLOC_NOMS_CM') }),
   );
+  const modele = $derived(modeleEnregistre === null || rangees.length === 0 ? modeleEnregistre : dessiner(rangees));
+  const englobantPlan = $derived(englobantDuTour(etat, rangees));
   // La pose à sa position dans la surface, sous la vue courante ; rien pour
   // une place dont la table n'est plus dessinée.
   const poseAffichee = $derived.by(() => {
@@ -232,10 +274,15 @@
   // Le cadre de la racine, relu maintenant.
   const cadreCourant = () => cadreDepuisRect(racine.getBoundingClientRect());
 
+  // Vrai tant que la vue est la vue initiale, calculée avant les mesures de
+  // PlanDessin, sans les rangées du plan écarté.
+  let vueSansMesures = true;
+
   // Pose la vue d'un geste de l'opérateur et la confie à la séance ; une
   // vue null — rien à zoomer dans ce cadre — ne change rien.
   function poserVue(suivante) {
     if (suivante === null) return;
+    vueSansMesures = false;
     vue = suivante;
     seance.demanderCadrage(suivante);
   }
@@ -269,7 +316,7 @@
     const groupe = element.closest('[data-table]');
     if (groupe !== null) {
       const table = Number(groupe.dataset.table);
-      const { x, y } = tableDeEtat(table).position;
+      const { x, y } = modele.tables.find(({ id }) => id === table).geometrie.centre;
       return { genre: 'table', table, siege: null, participant: null, position: { x, y } };
     }
     return { genre: 'sol', table: null, siege: null, participant: null };
@@ -470,6 +517,19 @@
     };
   });
 
+  // Les premières mesures : la vue initiale se recalcule sur l'englobant du
+  // plan écarté, quand des rangées s'écartent, et la vue d'un geste reste.
+  $effect(() => {
+    if (mesures === null || !vueSansMesures) return;
+    const englobantMesure = englobantPlan;
+    const ecarte = rangees.length > 0;
+    untrack(() => {
+      vueSansMesures = false;
+      const suivante = ecarte ? vueInitiale(seance.cadrage(), englobantMesure, cadreCourant()) : null;
+      if (suivante !== null) vue = suivante;
+    });
+  });
+
   $effect(() => {
     const element = racine;
     let etatGeste = REPOS;
@@ -583,11 +643,12 @@
           pression = table;
         }, DUREE_PRESSION);
       }
-      // La charge, l'état, les géométries et k du moment de l'appui : le
-      // geste se juge sur eux jusqu'à son terme.
+      // La charge, l'état, les géométries, les rangées et k du moment de
+      // l'appui : le geste se juge sur eux jusqu'à son terme.
       const chargeDuGeste = charge;
       const etatDuGeste = etat;
       const geometries = modele.tables.map((table) => table.geometrie);
+      const rangeesDuGeste = rangees;
       const k = vue.k;
       contexte = {
         controlerPlaces: memoriser((table, places) => controlerCapacite(chargeDuGeste, table, places, { origine: 'poignee' })),
@@ -602,6 +663,7 @@
             k,
           }),
         surLeSol: (point) => designerAuPoint(point, geometries, k).surLeSol,
+        positionDe: (point) => positionDepuisDessin(point, rangeesDuGeste),
       };
       const point = { x: evenement.clientX, y: evenement.clientY };
       appliquer(geste(etatGeste, { type: 'presser', source, pointeur: evenement.pointerId, point, vue, cadre }, contexte));
@@ -728,6 +790,17 @@
     };
   });
 
+  // La demande de « Voir sur le plan », servie sur la première vue qui
+  // existe, puis retirée, que la vue bouge ou non. La chaise se centre là
+  // où le plan écarté la dessine : vuePourVoir reçoit les rangées.
+  $effect(() => {
+    if (!$ui.centrerEvidence || vue === null) return;
+    untrack(() => {
+      const id = ui.etat().miseEnEvidence;
+      if (id !== null) poserVue(vuePourVoir(vue, etat, id, englobantPlan, cadreCourant(), rangees));
+      ui.evidenceCentree();
+    });
+  });
   // La place qui porte la pose la désigne par aria-describedby ; l'effet
   // suit le modèle, qui peut redessiner la chaise.
   $effect(() => {
@@ -743,6 +816,7 @@
   <BarreVue
     {tour}
     {tours}
+    {nomsTours}
     {zoomer}
     {ajuster}
     {evidence}
@@ -773,7 +847,7 @@
     >
       <g data-vue transform={vue === null ? undefined : transformDe(vue)} bind:this={groupeVue}>
         {#if modele !== null}
-          <PlanDessin {modele} />
+          <PlanDessin {modele} bind:mesures />
         {/if}
       </g>
       <Fantome {fantome} bind:element={elementFantome} />

@@ -36,7 +36,7 @@
   // contradiction, son code traduit et la personne nommée.
   //
   // Sinon, la liste des vues, dans leur ordre à l'écran, mène à chacune :
-  // un lien porte le focus sur la vue, qui se fait voir. Puis les dix vues,
+  // un lien porte le focus sur la vue, qui se fait voir. Puis les onze vues,
   // chacune sous le contrat de propriétés {detail, ligne, table} — le
   // détail du placement (detailDe, modele.js), la ligne d'évaluation de la
   // source, la table d'évaluation de la charge. Le détail se mesure pour la
@@ -60,6 +60,7 @@
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { derivationDe } from '../../application/depart.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import { texteFiliation } from '../propositions/filiation.js';
   import { evaluation, nomDe } from '../propositions/modele.js';
   import { detailDe } from './modele.js';
@@ -69,6 +70,7 @@
   import VueComparaison from './VueComparaison.svelte';
   import VueDiversite from './VueDiversite.svelte';
   import VueEntete from './VueEntete.svelte';
+  import VueInclusions from './VueInclusions.svelte';
   import VueObjectifs from './VueObjectifs.svelte';
   import VuePaires from './VuePaires.svelte';
   import VuePerformance from './VuePerformance.svelte';
@@ -93,6 +95,7 @@
     ['collisions', VueCollisions],
     ['tables', VueTables],
     ['paires', VuePaires],
+    ['inclusions', VueInclusions],
     ['objectifs', VueObjectifs],
     ['animateurs', VueAnimateurs],
     ['diversite', VueDiversite],
@@ -105,7 +108,7 @@
   const ligne = $derived(source?.ligne ?? null);
   // La phrase de filiation de la source, null pour le retenu, sans source
   // et hors d'une dérivée.
-  const filiation = $derived(typeof source?.id === 'number' ? texteFiliation(derivationDe(charge, source.id), { t, format }) : null);
+  const filiation = $derived(typeof source?.id === 'number' ? texteFiliation(derivationDe(charge, source.id), { t, format, nomsTours: nomsDesTours(charge) }) : null);
   const detail = $derived(
     source?.cas === 'mesurable'
       ? detailDe(charge, source.id, { courseDe: (id) => seance.courseDe(id), generationDe: (id) => generation.generationDe(id) })

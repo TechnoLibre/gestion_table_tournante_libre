@@ -638,7 +638,8 @@ describe('« À propos » (§ 18.6)', () => {
     expect(dans(m, '[data-auteur]').textContent.trim()).toBe('Mathieu Benoit');
     expect(dans(m, '[data-role]').textContent.trim()).toBe('Développeur, concepteur et mainteneur du logiciel');
     expect(credits.compareDocumentPosition(dans(m, '[data-bloc]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(panneau(m).textContent.includes(VERSION.windows)).toBe(false);
+    // La forme Windows (§ 18.1), la technique suivie de « .0 ».
+    expect(panneau(m).textContent.includes(`${VERSION.technique}.0`)).toBe(false);
     dans(m, '[data-commande="copier"]').click();
     await vi.waitFor(() => expect(m.presse.copies).toEqual([dans(m, '[data-bloc]').textContent]));
     expect(m.presse.copies[0]).not.toContain('TechnoLibre Inc.');

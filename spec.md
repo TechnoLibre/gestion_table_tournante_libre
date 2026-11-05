@@ -53,8 +53,9 @@ moment d'imprimer à ressortir de toutes les étapes pour y revenir, or corriger
 est ce qu'il fait le plus (§ 10.2). La navigation de l'événement groupe ses neuf
 sections en trois phases nommées : **Préparer** (import, participants, tables et
 tours), **Placer** (plan, diagnostic, génération, propositions, qualité),
-**Produire** (badges). Le groupement est une lecture, non un ordre : chaque
-section reste offerte depuis toutes les autres.
+**Produire** (impression : la planche de badges, puis l'aperçu des autres
+sorties). Le groupement est une lecture, non un ordre : chaque section reste
+offerte depuis toutes les autres.
 
 **Deux verrous existent pourtant, et ils sont ailleurs.** L'état **bloqué**
 refuse toute modification, import compris (§ 9, § 10.1) ; le **mode lecture**,
@@ -112,12 +113,19 @@ là, avant comme pendant la soirée ; une colonne du CSV les importe (§ 10.1).
 Valider une présence est une entrée d'historique, qui ajuste le placement
 retenu (§ 5.8).
 
+La fiche porte enfin ses **inclusions** (§ 4) : les organisations et les
+personnes qu'elle doit rencontrer au moins une fois, une case par organisation
+ou par personne, sous deux rubriques ; la grille les montre dans une colonne
+qu'elle masque par défaut (§ 10.2), et deux colonnes du CSV les importent
+(§ 10.1). Elles ne sont exigées nulle part.
+
 **4. Préparer les tables.** *Obligatoire.* L'opérateur fixe le nombre de sièges
-par défaut, crée les tables — une à une, ou d'un geste celles qui manquent
-pour asseoir chacun, à la taille qu'il donne —, surcharge celles qui diffèrent
-(§ 6.1) et les dispose sur le plan (§ 7.1). Le logiciel énonce la conséquence
-chiffrée d'un changement de défaut avant de l'appliquer, n'écrase aucune
-surcharge, et refuse en bloc une baisse qu'une seule table refuse (§ 6.1).
+par défaut, crée les tables — une à une, ou d'un geste celles qui manquent pour
+asseoir chacun, à la taille qu'il donne, et qui reçoivent les animateurs à
+désigner (étape 6) —, surcharge celles qui diffèrent (§ 6.1) et les dispose sur
+le plan (§ 7.1). Le logiciel énonce la conséquence chiffrée d'un changement de
+défaut avant de l'appliquer, n'écrase aucune surcharge, et refuse en bloc une
+baisse qu'une seule table refuse (§ 6.1).
 
 Il donne au besoin à une table un **objectif** (§ 4.5) — les étiquettes des
 personnes qu'elle attend, sous la règle « au moins une » ou « toutes » —, pour
@@ -138,15 +146,19 @@ nomme les personnes qu'il laisse absentes de ce tour. Les placements déjà
 engendrés, eux, ne sont pas tronqués : ils ne portent plus le nombre de tours de
 la soirée, restent entiers **en dérive** (§ 9), et le logiciel nomme ceux que le
 changement touche. Les annoncer après coup ferait découvrir la perte à
-l'impression.
+l'impression. Chaque tour peut aussi porter un nom, saisi au même endroit
+(§ 4) : retirer un tour retire son nom, que l'annonce nomme, et un tour ajouté
+vient sans nom.
 
 **6. Désigner les animateurs, table par table.** *Facultative — une soirée sans
 aucun animateur est une configuration valide, et la petite démonstration en est
 une (§ 15.3). Reprenable : une désignation se retire, se déplace, s'ajoute après
 la génération.*
 
-L'opérateur désigne **lui-même quelle personne anime quelle table**. Il n'existe
-aucune commande qui répartit les animateurs sur les tables (§ 5.8).
+L'opérateur désigne **lui-même quelle personne anime quelle table**. Une seule
+commande répartit des animateurs, et seulement sur les tables qu'elle crée :
+« Créer les tables… » (§ 6.1), pour les personnes que la marque de l'animation
+réservée dit à désigner (§ 4, § 5.8).
 
 Un geste de désignation produit **deux faits sur la même place**, sous une seule
 entrée d'historique : une **réservation** de portée « tous les tours » au nom de
@@ -154,23 +166,48 @@ la personne, et un **titre de place** (§ 4). Les deux ensemble font l'animateur
 ni l'un ni l'autre seul. Le titre reste quand son titulaire part, et la table
 affiche « titre *animateur* non pourvu » (§ 4.1). Le statut d'« ancré » du § 4.2
 en découle comme un fait calculé : le logiciel ne porte aucune case « est
-animateur ».
+animateur ». La marque de l'animation réservée (§ 4) n'en est pas une : elle
+dit qu'une personne est **à désigner**, jamais qu'elle anime, et l'import qui
+la pose ne désigne personne.
 
 La désignation se fait aussi **en lot**, depuis la rangée « Animateurs » de
 chaque table dans « Tables et tours » (§ 6.1) : les personnes choisies sont
-désignées ensemble sous un même titre, en une seule entrée d'historique, et si
-une seule est refusée, aucune n'est désignée. Une personne absente à un tour est
-refusée avant toute désignation (§ 5.9) : sa réservation « tous les tours » ne
+désignées ensemble, en une seule entrée d'historique, et si une seule est
+refusée, aucune n'est désignée. Une personne absente à un tour est refusée
+avant toute désignation (§ 5.9) : sa réservation « tous les tours » ne
 pourvoirait aucun titre pour la soirée. Chaque personne du lot reçoit **son
 propre titre** : au siège sans titre qu'elle tient déjà à cette table, s'il en
 est un, sinon au plus petit siège de la table qui n'en porte aucun et que ne
 tient, à aucun tour, la réservation active d'une autre personne — une
 réservation suspendue par une exclusion ou une absence ne tient rien (§ 4.4) :
-un titre non pourvu posé avant le lot reste tel quel, à sa place, et
-une place réservée à la main n'arrête pas le lot tant qu'il reste une place
-libre. Quand aucun siège n'est à la fois sans titre et libre, le lot suit la
-règle de la désignation au plan et pourvoit le premier titre non pourvu de la
-table.
+un titre non pourvu posé avant le lot reste tel quel, à sa place, et une place
+réservée à la main n'arrête pas le lot tant qu'il reste une place libre. Ce
+titre porte le **titre pressenti** de la personne (§ 4), quand elle en a un
+qui ne se réduit pas à des espaces ; le titre saisi dans la fenêtre vaut pour
+les autres : une personne pressentie « animatrice VIP » porte ce titre sur sa
+place et sur son badge, et sa voisine de lot sans titre pressenti reçoit le
+titre saisi, « animateur » par défaut. Quand aucun siège n'est à la fois sans
+titre et libre, le lot suit la règle de la désignation au plan et pourvoit le
+premier titre non pourvu de la table, dont le libellé ne change pas.
+
+La désignation se fait enfin **à la création des tables** qui manquent (§ 6.1),
+dans l'entrée d'historique qui les crée : chaque personne à désigner — marquée,
+non exclue, qui n'anime encore aucune table — l'est sur l'une des tables
+créées. Les personnes passent par identifiant croissant ; chacune va à la table
+créée qui a le moins d'animateurs, puis à celle dont aucun animateur ne porte
+son organisation, puis à celle de plus petit numéro. Elle y reçoit, comme au
+lot, une réservation « tous les tours » et son propre titre au plus petit siège
+libre : son titre pressenti, s'il ne se réduit pas à des espaces, sinon
+« animateur ». Une table créée garde au moins un siège qui tourne : elle reçoit
+au plus un animateur de moins que ses places. Ne sont pas désignées une
+personne absente à un tour, une personne à qui une place est déjà réservée, et
+celle qui ne trouve plus de place d'animateur aux tables créées : la création
+réussit quand même, et son avertissement (`ANIMATEURS_A_DESIGNER`) nomme
+chacune avec sa cause et renvoie à la rangée « Animateurs », en disant, pour
+chaque cause présente, ce qui y précède la désignation : l'absente s'y désigne
+une fois sa présence rendue à tous les tours, la personne réservée à la table
+de sa réservation ou une fois celle-ci retirée. Une personne exclue est passée
+sans mot. Créer une seule table ne désigne personne.
 
 Le retrait d'un animateur depuis cette rangée retire **ensemble** sa
 réservation « tous les tours » et **un seul** titre, celui qu'elle pourvoit, en
@@ -178,7 +215,10 @@ une entrée ; les autres réservations et titres de la table restent. Le fichier
 ne garde pas quel geste a posé un titre : deux titres au même siège, et le
 premier par libellé part, l'autre reste non pourvu ; un titre posé avant une
 désignation qui l'a pourvu — au plan, ou par un lot sans siège à la fois libre
-et sans titre — part avec elle.
+et sans titre — part avec elle. Il ne garde pas non plus quel geste a posé une
+réservation : chaque réservation « tous les tours » de la personne qui pourvoit
+un titre de la table part au retrait, y compris celle posée à la main avant le
+lot, au siège où le lot a mis son titre, et aucun avis ne le signale.
 
 **« La place » se lit de deux façons, et le logiciel tranche** : c'est un
 **siège** quand l'attribution des sièges est active (§ 5.3), la **table** sinon.
@@ -198,10 +238,13 @@ du § 5.9 gardent cette étape comme n'importe quelle autre pose : personne
 exclue, deux places sur un même tour, dépôt sur une place déjà réservée à un
 autre.
 
-Le logiciel n'assigne pas, il **montre le travail qui reste**, par deux listes
-cliquables qui mènent à la place ou à la personne : la liste des **titres de
-place non pourvus** (§ 4.1), et la liste des participants portant un **titre
-pressenti** (§ 4) qui ne sont encore réservés nulle part.
+Hors de la création des tables, le logiciel n'assigne pas, il **montre le
+travail qui reste**, par deux listes cliquables qui mènent à la place ou à la
+personne : la liste des **titres de place non pourvus** (§ 4.1), et la liste des
+participants portant un **titre pressenti** (§ 4) qui ne sont encore réservés
+nulle part. La colonne « Animation » de la liste des participants (§ 10.2) dit,
+pour chaque personne, les tables qu'elle anime, ou « à désigner » sous la marque
+de l'animation réservée.
 
 **7. Placer des participants à la main.** *Facultative, reprenable.* Ce sont des
 réservations ordinaires (§ 5.8). Le logiciel refuse de déposer quelqu'un sur une
@@ -213,7 +256,10 @@ demander.* Avant toute recherche, il énonce ce que la configuration rend
 inévitable, combien, et ce qui le rendrait évitable (§ 5.6), donne le **plafond
 a priori** (§ 5.5), et donne le **plancher de l'écart d'itinéraire maximal**
 quand la configuration en impose un. Sans ce dernier, le troisième chiffre de la
-page de qualité envoie relancer vers un zéro que la configuration interdit.
+page de qualité envoie relancer vers un zéro que la configuration interdit. Il
+nomme aussi les inclusions qu'aucun plan ne satisfait, et les listes
+d'inclusions qui demandent plus de personnes que leur personne n'en peut
+rencontrer (§ 5.6).
 
 **9. Générer.** *Nécessaire pour obtenir un placement, reprenable sans perte.*
 La commande prend une **graine** et un **compte d'arrêt** ; chaque proposition
@@ -224,9 +270,12 @@ ordonne tous. Les réservations des étapes 6 et 7 sont honorées, le moteur pla
 les autres autour (§ 5.2). Les critères que la recherche poursuit et que le
 classement applique sont ceux que l'opérateur coche (§ 5.3), dans l'**ordre des
 priorités** qu'il règle à côté (§ 5.7) ; pour les objectifs des tables, il y
-choisit aussi ce que le critère cherche d'abord, le **mode** (§ 5.3). Sans
-réglage, c'est l'ordre par défaut et le mode « le plus de places servies ». Le
-logiciel nomme automatiquement l'instant qui précède chaque génération (§ 8.3).
+choisit aussi ce que le critère cherche d'abord, le **mode** (§ 5.3). Les
+conflits d'organisation et les inclusions de l'étape 3 comptent sans case dès
+qu'ils ont un objet ; l'ordre par défaut les range en tête, les inclusions
+juste après les conflits (§ 5.3, § 5.7). Sans réglage, c'est l'ordre par défaut
+et le mode « le plus de places servies ». Le logiciel nomme automatiquement
+l'instant qui précède chaque génération (§ 8.3).
 Une génération peut aussi **repartir d'une proposition** choisie au tableau,
 son **départ**, et en figer des tours : ses propositions, dites
 **dérivées**, continuent le plan du départ sous de nouvelles graines, ne
@@ -243,17 +292,20 @@ placements sur le même axe — celui du **manque** (§ 12.10) — dans sa vue d
 comparaison, qui trace les deux courbes sur un même tracé et pose leurs chiffres
 côte à côte, puis retient celui qu'il préfère. « Comparer », dans le menu
 « Actions » de la ligne d'une proposition comparable du tableau des propositions
-et de celle du placement retenu, y mène. La page de qualité est la section « Qualité » de l'événement :
-elle mesure le placement que le plan montre, et chaque ligne du tableau des
-propositions y mène. Elle répond à deux questions — ce placement est-il bon, qui
-s'y trouve mal servi — par le profil des rencontres, les collisions
-d'organisation, les paires répétées, le mélange des organisations à chaque
-table, les objectifs des tables tour par tour, les animateurs, et la performance
-du calcul qui a produit la proposition. Le logiciel sépare ce que le moteur a
-décidé de ce que les réservations imposent (§ 5.4). Retenir fait passer le plan
-à l'état *Retenu* (§ 9) ; les propositions non retenues restent disponibles. Le
-retenu se résume ensuite dans la liste des événements, par ses collisions
-cumulées et ses rencontres répétées choisies (§ 5.4, § 8.1).
+et de celle du placement retenu, y mène. La page de qualité est la section
+« Qualité » de l'événement : elle mesure le placement que le plan montre, et
+chaque ligne du tableau des propositions y mène. Elle répond à deux questions —
+ce placement est-il bon, qui s'y trouve mal servi — par le profil des
+rencontres, les collisions d'organisation, les paires répétées, les inclusions
+non satisfaites, le mélange des organisations à chaque table, les objectifs des
+tables tour par tour, les animateurs, et la performance du calcul qui a produit
+la proposition. Le tableau des propositions, le plan, la fiche et la grille des
+participants nomment eux aussi chaque inclusion qu'un placement laisse non
+satisfaite (§ 12.15). Le logiciel sépare ce que le moteur a décidé de ce que les
+réservations imposent (§ 5.4). Retenir fait passer le plan à l'état *Retenu*
+(§ 9) ; les propositions non retenues restent disponibles. Le retenu se résume
+ensuite dans la liste des événements, par ses collisions cumulées et ses
+rencontres répétées choisies (§ 5.4, § 8.1).
 
 **11. Ajuster à la main.** *Facultative, reprenable.* Le même geste qu'à
 l'étape 7 déplace maintenant une personne réelle dans le placement retenu. **Le
@@ -267,11 +319,13 @@ tours où il est présent, et personne d'autre ne change de place.
 
 **12. Imprimer.** La **planche de badges** (§ 11.1), qui est le seul document
 PDF, et au besoin les vues imprimables : liste d'accueil, feuille par table,
-plan (§ 11.7). La page de qualité se lit à l'écran et ne s'imprime pas. Le
-logiciel n'interdit pas d'imprimer un plan qui n'est ni retenu ni bloqué ; il le
-marque **BROUILLON** en filigrane. **Produire la planche n'est pas une
-modification** : elle reste disponible en mode lecture et sur un plan bloqué.
-L'opérateur bloque ensuite le plan pour le distribuer (§ 9).
+plan (§ 11.7). Tout part de la section « Impression » : sous son titre
+« Badges », la planche, sa liste CSV et la réédition ; sous son titre « Plan »,
+l'aperçu avant impression des trois vues. La page de qualité se lit à l'écran et
+ne s'imprime pas. Le logiciel n'interdit pas d'imprimer un plan qui n'est ni
+retenu ni bloqué ; il le marque **BROUILLON** en filigrane. **Produire la
+planche n'est pas une modification** : elle reste disponible en mode lecture et
+sur un plan bloqué. L'opérateur bloque ensuite le plan pour le distribuer (§ 9).
 
 **Ce qui doit avoir eu lieu.** Les étapes 2, 3, 5, 6, 7, 10 et 11 sont
 facultatives ; 2, 3, 4, 5, 6, 7, 9 et 11 se reprennent indéfiniment, dans
@@ -313,6 +367,7 @@ une section de ce document. Les deux s'écrivent à la main (§ 19.8).
 | `PRE-12` | Télécharger les modèles CSV et les fichiers d'exemple | § 10.1, § 10.3 |
 | `PRE-13` | Donner un libellé aux tables | § 4, § 7.7 |
 | `PRE-14` | Donner un logo aux personnes | § 8.9, § 10.2 |
+| `PRE-15` | Nommer les inclusions d'une personne : organisations et participants à rencontrer au moins une fois | § 4, § 10.1, § 10.2 |
 
 **Placer** — `PLA`
 
@@ -335,6 +390,7 @@ une section de ce document. Les deux s'écrivent à la main (§ 19.8).
 | `PLA-15` | Ajuster le placement retenu, qui suit les présences | § 5.8 |
 | `PLA-16` | Signaler les tables en conflit sur le plan | § 7.5 |
 | `PLA-17` | Inscrire le numéro de chaque table sur son plateau | § 7.7 |
+| `PLA-18` | Voir chaque inclusion non satisfaite d'une proposition | § 5.7, § 7.5, § 12.15 |
 
 **Produire** — `PRO`
 
@@ -348,6 +404,7 @@ une section de ce document. Les deux s'écrivent à la main (§ 19.8).
 | `PRO-06` | Imprimer une feuille par table | § 11.7 |
 | `PRO-07` | Imprimer le plan de salle, tour par tour | § 11.7 |
 | `PRO-08` | Marquer BROUILLON ce qui n'est pas retenu | § 11.7 |
+| `PRO-09` | Produire la liste des badges en CSV, pour un tableur | § 11.6 |
 
 **Fichiers et sécurité** — `FIC`
 
@@ -411,7 +468,22 @@ Un participant porte aussi un **titre pressenti** — « animatrice », « hôte
 qui est **purement informatif** : il s'imprime sur sa fiche, il n'attribue
 aucun rôle, il ne pourvoit aucune place et il ne contraint rien. Il existe pour
 qu'une liste reçue où les animateurs sont signalés ne perde pas cette
-information à l'import.
+information à l'import. La désignation en lot lui emprunte le libellé du
+titre qu'elle pose (§ 2.1 étape 6), la désignation une à une le propose
+d'abord ; il ne pourvoit rien par lui-même.
+
+Un participant peut porter la **marque de l'animation réservée** : elle dit
+qu'il est **à désigner** animateur d'une table — une liste reçue où « animation
+de la table d'honneur » est un titre pressenti ne dit pas, sinon, que la
+personne doit animer. La marque est une **intention**, jamais le fait : elle ne
+fait animer personne, ne pourvoit aucune place et ne contraint pas la
+génération ; l'animateur reste celui que les titres pourvus désignent (§ 2.1
+étape 6). « Créer les tables… » la lit, et désigne les personnes marquées sur
+les tables qu'il crée (§ 6.1). Absente, elle vaut « non ». La fiche la saisit
+par une case, la colonne CSV `animation_reservee` la porte à l'import comme à
+l'export (§ 10.1, § 10.2), et la colonne « Animation » de la grille dit « à
+désigner » pour une personne marquée, non exclue, qui n'anime encore aucune
+table. Une personne exclue la garde, suspendue comme le reste.
 
 Un participant peut être **exclu** sans être supprimé : il reste dans la liste,
 il n'est plus placé, et il sort de toutes les statistiques.
@@ -425,6 +497,12 @@ vaut pour toute la soirée et retire la personne de toutes les statistiques — 
 en réserve — la réserve tient une personne présente qui attend une table
 (§ 7.1). « Personne présente », sans tour, désigne une personne non exclue,
 présente à un tour au moins ; « présente au tour r » désigne ce tour.
+
+Un participant que « Rendre les noms uniques » a renommé à l'import (§ 10.1)
+porte la **marque du nom numéroté**, cachée : elle dit que le numéro final de
+son nom — « Galet 01 » — vient de l'import, et non de la liste reçue. Ni la
+fiche ni la grille ne la montrent, aucune colonne CSV ne la porte, et renommer
+la personne la retire (§ 8.9, § 10.2).
 
 **Table** — un **identifiant entier**, unique dans l'événement et jamais
 réutilisé, exactement comme un participant ; un **numéro affiché** à partir
@@ -451,6 +529,41 @@ chaque participant non exclu présent à ce tour est assis à exactement une
 table, sauf l'arrivée qu'un tour figé laisse en réserve (§ 5.7) ; un placement
 ajusté peut tenir des présents en réserve (§ 7.1). Une personne absente à un
 tour n'y occupe aucune place.
+
+Un tour porte un **nom**, facultatif — « Apéritif », « Plat principal » —, de 60
+caractères au plus ; sans nom, il se dit « Tour 3 ». Le nom est **purement
+informatif**, comme le libellé d'une table : le moteur ne le lit pas, et le
+poser, le changer ou le retirer ne met aucun placement en dérive (§ 9). Deux
+tours peuvent porter le même nom. Il se saisit dans « Tables et tours », un
+champ par tour, vide pour un tour sans nom, dont le texte indicatif est
+« Tour 3 » ; saisir le nom par défaut d'un tour revient à vider son champ.
+Retirer un tour retire son nom, que la fenêtre de la baisse nomme ; un tour
+ajouté vient sans nom.
+
+**Le nom se lit partout où un tour se désigne** à l'opérateur ou à l'invité,
+sous trois formes. **Seul**, à la place de « Tour 3 », dans un titre, une tête
+de colonne, un choix et une ligne de badge — « Plat principal — table 3 ». Dans
+une colonne « Tour » qui ne porte que le numéro — le tableau des personnes
+présentes par tour, l'itinéraire de la fiche, le choix du tour du plan —, à la
+place du numéro. **Après son numéro, entre parenthèses**, dans une phrase, où le
+numéro garde la grammaire — « absente au tour 2 (Plat principal) », « tours 1
+(Apéritif) et 2 » ; une suite de tours consécutifs ne se resserre en
+« tours 2 à 4 » que sur des tours sans nom. **À la place de « tour 3 »** dans
+une mention brève, sans article — « (réservée, Plat principal) », « Plat
+principal, table 5 ». Un libellé figé du journal prend le nom qu'a le tour au
+moment du geste (§ 8.2). Une sortie imprimée pose le nom comme une donnée,
+telle quelle, dans son propre nœud (§ 11.7).
+
+**Le numéro reste là où une machine relit, ou où le fichier se décrit** : la
+colonne `presence` du CSV des participants, à l'import comme à l'export
+(« 1-3 », § 10.1), la colonne `tour` du CSV des objectifs (§ 10.4), les refus de
+l'import qui citent une valeur du fichier, les fautes de forme du fichier et les
+défauts du calcul, qui désignent une position, un tour qui n'existe pas, et
+l'avancement du calcul exact (« tour 3 sur 5 »). La case compacte de la
+présence, dans la grille, garde son numéro faute de place, et se nomme par le
+nom du tour pour les technologies d'assistance. L'en-tête d'un bloc de tours de
+la liste d'accueil, « Tours 1 à 34 », garde ses numéros : les colonnes du bloc
+nomment chaque tour.
 
 **Placement** — pour chaque tour, qui est à quelle table, et à quel siège si
 les sièges sont attribués.
@@ -490,6 +603,52 @@ dernière personne supprimée, sans organisation, ou retirée par un import —,
 elle quitte chaque liste dans la même entrée ; et une personne qui prend
 l'organisation qu'elle nommait la retire de sa liste. Le libellé de l'entrée
 le dit (§ 8.2).
+
+**Inclusion** — une organisation ou une personne qu'une personne nomme pour la
+**rencontrer au moins une fois** : partager une table avec elle à un tour au
+moins, n'importe lequel. Une personne porte deux listes, vides par défaut : ses
+**inclusions d'organisation**, chacune satisfaite quand la personne partage une
+table avec au moins un membre de cette organisation, et ses **inclusions de
+participant**, qui désignent chaque personne par son identifiant, jamais par
+son nom : la renommer ne change rien, et deux homonymes restent distincts. Une
+organisation incluse est celle d'un participant de l'événement, exclus compris,
+et jamais la sienne ; une personne incluse est un participant de l'événement,
+exclu compris, et jamais elle-même. Un collègue de sa propre organisation se
+nomme comme un autre. Une inclusion que contredit un conflit de la personne
+s'admet. L'inclusion n'est ni une réservation ni une fixation : elle ne place
+personne et ne retire rien de ce que la génération peut faire ; c'est un
+critère de la recherche et du classement (§ 5.3, § 5.7), que la mesure d'un
+placement compte (§ 5.4). L'exclusion suspend une personne, pas ses listes :
+la liste d'une exclue se garde, et une inclusion qui vise une exclue aussi.
+Elle se saisit dans la fiche et dans la grille (§ 10.2), et s'importe en CSV,
+une personne par son nom affiché (§ 10.1).
+
+Les listes d'inclusions d'organisation suivent les organisations comme celles
+des conflits : la référence suit le renommage de la dernière personne d'une
+organisation, une organisation qui disparaît quitte chaque liste, et une
+personne qui prend l'organisation qu'elle incluait la retire de sa liste. Une
+personne supprimée quitte chaque liste d'inclusions de participant qui la
+nomme. Tout cela se fait dans l'entrée du geste qui le provoque : son libellé
+le dit (§ 8.2), et un retour arrière rend les listes d'avant (§ 8.3).
+
+Une inclusion est **active** quand un plan qui honore les réservations peut la
+satisfaire, au jugé de la configuration seule : la personne qui la porte n'est
+pas exclue ; la personne incluse non plus, ou un présent porte
+l'organisation incluse ; aucun conflit d'organisation ne sépare la personne de
+la cible, ou des membres de l'organisation incluse ; et, à un tour au moins où
+les deux sont présentes, une table peut les accueillir ensemble — leur table
+réservée commune, la table réservée de l'une quand il y reste un siège, ou,
+toutes deux libres, une table qui garde deux sièges. Une organisation incluse
+l'est dès qu'un de ses membres l'est. Sinon l'inclusion est **hors
+d'atteinte**, sous la première raison qui la retient : la personne incluse est
+exclue, aucun présent ne porte l'organisation, un conflit la contredit, les
+deux ne sont jamais présentes au même tour, les réservations les assoient à
+deux tables différentes à chaque tour commun, aucune table n'a de place pour
+les deux ; pour une organisation, la raison la plus proche du possible parmi
+ses membres. Une inclusion hors d'atteinte ne compte nulle part, ni satisfaite
+ni manquée : le diagnostic la nomme (§ 5.6). Sa propre organisation et une
+cible nommée deux fois ne font pas d'inclusion de plus, et la liste d'une
+exclue attend qu'elle soit réintégrée.
 
 **Objectif de table** — une liste d'étiquettes attachée à une table, sous une
 règle : *au moins une* de ces étiquettes, ou *toutes*. Il vaut pour la soirée,
@@ -595,9 +754,16 @@ ne peut asseoir quelqu'un qui n'est pas là.
 suspend toutes celles de la personne : une portée « tous les tours » ne vaut
 plus qu'aux tours de présence, une réservation de tour désigné sur un tour
 d'absence est suspendue, sa place rendue aux mobiles et son titre non pourvu à
-ce tour, et le logiciel le dit. Rendre la présence les rend. La présence d'une
-personne exclue se garde, suspendue : ni la recherche, ni le placement, ni les
-titres ne la lisent, et la réintégration la rend. **Retirer une personne après
+ce tour, et le logiciel le dit. Rendre la présence les rend. Une animatrice
+absente à un tour reste animatrice de sa table tant que sa réservation et son
+titre existent : sa désignation est suspendue. Les désignations suspendues se
+répartissent, par la règle des titres pourvus (§ 2.1 étape 6), sur les seuls
+titres restés sans pourvoyeur pour la soirée, entre les réservations « tous
+les tours » des absentes non exclues : elles ne prennent jamais le titre
+d'une présente. La rangée « Animateurs » la garde, marquée de ses tours
+d'absence, avec son retrait (§ 6.1). La présence d'une personne exclue se
+garde, suspendue : ni la recherche, ni le placement, ni les titres ne la
+lisent, et la réintégration la rend. **Retirer une personne après
 des tours joués se fait par sa présence**, non par l'exclusion : elle garde sa
 place aux tours où elle était là, et ses rencontres y comptent (§ 5.4) ;
 l'exclusion et la suppression la retirent de toute la soirée, tours joués
@@ -764,14 +930,18 @@ aperçoive**.
 
 Moyennant cet ajout, le moteur n'a **qu'un seul chemin de code** : la
 réservation est un prétraitement qui réduit les capacités, retire des
-participants et annote les tables — jamais un second algorithme. Une garde de
-l'arborescence le tient : dans le moteur, seuls la normalisation de la
-configuration et le diagnostic lisent les réservations, et la normalisation
-seule lit la présence. Les tours figés d'une
-génération dérivée (§ 5.7) n'y entrent pas : ils ne réduisent aucune capacité,
-ne retirent personne et n'annotent aucune table. La recherche les reçoit à
-part, ne tire aucun mouvement dans ces tours, et compte leurs rencontres dans
-le score de la soirée.
+participants et annote les tables — jamais un second algorithme. Deux gardes
+de l'arborescence le tiennent : dans le moteur, seuls la normalisation de la
+configuration et le diagnostic lisent les réservations ; seuls la fonction
+qui dit qu'une personne est présente, la normalisation et le diagnostic lisent
+la présence, le diagnostic pour la ramener aux tours d'une soirée plus courte
+qu'il sonde (§ 5.6). Les tours figés d'une génération dérivée (§ 5.7) n'y
+entrent pas : ils ne réduisent aucune capacité, ne retirent personne et
+n'annotent aucune table. La recherche les reçoit à part, ne tire aucun
+mouvement dans ces tours, et compte leurs rencontres dans le score de la
+soirée. L'inclusion n'y ajoute ni prétraitement ni placement préalable : c'est
+un critère de la recherche (§ 5.3, § 5.7), et son mouvement dirigé (§ 5.10) ne
+choisit que les sièges à échanger.
 
 ### 5.3 Les contraintes, activables une à une
 
@@ -816,6 +986,7 @@ aucune case : il montre l'état que donnent les cases de ce tableau.
 | animateurs non rencontrés | « Rencontrer le plus d'animateurs différents » est cochée et a un objet |
 | redondance d'organisation | « Varier les organisations rencontrées » est cochée |
 | conflits d'organisation | toujours, sans case, quand il a un objet |
+| inclusions non satisfaites | toujours, sans case, quand il a un objet |
 
 **Le conflit d'organisation n'a pas de case.** Il compte dès qu'une paire de
 personnes présentes est en conflit (§ 4) : une liste, d'une personne
@@ -825,6 +996,14 @@ aucune liste ne relie ainsi deux présents, il est sans objet — il ne compte
 nulle part, et l'éditeur de l'ordre le marque « sans objet ». Un événement qui
 ne porte aucune liste se génère donc exactement comme avant que le critère
 existe : mêmes plans à graine égale, même classement, même phrase.
+
+**Les inclusions n'ont pas de case.** Elles comptent dès qu'une inclusion est
+active (§ 4). Sans liste, ou quand aucune inclusion n'est active, elles sont
+sans objet, et l'éditeur de l'ordre les marque ainsi. Un événement sans
+inclusion active se génère exactement comme avant que le critère existe :
+mêmes plans à graine égale, même classement, même phrase. Quand des
+inclusions sont actives mais que chaque liste dépasse ce que sa personne
+peut rencontrer (§ 5.4), le critère a un objet et vaut zéro partout.
 
 **« Attribuer les sièges » change les animateurs.** Sans sièges attribués, une
 réservation sans siège à une table titrée peut pourvoir un titre de cette
@@ -921,6 +1100,8 @@ une lecture et non un jugement :
 | **le plus de tours hors objectif d'une personne** | max (P(p) − s(p)) sur les personnes concernées |
 | **animateurs rencontrés** — m(p) | animateurs distincts (§ 4.5) que p rencontre à un tour où ils animent, lui-même non compté ; un animateur rencontré à plusieurs tours compte une fois ; m(p) ne dépasse pas B(p), la borne des animateurs |
 | **animateurs non rencontrés** | Σ (B(p) − m(p)) sur les personnes présentes placées : ce qui leur reste à rencontrer de ce que la configuration leur permettait |
+| **inclusions satisfaites** — sat(p) | inclusions actives de p (§ 4) satisfaites : p partage une table, à un tour au moins, n'importe lequel, avec la personne incluse, ou avec un membre au moins de l'organisation incluse ; elles ne dépassent pas I(p), ses **inclusions atteignables** |
+| **inclusions non satisfaites** | rencontres demandées non satisfaites : chaque inclusion active non satisfaite d'une personne dont la liste ne dépasse pas son plafond, une même paire de personnes ne comptant qu'une fois, quel que soit le sens des demandes ; sans objet sans inclusion active |
 
 **Les agrégats portent sur tous les participants placés.** Le minimum se calcule
 sur l'ensemble, ancrés compris, et **deux lignes secondaires** donnent la même
@@ -934,6 +1115,17 @@ partiellement fixé compte parmi les mobiles.
 > Les deux lignes secondaires existent pour que l'opérateur sache si le minimum
 > global désigne un défaut qu'une relance corrige, ou la conséquence de son
 > propre plan de réservation.
+
+Le minimum des rencontres porte les siennes en colonnes au tableau des
+propositions (§ 5.7), et en tuiles sur la page de qualité (§ 12.2). Les autres
+agrégats — le minimum de A(p), celui de d(p), les trois chiffres du manque
+(§ 12.10.4), les minimums de s(p) et de m(p) — les écrivent **sous leur
+chiffre**, sur une ligne en encre secondaire : « mobiles 26 · ancrés 24 ». Elles
+ne s'y écrivent que quand la population que l'agrégat mesure compte des mobiles
+et des ancrés — celle de s(p) et de m(p) n'est que leurs concernés : sans ancré,
+l'une écrirait « — » et l'autre répéterait le chiffre de tête. Le minimum de
+A(p) les tait aussi quand le taux de diversité écrit « — » : personne n'y
+rencontre d'organisation, et A(p) vaut 0 pour tous.
 
 **Des rencontres, le minimum s'affiche, jamais la moyenne.** Le minimum décrit
 le sort de la personne la plus mal servie, qui est celle qui se plaindra. La
@@ -1007,6 +1199,47 @@ les animateurs non rencontrés. Un animateur y entre comme tout autre : aux tour
 où il n'anime pas, il rencontre ceux qui animent. Comme les personnes
 rencontrées, les animateurs rencontrés ne se séparent pas en imposé et choisi.
 Sans personne concernée, m(p) et les animateurs non rencontrés écrivent « — ».
+
+**Les inclusions se lisent sur les inclusions actives** (§ 4) ; une inclusion
+hors d'atteinte n'y entre pas. Pour une personne p, k°(p) compte ses
+inclusions actives ; Q(p) ses personnes incluses ; d(p) ses organisations
+incluses qui contiennent une personne de Q(p) ; b(p) = k°(p) − d(p) les
+personnes qu'il lui faut rencontrer pour toutes les satisfaire, une personne
+n'ayant qu'une organisation ; K(p) son plafond a priori (§ 5.5), le plus de
+personnes distinctes qu'un plan valide lui fait rencontrer. Ses inclusions
+atteignables valent
+
+```
+I(p) = min( k°(p) , K(p) + min( K(p) , d(p) ) )
+```
+
+et aucun plan valide n'en satisfait davantage : parmi les M personnes qu'elle
+rencontre, |M| ≤ K(p), chacune satisfait au plus sa propre inclusion et celle
+de son organisation, et une personne de Q(p) ne touche qu'une organisation
+qu'elle couvre, d'où sat(p) ≤ |M| + min(|M|, d(p)). Prendre d'abord une
+personne de Q(p) par organisation couverte, puis une personne par inclusion
+restante, atteint I(p) dès que K(p) personnes sont libres de la rencontrer.
+Deux régimes en sortent :
+
+- **b(p) ≤ K(p)** : toute la liste est atteignable, I(p) = k°(p), et chaque
+  inclusion active que le plan ne satisfait pas est une inclusion non
+  satisfaite, nommée ;
+- **b(p) > K(p)** : la liste demande plus de personnes que p n'en peut
+  rencontrer. Ne pas la satisfaire tout entière n'est pas une erreur : ses
+  inclusions ne comptent jamais parmi les inclusions non satisfaites, et le
+  nombre de celles qu'elle aurait pu atteindre, I(p) − sat(p), est une
+  information.
+
+Les inclusions non satisfaites comptent des **rencontres demandées**. Une
+inclusion de personne demande la rencontre de la paire ; une inclusion
+d'organisation dont un seul membre peut partager une table avec la personne
+(§ 4) demande la même, car dans un plan qui honore les réservations ce membre
+est le seul qui la satisfasse. Les inclusions qui demandent une même paire, dans
+un sens ou dans l'autre, ne comptent qu'une fois, dès que l'une des deux
+personnes reste dans son plafond. Une inclusion d'organisation que plusieurs
+membres peuvent satisfaire est une rencontre à elle seule. Sans inclusion
+active, le critère est sans objet, et ni colonne ni tuile n'écrit ces chiffres
+(§ 5.7, § 12.2).
 
 **Aucun de ces chiffres ne s'additionne à un autre pour s'afficher.** Un palier
 pondéré du § 5.7 somme des paires, des couples (personne, tour) et des
@@ -1416,6 +1649,25 @@ inévitable, **combien**, et ce qui le rendrait évitable :
 L'objectif auquel aucune personne présente ne correspond est signalé à
 l'objectif même (§ 5.9).
 
+**Les inclusions qu'aucun plan ne satisfait.** Le diagnostic relève chaque
+inclusion hors d'atteinte (§ 4), avec sa raison et la personne qui la porte. Il
+relève aussi chaque personne **au-delà de son plafond**, dont la liste demande
+plus de personnes qu'elle n'en peut rencontrer, b(p) > K(p) (§ 5.4) : avec ses
+inclusions actives, les personnes qu'elles demandent, son plafond a priori et
+ses inclusions atteignables I(p), si bien que k°(p) − I(p) d'entre elles restent
+hors de portée quel que soit le plan. Ce sont des informations, jamais des
+avis : aucun plan ne lève une inclusion hors d'atteinte, et ne pas satisfaire
+toute une liste qui dépasse n'est pas une erreur. Elles ne touchent à aucun
+plancher : celui des collisions, pris sur tous les plans, reste valide. Les
+énoncés nomment les personnes : « inclusion hors d'atteinte : Iris Ombrelle →
+Théo Pervenche, les deux ne sont jamais présentes au même tour », avec le remède
+de sa raison — réintégrer la personne incluse, retirer le conflit ou
+l'inclusion, rendre les deux présentes à un même tour, déplacer une réservation,
+libérer un siège ; sans présent de l'organisation, un constat — ; « Ondine
+Lacasse : 9 inclusions demandent 8 personnes ; la soirée lui en fait rencontrer
+au plus 6, donc au plus 7 satisfaites, et 2 restent hors de portée », avec pour
+remède de raccourcir la liste ou de lui faire rencontrer plus de monde.
+
 **Sous absence.** Dès qu'une personne non exclue est absente à un tour, le
 diagnostic le dit en tête de la carte de tout l'événement, après les
 collisions et l'excédent : « 2 personnes ne sont pas présentes à chaque tour :
@@ -1428,8 +1680,9 @@ d'itinéraire perd le sien.
 À l'écran, les énoncés se regroupent en cartes, sans changer d'ordre : la
 séparation des organisations vidée de son sens, une carte par organisation en
 collision, titrée de sa pastille d'organisation (§ 12.7), celle des
-organisations en conflit, une ligne par étoile, puis ce qui vaut pour tout
-l'événement.
+organisations en conflit, une ligne par étoile, ce qui vaut pour tout
+l'événement, puis la carte « Inclusions », les inclusions hors d'atteinte puis
+les listes au-delà de leur plafond.
 
 **Chaque énoncé s'explique, toujours visible.** Dans la section du
 diagnostic — le panneau compact à côté du plan garde les énoncés seuls —,
@@ -1460,27 +1713,33 @@ formule ne s'écrit que lorsque le chiffre de l'énoncé l'égale. Sur 4 tours
   exception : « 4 places restent vides à chaque tour, 260 personnes pour 264
   places : une personne assise à une table incomplète y rencontre une
   personne de moins par place vide, et ce plafond, compté sur des tables
-  pleines, peut alors lui échapper » — sous présence partielle, « Jusqu'à 4
-  places restent vides selon le tour ». C'est la source de l'écart
-  d'itinéraire que le diagnostic ne chiffre pas d'avance quand des places
-  restent vides ;
+  pleines, peut alors lui échapper » — quand le nombre de places vides varie
+  d'un tour à l'autre, « Jusqu'à 4 places restent vides selon le tour ». Une
+  présence partielle qui laisse le même nombre de places vides à chaque tour
+  garde la première forme. C'est la source de l'écart d'itinéraire que le
+  diagnostic ne chiffre pas d'avance quand des places restent vides ;
 - les **retours imposés**, quand chaque personne qui en porte revient R − 1
   fois : « chacune des 33 personnes réservées à une table y reste aux 4
   tours, et y revient donc 3 fois ; ces retours sont voulus par les
   réservations et ne comptent pas contre les propositions » ; sinon leur
   compte et le nombre de personnes ;
-- les **collisions** d'une organisation disent si les tables manquent ou si
-  des réservations réunissent ses membres, et combien de fois deux d'entre eux
+- les **collisions** d'une organisation disent si les tables manquent ou si des
+  réservations réunissent ses membres, et combien de fois deux d'entre eux
   partagent une table ; l'**excédent**, que deux collègues déjà assis ensemble
-  se retrouvent ; l'**écart d'itinéraire**, que des tables plus petites ou
-  plus ancrées se remplissent quand même ; une table **gelée** ou **à moitié
+  se retrouvent ; l'**écart d'itinéraire**, que des tables plus petites ou plus
+  ancrées se remplissent quand même ; une table **gelée** ou **à moitié
   ancrée**, qui y reste et combien de places s'y renouvellent ; les
   **animateurs** d'une même organisation, combien de fois un mobile la
-  recroise ; la **redondance**, les **objectifs**, le **manque de places**,
-  les **conflits imposés** et la **présence par tour**, chacun de ses propres
+  recroise ; la **redondance**, les **objectifs**, le **manque de places**, les
+  **conflits imposés** et la **présence par tour**, chacun de ses propres
   chiffres ; une **étoile de conflits**, que chaque tour partage les tables
-  entre le centre et ses branches, le plancher de ses organisations une à
-  une, sans le conflit, et ce que le partage y ajoute.
+  entre le centre et ses branches, le plancher de ses organisations une à une,
+  sans le conflit, et ce que le partage y ajoute ; une **inclusion hors
+  d'atteinte**, qu'elle ne compte ni parmi les satisfaites ni parmi les non
+  satisfaites ; une **liste au-delà du plafond**, que ne pas la satisfaire tout
+  entière n'est pas une erreur, combien un placement lui en satisfait au plus,
+  et que la page de qualité dit combien il en laisse encore possibles sans les
+  atteindre.
 
 **La proposition choisie, expliquée.** Sous la carte de tout l'événement,
 la section — le panneau compact ne la porte pas — pose une carte « La
@@ -1500,22 +1759,26 @@ titrés :
 - **Ce qui est atteint** : le minimum des rencontres, rapporté au plafond a
   priori des personnes qui l'atteignent — « Le moins bien servi rencontre 23
   personnes différentes, sur les 28 que son plafond a priori permet », leur
-  étendue quand ces plafonds diffèrent —, les minimums des mobiles et des
-  ancrés quand les deux populations existent ; puis, chacun quand son
-  critère compte (§ 5.3) — coché, avec un objet —, les conflits
-  d'organisation, les collisions — « 9 fois, deux personnes d'une même
-  organisation partagent une table, toujours des paires différentes :
-  aucune paire de collègues ne se retrouve deux fois » à excédent nul —,
-  les retours choisis sous « nouvelle table », la diversité, les objectifs
-  et les animateurs. Un plancher du diagnostic ne se dit égalé que sur un
-  plan qui honore les réservations. Le plancher des collisions qui vaut pour
-  tout plan est la somme des planchers par groupe ; pour un plan sans
-  conflit, chaque étoile de conflits y remplace la somme de ses
-  organisations par son propre plancher. Des collisions qui égalent ce
-  plancher renforcé, sans aucun conflit, se disent au minimum : « Ses
-  collisions sont au minimum : aucune relance ne les fera baisser sans créer
-  de conflit d'organisation. » Le minimum atteint du § 5.5, qui se lit sur
-  les rencontres, n'en change pas ;
+  étendue quand ces plafonds diffèrent —, les minimums des mobiles et des ancrés
+  quand les deux populations existent ; puis, chacun quand son critère compte
+  (§ 5.3) — coché, avec un objet —, les conflits d'organisation, les inclusions
+  — « 2 rencontres demandées par les inclusions sur 5 ne se font pas : ce sont
+  les inclusions non satisfaites », ou que chacune se fait, rien quand chaque
+  liste active dépasse ce que sa personne peut rencontrer, puis, quand des
+  listes dépassent ce que leurs personnes peuvent rencontrer, combien de leurs
+  inclusions encore possibles le placement n'atteint pas, ou que toutes sont
+  atteintes, sans que ce soit un avis —, les collisions — « 9 fois, deux
+  personnes d'une même organisation partagent une table, toujours des paires
+  différentes : aucune paire de collègues ne se retrouve deux fois » à excédent
+  nul —, les retours choisis sous « nouvelle table », la diversité, les
+  objectifs et les animateurs. Un plancher du diagnostic ne se dit égalé que sur
+  un plan qui honore les réservations. Le plancher des collisions qui vaut pour
+  tout plan est la somme des planchers par groupe ; pour un plan sans conflit,
+  chaque étoile de conflits y remplace la somme de ses organisations par son
+  propre plancher. Des collisions qui égalent ce plancher renforcé, sans aucun
+  conflit, se disent au minimum : « Ses collisions sont au minimum : aucune
+  relance ne les fera baisser sans créer de conflit d'organisation. » Le minimum
+  atteint du § 5.5, qui se lit sur les rencontres, n'en change pas ;
 - **Ce qui manque, et pourquoi** : l'écart au plafond a priori maximal,
   décomposé en ses deux parts (§ 12.10.5) — la place, par l'écart
   d'itinéraire maximal, les places vides de chaque tour et le plancher que
@@ -1532,7 +1795,8 @@ titrés :
   seule, le minimum atteint (§ 5.5) ;
 - **Ce qu'on peut tenter**, des gestes qui existent seulement : « Repartir
   d'elle » — « Générer » pour le retenu, qui ne l'offre pas — avec un
-  compte d'arrêt plus élevé que le réglage, quand des revoirs coûtent des
+  compte d'arrêt plus élevé que celui qui a produit la proposition — que
+  le réglage, pour le retenu —, quand des revoirs coûtent des
   rencontres, quand une règle active reste au-dessus de ce que le
   diagnostic prouve inévitable — des conflits au-delà des conflits imposés,
   des collisions au-delà de leur plancher, renforcé par les étoiles pour un
@@ -1842,13 +2106,18 @@ entier ≥ 0, et la plus faible est la meilleure.
 | animateurs non rencontrés | Σ (B(p) − m(p)) (§ 5.4) | la même | raffinement |
 | redondance d'organisation | Σ r(p) | la même | raffinement |
 | conflits d'organisation | les conflits d'organisation (§ 5.4) | la même | contrainte |
+| inclusions non satisfaites | les inclusions non satisfaites (§ 5.4) | la même | contrainte |
 
-**La liste est complète** : chaque critère y figure une fois, coché ou non.
-Trois critères y sont **seuls à leur palier** : ils se déplacent, ils ne
-partagent pas leur palier. Le conflit d'organisation, parce qu'il dit ce que
+**La liste est complète** : chaque critère y figure une fois, coché ou non ;
+seule une liste lue d'un fichier écrit avant les inclusions peut les taire
+(§ 8.9). Quatre critères y sont **seuls à leur palier** : ils se déplacent, ils
+ne partagent pas leur palier. Le conflit d'organisation, parce qu'il dit ce que
 la soirée promet de ne jamais faire : une somme pondérée l'échangerait contre
-quelques collisions ou quelques retours. L'écart au plafond a priori, parce que sa valeur nulle est le
-certificat du § 5.5 et qu'une somme pondérée le noierait dans d'autres unités.
+quelques collisions ou quelques retours. Les inclusions non satisfaites, pour
+la même raison : une somme pondérée échangerait une rencontre promise contre
+quelques collisions. L'écart au plafond a priori, parce que sa valeur nulle est
+le certificat du § 5.5 et qu'une somme pondérée le noierait dans d'autres
+unités.
 Les rencontres répétées et les retours, parce que leurs deux valeurs ne
 s'échangent pas au même taux contre un autre critère : une paire réunie trois
 fois coûte deux à la recherche et un au classement, un retour coûte un à la
@@ -1873,17 +2142,19 @@ de même effet que l'ordre par défaut s'y lit, et se réécrit présente (§ 8.
 Un critère qui rejoint un palier y entre au poids 1. Changer de mode réécrit la
 liste ainsi rangée, sans qu'aucun critère change de palier.
 
-**Ordre par défaut** : conflits d'organisation, puis excédent de collisions,
-puis rencontres répétées et retours, puis collisions cumulées, puis écart au
-plafond a priori, puis tours hors objectif, puis animateurs non rencontrés, puis
-redondance d'organisation, chacun seul à son palier, sous le mode « le plus de
-places servies ». Il n'est pas l'ordre du tableau ci-dessus, qui reste celui des
-critères dans un palier. L'**ordre fixe de référence** est la liste excédent,
-rencontres répétées, cumulées, écart, redondance, chacun seul à son palier :
-l'ordre par défaut sans les trois critères des conflits, des objectifs et des
+**Ordre par défaut** : conflits d'organisation, puis inclusions non
+satisfaites, puis excédent de collisions, puis rencontres répétées et retours,
+puis collisions cumulées, puis écart au plafond a priori, puis tours hors
+objectif, puis animateurs non rencontrés, puis redondance d'organisation, chacun
+seul à son palier, sous le mode « le plus de places servies ». Il n'est pas
+l'ordre du tableau ci-dessus, qui reste celui des critères dans un palier.
+L'**ordre fixe de référence** est la liste excédent, rencontres répétées,
+cumulées, écart, redondance, chacun seul à son palier : l'ordre par défaut sans
+les quatre critères des conflits, des inclusions, des objectifs et des
 animateurs. Une liste écrite garde son ordre : seul l'événement qui ne règle
 rien suit l'ordre par défaut. Sous l'ordre par défaut, sans liste de conflits,
-sans objectif de table et sans la case des animateurs, quel que soit le mode :
+sans inclusion active, sans objectif de table et sans la case des animateurs,
+quel que soit le mode :
 sous toute combinaison des cases du § 5.3, les plans à graine égale sont ceux
 de l'ordre fixe de référence ; sous les quatre cases cochées, le classement et
 sa phrase le sont aussi. Une case décochée retire son critère du
@@ -1895,11 +2166,15 @@ focus au clavier, ouvre une infobulle qui dit ce qu'il compte et nomme la
 colonne des propositions qui le montre (§ 14.5).
 
 **L'ordre par défaut met d'abord ce que la soirée promet à chacun.** Ne jamais
-asseoir ensemble deux organisations en conflit vient avant tout : c'est le
-seul critère que l'opérateur nomme personne par personne, et il le fait pour
-qu'il tienne. Le conflit d'organisation ouvre donc l'ordre par défaut ; il se
-déplace comme les autres, et l'opérateur qui le range plus bas l'accepte
-moins tenu. Ne pas passer la soirée avec ses collègues, ne pas revoir à une table une personne déjà
+asseoir ensemble deux organisations en conflit vient avant tout ; les inclusions
+suivent. Ce sont les deux critères que l'opérateur nomme personne par personne,
+et il les nomme pour qu'ils tiennent : un conflit dit ce que la soirée ne fera
+jamais, une inclusion ce qu'elle fera au moins une fois, et le « jamais » passe
+devant. Une inclusion qu'un conflit contredit est hors d'atteinte, quel que soit
+l'ordre (§ 4). Le conflit d'organisation ouvre l'ordre par défaut, les
+inclusions non satisfaites viennent ensuite ; chacun se déplace comme les
+autres, et l'opérateur qui le range plus bas l'accepte moins tenu. Ne pas passer
+la soirée avec ses collègues, ne pas revoir à une table une personne déjà
 rencontrée, ne pas revenir à une table déjà visitée : ce sont les promesses que
 l'opérateur fait à la salle, et un plan qui en manque une se voit. L'excédent de
 collisions vient en tête, puis les rencontres répétées et retours, puis les
@@ -1924,10 +2199,10 @@ contraintes de la recherche : une fois l'écart annulé, la bascule compare les
 paliers dans le même ordre que sous l'ordre par défaut, les rencontres répétées
 devant les collisions cumulées. L'ordre du tableau ci-dessus — écart, excédent,
 cumulées, tours hors objectif, rencontres répétées et retours, animateurs,
-redondance — range les collisions devant les rencontres répétées, et c'est sous
-lui que chaque proposition de la petite démonstration et de sa variante atteint
-son optimum (§ 15.3) ; l'opérateur qui préfère les rencontres le règle, et
-l'éditeur le permet.
+redondance, conflits, inclusions — range les collisions devant les rencontres
+répétées, et c'est sous lui que chaque proposition de la petite démonstration
+et de sa variante atteint son optimum (§ 15.3) ; l'opérateur qui préfère les
+rencontres le règle, et l'éditeur le permet.
 
 **L'excédent de collisions précède les rencontres répétées et les collisions
 cumulées.** Le § 5.4 le démontre en trois plans. Classer d'abord sur les
@@ -1968,11 +2243,11 @@ gardant leur ordre : elle peut perdre une rencontre le temps de défaire une
 collision, puis la reprendre. L'écart en tête, une meilleure affectation garde
 un écart nul, et la bascule est acquise ; rangé après d'autres paliers, il peut
 redevenir non nul sur une meilleure affectation, et la recherche revient alors
-à l'ordre du score. Sous l'ordre par défaut, cela compare conflits,
+à l'ordre du score. Sous l'ordre par défaut, cela compare conflits, inclusions,
 excédent, rencontres répétées et retours, cumulées, tours hors objectif,
 l'écart, animateurs, redondance : sans objectif, l'ordre des paliers ne change
-pas. Le classement,
-lui, suit toujours l'ordre réglé.
+pas, et les inclusions restent devant l'écart dans les deux ordres. Le
+classement, lui, suit toujours l'ordre réglé.
 
 **Tant que l'écart n'est pas annulé, la somme des carrés précède tous les
 paliers qui suivent l'écart.** Là où le plus grand écart ne peut pas descendre à
@@ -1982,8 +2257,8 @@ somme des carrés, et pèse dans la recherche à peine plus qu'un départage. Un
 critère rangé après l'écart ne coûte donc aucune rencontre à personne ; pour
 qu'il pèse sur une soirée tendue, l'opérateur le range devant l'écart, et
 accepte de perdre des rencontres pour lui. L'ordre par défaut le fait pour les
-conflits d'organisation, l'excédent, les rencontres répétées et retours et les
-collisions cumulées.
+conflits d'organisation, les inclusions non satisfaites, l'excédent, les
+rencontres répétées et retours et les collisions cumulées.
 
 **Un critère décoché ou sans objet** (§ 5.3) sort de la recherche comme du
 classement ; un palier dont aucun critère ne compte disparaît, et les autres
@@ -1999,8 +2274,8 @@ borne N bien en deçà. Deux propositions égales sur tous les paliers se
 départagent par l'identifiant croissant. L'ordre des paliers est celui de la
 liste écrite. L'ordre des critères dans un palier ne change aucune clé ; il est
 pourtant fixé, celui du tableau ci-dessus, pour que deux listes de même effet
-s'écrivent pareil : les commandes et le moteur refusent un palier rangé
-autrement, et la lecture d'un fichier le range (§ 8.9).
+s'écrivent pareil : le moteur refuse un palier rangé autrement ; les commandes
+le rangent avant de l'écrire, et la lecture d'un fichier le range (§ 8.9).
 
 **La phrase de l'ordre dit les paliers.** Elle nomme les paliers appliqués, dans
 l'ordre, séparés par « puis » ; un palier de plusieurs critères se lit
@@ -2009,9 +2284,9 @@ le palier applique : « rencontres répétées », ou « retours » sous « nouv
 table » seule ; un critère qui en classe deux les nomme l'une après l'autre,
 séparées par « puis » comme deux paliers — « personnes jamais servies, puis
 tours hors objectif ». L'éditeur, lui, écrit le nom complet du critère. Sous
-l'ordre par défaut, sans liste de conflits, sans objectif et sans la case des
-animateurs, les quatre cases cochées, elle est mot pour mot celle de l'ordre
-fixe de référence.
+l'ordre par défaut, sans liste de conflits, sans inclusion active, sans
+objectif et sans la case des animateurs, les quatre cases cochées, elle est mot
+pour mot celle de l'ordre fixe de référence.
 
 **Les paires distinctes ne sont pas une clé de tri** ; elles restent une colonne
 affichée, et se retrouvent de toute façon par soustraction. Trois clés pour deux
@@ -2038,46 +2313,53 @@ l'objectif, précédés des personnes jamais servies sous « chacun au moins une
 fois » et du plus de tours hors objectif d'une personne sous « l'équité
 d'abord » ; pour le second, le minimum des animateurs rencontrés et les
 animateurs non rencontrés ; chacune présente quand son critère compte (§ 5.3).
-Le groupe des collisions d'organisation s'ouvre, quand le conflit
-d'organisation a un objet, sur la colonne des conflits d'organisation, en
-occurrences (paire, tour) ; sans paire de présents en conflit, elle n'y est
-pas. Une ligne qui en laisse — la recherche les vise à zéro sans les
-interdire — le dit aussi sous son numéro, après ses violations : « 2 conflits
-restants », « 1 conflit restant » ; à zéro, la phrase manque.
-Chacun de ces deux minimums porte sur tous les concernés, sans ses lignes
-secondaires (§ 5.4). Le regroupement ne change l'en-tête ni l'explication
-d'aucune colonne ; ses nombres s'alignent à droite en chiffres tabulaires. La
-ligne du placement retenu porte la teinte de l'état Retenu, et la proposition
-retenue, la pastille « retenue ». Une proposition dérivée porte, sous son
-numéro, la phrase qui la rattache à son départ — « Dérivée de n° 4. », ou
-« Dérivée de n° 4, tours 1 et 2 figés. » —, sans colonne de plus, comme la
-ligne du retenu porte « Tel que la proposition n° X. », « Tel que la
-proposition n° X, ajusté aux participants. » quand il ne diffère de sa
-proposition que par l'ajustement aux participants (§ 5.8), et « Ajusté à la
-main depuis la proposition n° X. » quand il porte une retouche que retenir de
-nouveau cette proposition détruirait. Seul le départ immédiat
-est nommé : la ligne du départ dit le sien. Quand le départ n'est plus dans la
-liste, la phrase le dit — « Dérivée de n° 4, qui n'est plus dans la liste. » —
-et ne désigne aucune autre proposition. Les commandes d'une ligne vivent dans
-son **menu « Actions »**, un seul bouton dans la dernière cellule : fermé, il
-ne montre que ce bouton. Chaque phrase de la colonne « Imposé par les
+Le groupe des collisions d'organisation s'ouvre, quand le conflit d'organisation
+a un objet, sur la colonne des conflits d'organisation, en occurrences (paire,
+tour) ; sans paire de présents en conflit, elle n'y est pas. Quand une inclusion
+est active (§ 4), la colonne des inclusions non satisfaites la suit, en
+rencontres demandées (§ 5.4) ; sans objet, elle n'y est pas. Une ligne qui en
+laisse — la recherche les vise à zéro sans les interdire — le dit aussi sous son
+numéro, après ses violations : « 2 conflits restants », « 1 conflit restant »,
+puis « 2 inclusions non satisfaites », « 1 inclusion non satisfaite » ; à zéro,
+la phrase manque, et la ligne garde sa hauteur sans elle. Chaque inclusion non
+satisfaite se nomme à la page de qualité (§ 12.15). Chacun de ces deux minimums
+porte sur tous les concernés, sans ses lignes secondaires (§ 5.4), que sa tuile
+écrit (§ 12.2). Sous le chiffre de la colonne du plus grand manque, une ligne en
+encre secondaire écrit le plafond réalisé de la personne au rang 1 du profil de
+manque (§ 12.10.3) ; sous ceux du minimum de A(p), du taux de diversité et des
+trois chiffres du manque, une autre écrit leurs deux lignes secondaires (§ 5.4).
+Le regroupement ne change l'en-tête ni l'explication d'aucune colonne ; ses
+nombres s'alignent à droite en chiffres tabulaires. La ligne du placement retenu
+porte la teinte de l'état Retenu, et la proposition retenue, la pastille
+« retenue ». Une proposition dérivée porte, sous son numéro, la phrase qui la
+rattache à son départ — « Dérivée de n° 4. », ou « Dérivée de n° 4, tours 1 et 2
+figés. » —, sans colonne de plus, comme la ligne du retenu porte « Tel que la
+proposition n° X. », « Tel que la proposition n° X, ajusté aux participants. »
+quand il ne diffère de sa proposition que par l'ajustement aux participants
+(§ 5.8), et « Ajusté à la main depuis la proposition n° X. » quand il porte une
+retouche que retenir de nouveau cette proposition détruirait. Seul le départ
+immédiat est nommé : la ligne du départ dit le sien. Quand le départ n'est plus
+dans la liste, la phrase le dit — « Dérivée de n° 4, qui n'est plus dans la
+liste. » — et ne désigne aucune autre proposition. Les commandes d'une ligne
+vivent dans son **menu « Actions »**, un seul bouton dans la dernière cellule :
+fermé, il ne montre que ce bouton. Chaque phrase de la colonne « Imposé par les
 réservations » tient sur une ligne, et chaque ligne a la hauteur de ses
-chiffres, phrase de filiation comprise. Le menu d'une proposition porte « Voir
-sur le plan », « Qualité » et « Retenir » ; celui d'une proposition comparable
-porte aussi « Repartir d'elle » et « Comparer » (§ 12) ; celui d'une
-proposition qu'un changement de participants a seul mise en dérive porte
-« Repartir d'elle », sans « Comparer » ; celui d'une autre ligne en dérive, ou
-fautive, ni l'une ni l'autre ; le menu du placement retenu porte
+chiffres, phrase de filiation et lignes sous un chiffre comprises. Le menu d'une
+proposition porte « Voir sur le plan », « Qualité » et « Retenir » ; celui d'une
+proposition comparable porte aussi « Repartir d'elle » et « Comparer » (§ 12) ;
+celui d'une proposition qu'un changement de participants a seul mise en dérive
+porte « Repartir d'elle », sans « Comparer » ; celui d'une autre ligne en
+dérive, ou fautive, ni l'une ni l'autre ; le menu du placement retenu porte
 « Voir sur le plan », « Qualité » et « Comparer ». Le bouton suit le motif du
 bouton de menu de WAI-ARIA : il annonce son menu, s'ouvre au clic, par Entrée,
 l'espace et les flèches, et le menu se parcourt aux flèches, à Début et à Fin,
 se ferme par Échap, par Tab ou par un clic au dehors. Une commande exécutée
-ferme le menu ; le refus d'une commande — « Retenir » en lecture — reste
-affiché à côté du bouton, que le bouton désigne. Le bouton a un nom accessible
-qui porte le numéro de la ligne, « Actions de la proposition n° 4 », « Actions
-du placement retenu », comme « Repartir d'elle » et « Comparer » : « Comparer
-la proposition n° 4 », « Repartir de la proposition n° 4 », « Comparer le
-placement retenu ».
+ferme le menu ; le refus d'une commande — « Retenir » en lecture — reste affiché
+à côté du bouton, que le bouton désigne. Le bouton a un nom accessible qui porte
+le numéro de la ligne, « Actions de la proposition n° 4 », « Actions du
+placement retenu », comme « Repartir d'elle » et « Comparer » : « Comparer la
+proposition n° 4 », « Repartir de la proposition n° 4 », « Comparer le placement
+retenu ».
 
 ### 5.8 Le placement à la main
 
@@ -2109,7 +2391,11 @@ participants** : seul le mobilier, les tours ou un fichier écrit ailleurs l'y
 mettent (§ 9). « Défaire » reprend le geste et l'ajustement ensemble. Le
 libellé de l'entrée le dit — « ; placement retenu ajusté » —, et les
 propositions, elles, gardent leur plan : elles entrent en dérive (§ 9), sans
-cesser de servir de départ (§ 5.7).
+cesser de servir de départ (§ 5.7). Le changement de présence nomme les tours
+touchés au lieu de cette mention : « Présence de Prénom Nom : tours 2 et 3, au
+lieu des tours 1 et 2 ; retirée du placement retenu au tour 1, mise en réserve
+au tour 3 » — chaque partie seulement quand elle a des tours, et rien après la
+présence quand le retenu ne bouge pas.
 
 Une personne ajoutée en état retenu entre en réserve du retenu à ses tours de
 présence, et le logiciel le dit (`A_PLACER_DANS_LE_RETENU`) : quand sa présence
@@ -2129,22 +2415,36 @@ demande confirmation que si le retenu porte une retouche à la main que ce geste
 détruirait (§ 9) : un retenu seulement ajusté aux participants se remplace sans
 fenêtre, sa proposition retenue de nouveau donnant le même ajustement.
 
-**Il n'existe aucune commande qui répartit les animateurs sur les tables.**
-L'opérateur désigne lui-même quelle personne anime quelle table (§ 2.1,
-étape 6). Une commande qui attribuerait un animateur par numéro de table le
-ferait sous une **seule** entrée d'historique : revenir sur elle, parce que douze
-attributions sur trente-trois sont fausses, emporterait aussi les vingt-et-une
-qui étaient bonnes — le § 8.3 restitue un état, il ne défait pas un geste.
+**Une seule commande répartit des animateurs sur les tables**, et seulement sur
+celles qu'elle crée : « Créer les tables… », pour les personnes que la marque de
+l'animation réservée dit à désigner (§ 2.1 étape 6, § 6.1). Une table existante,
+l'opérateur désigne lui-même qui l'anime (§ 2.1, étape 6). Une commande qui
+attribuerait un animateur par numéro de table le ferait sous une **seule**
+entrée d'historique : revenir sur elle, parce que douze attributions sur
+trente-trois sont fausses, emporterait aussi les vingt-et-une qui étaient bonnes
+— le § 8.3 restitue un état, il ne défait pas un geste. La création des tables
+n'y tombe pas : elle suit l'intention que l'opérateur a écrite, personne par
+personne, dans la marque, et ne touche que des tables qui n'existaient pas.
+« Défaire » la reprend entière, tables et animateurs ensemble, et rien
+d'autre ; une attribution à corriger se retire à la rangée « Animateurs » de
+sa table, sans toucher aux autres.
 
-Ce qui la remplace : le logiciel **montre le travail qui reste**, par des listes
-cliquables qui mènent à la place ou à la personne — la liste des **titres de
-place non pourvus** (§ 4.1), la liste des participants portant un **titre
-pressenti** (§ 4) qui ne sont encore réservés nulle part, et, sous un retenu, la
-liste **« En réserve dans le placement retenu »** : chaque personne que le
-retenu laisse en réserve, avec ses tours, une exclue, une supprimée ou une
-absente au tour n'y figurant pas ; un clic montre le premier de ces tours et la
-choisit. Elle n'existe pas sans retenu, et dit « Aucun. » sous un retenu qui
-n'en laisse pas, ou qui se contredit.
+Ce qui remplace la répartition : le logiciel **montre le travail qui reste**,
+par des listes cliquables qui mènent à la place ou à la personne — la liste des
+**titres de place non pourvus** (§ 4.1), la liste des participants portant un
+**titre pressenti** (§ 4) qui ne sont encore réservés nulle part, et, sous un
+retenu, la liste **« En réserve dans le placement retenu »** : chaque personne
+que le retenu laisse en réserve, avec ses tours, une exclue, une supprimée ou
+une absente au tour n'y figurant pas ; un clic montre le premier de ces tours et
+la choisit. Elle n'existe pas sans retenu, et dit « Aucun. » sous un retenu qui
+n'en laisse pas, ou qui se contredit. Puis la liste **« Inclusions non
+satisfaites »** du placement que le plan montre — la proposition demandée, sinon
+le retenu, comme la page de qualité le mesure (§ 12) — : chaque rencontre
+demandée qu'il ne fait pas, dans les phrases de la page de qualité (§ 12.15),
+« Iris Ombrelle n'a pas rencontré Théo Pervenche » ; un clic choisit la personne
+qui la porte, un second l'oublie. Aucune table ne la signale (§ 7.5). Elle
+n'existe que quand ce placement se mesure et qu'une inclusion est active, et dit
+« Aucune. » quand il les fait toutes.
 
 ### 5.9 Ce que le logiciel refuse, au moment du geste
 
@@ -2205,6 +2505,14 @@ dans l'outil.
   participant ne porterait, ou la propre organisation de la personne : refusé
   entier, la cause nommant l'organisation et sa ligne, le remède invitant à
   corriger le fichier puis à l'importer de nouveau (§ 10.1).
+- Une liste d'inclusions qui nomme la propre organisation de la personne
+  (`INCLUSION_PROPRE_ORGANISATION`) ou la personne elle-même
+  (`INCLUSION_DE_SOI`), une organisation qu'aucun participant ne porte
+  (`ORGANISATION_INCONNUE`) ou un identifiant qu'aucun participant n'a
+  (`PARTICIPANT_INCONNU`) : refusée entière à la première valeur fautive, dans
+  l'ordre reçu, sans remède, l'organisation ou la personne se choisissant dans
+  le champ même, parmi les autres. Une inclusion que contredit un conflit de la
+  personne n'est pas refusée (§ 4) : elle est acceptée et signalée, plus bas.
 - Déposer quelqu'un sur une place réservée à un autre, ou l'échanger avec elle.
   **Déplacer la réservation** est une commande séparée et explicite.
 - Une saisie d'étiquettes vide — des blancs ou des séparateurs seuls —, une
@@ -2235,11 +2543,18 @@ dans l'outil.
   titre —, signalé contre l'objectif ; une étiquette d'objectif qu'aucune
   personne ne porte, exclues comprises, signalée avec l'orthographe voisine
   quand il en existe une ; un critère coché sans objet (§ 5.3), marqué « sans
-  objet » dans l'ordre des priorités ; une réservation, ou un placement
-  retouché à la main dans le retenu, qui réunit à une table deux personnes en
-  conflit d'organisation (§ 4) : la commande écrit, la table porte la trame
-  du conflit (§ 7.5), et son panneau nomme chaque paire sous « Conflits
-  d'organisation à ce tour ».
+  objet » dans l'ordre des priorités ; une réservation, ou un placement retouché
+  à la main dans le retenu, qui réunit à une table deux personnes en conflit
+  d'organisation (§ 4) : la commande écrit, la table porte la trame du conflit
+  (§ 7.5), et son panneau nomme chaque paire sous « Conflits d'organisation à ce
+  tour » ; une inclusion qu'un conflit d'organisation contredit (§ 4), quel que
+  soit le geste qui la fait naître — l'inclusion posée, le conflit posé, une
+  personne qui change d'organisation ou revient d'une exclusion — : la commande
+  écrit, et un avertissement (`INCLUSION_CONTREDITE`) nomme chaque inclusion
+  nouvellement contredite, sa personne et sa cible, et dit qu'elle reste dans sa
+  liste, hors d'atteinte, tant que le conflit tient ; une contradiction qui
+  était déjà là ne se redit pas, même quand l'organisation qu'elle vise est
+  renommée et que les listes suivent le renommage (§ 4).
 
 Un refus **nomme sa cause et propose le geste qui le lève**, et se manifeste
 **sur la place concernée**, pas dans une boîte de dialogue. Seul un geste qui
@@ -2287,13 +2602,48 @@ d'arrivée ; un compteur par couple (personne, animateur), N × A octets pour A
 animateurs tant que R ne dépasse pas 255, dit quand une rencontre apparaît ou
 disparaît. La recherche ne tient ces compteurs que quand le critère des
 animateurs compte, coché et avec un objet : sinon aucune composante ne les lit,
-et elle ne paie rien pour eux, même quand des personnes animent. Le coût d'un
-mouvement reste de l'ordre des sièges des deux tables, et un n-uplet de dix
+et elle ne paie rien pour eux, même quand des personnes animent. Les inclusions
+non satisfaites se lisent sur deux compteurs que la recherche tient déjà : une
+inclusion de personne est satisfaite quand la paire est réunie, une inclusion
+d'organisation quand la personne compte un membre de cette organisation parmi
+ses rencontres, comme la mesure les juge (§ 13.2). Après un échange, seules se
+relisent les rencontres demandées des deux personnes déplacées — celles dont
+elles sont une extrémité, celles qu'elles portent, et celles qui incluent leur
+organisation —, chacune en temps constant ; la boucle des paires n'en lit rien
+de plus, et sans inclusion active la recherche ne relit rien. Le coût d'un
+mouvement reste de l'ordre des sièges des deux tables, et un n-uplet de douze
 composantes au plus se compose et se compare dans le même ordre de grandeur que
 celui de six : mesuré sur la grande démonstration, un mouvement coûte quelques
 pour cent de plus que sous l'ordre fixe de référence sans objectif, et moins
 d'un dixième de plus avec des étiquettes, des objectifs, la case des animateurs
-et un ordre réglé.
+et un ordre réglé ; deux cent dix inclusions actives n'en changent pas l'ordre
+de grandeur.
+
+**Tant qu'une rencontre demandée manque, un mouvement sur deux la rapproche.**
+Quand le critère des inclusions compte et qu'une rencontre demandée (§ 5.4)
+n'est pas faite, chaque mouvement tire d'abord entre deux genres, à parts
+égales. Le mouvement ordinaire tire comme sans inclusion. Le mouvement dirigé
+tire une rencontre demandée qui manque, puis, pour une organisation que
+plusieurs membres satisfont, l'un d'eux ; puis un tour où les deux sont présents
+et celle des deux qui y est libre, qui rejoint la table de l'autre à l'un de ses
+sièges mobiles, par l'échange ordinaire avec son occupant, personne ou place
+vide. Sans tour qui le permette, il est évalué et rejeté. Il ne touche ni un
+siège fixé ni un tour figé, et s'accepte, se refuse et se défait comme un
+autre : il ne choisit que les sièges à échanger, et la comparaison des scores
+reste seule juge. Les rencontres qui manquent forment un ensemble que chaque
+relecture tient en temps constant. Sans lui, la recherche ordinaire ne trouve
+une rencontre demandée qu'au hasard d'un échange qui assied les deux personnes
+ensemble, et en laisse, sur une soirée dense en listes, au compte par défaut.
+Avec lui, la fixture de mesure du § 14.10 les fait toutes en quelques dizaines
+de milliers de mouvements, une soirée dense en laisse près de dix fois moins au
+compte par défaut, et sur une soirée moins dense les paliers qui suivent ne s'en
+écartent pas au-delà du bruit des graines. La part d'un sur deux est une
+constante du moteur, qu'aucun réglage n'expose. Un mouvement dirigé coûte de
+l'ordre d'un dixième de plus qu'un mouvement ordinaire et ne se tire plus dès
+que toutes les rencontres demandées sont faites ; le prix en temps se paie
+pourtant surtout après ce point : à compte égal, une génération qui porte des
+inclusions dure de l'ordre d'un dixième de plus, car une recherche plus avancée
+rejette davantage de mouvements, et un mouvement rejeté se défait.
 
 **La présence ne coûte rien à la recherche.** Une personne absente à un tour
 n'occupe aucun siège de ce tour, aucun mouvement ne la touche, et les grandeurs
@@ -2311,7 +2661,9 @@ chacune le lit avec son |C(p)| et son n_p^C (§ 5.5).
 façon dont deux scores se comparent, jamais les tirages : aucun ne s'ajoute ni
 ne se déplace (§ 15.5, point 3). La liste se lit dans l'ordre où le fichier
 l'écrit, jamais par le parcours des clés d'un objet, et les sommes d'un palier
-sont des entiers exacts.
+sont des entiers exacts. Le mouvement dirigé des inclusions ne tire rien tant
+qu'aucune rencontre demandée ne manque ; sans inclusion active, la suite des
+tirages est celle d'avant.
 
 **Une génération dérivée ne touche pas au hasard d'une génération
 ordinaire.** Son départ remplace chaque tirage d'un placement, au début de la
@@ -2376,23 +2728,23 @@ d'inactivité du § 8.4 est suspendu tant qu'un calcul tourne, donc le retour
 automatique en lecture ne tombe jamais au milieu d'une génération.
 
 **Une opération longue s'annonce, et l'écran ne paraît pas figé.** Ouvrir un
-événement, charger une démonstration, défaire, refaire ou revenir à un instant,
-appliquer un import, finir une génération — trier et enregistrer ses
-propositions, après la recherche —, ouvrir l'aperçu avant impression, préparer,
-produire ou enregistrer ailleurs la planche de badges, écrire ailleurs : ces
-opérations calculent sur le fil de l'interface. Une pastille « Traitement en
-cours… », au bas de la fenêtre et centrée, se pose et se peint **avant** que le
-calcul ne parte, et ne se voit qu'au bout d'**une demi-seconde** : une opération
-brève passe sans rien montrer. Son apparition et la rotation de son signe sont
-jouées par le compositeur du navigateur pendant que le calcul tient le fil, sans
+événement ou l'une de ses versions de secours (§ 8.8), charger une
+démonstration, défaire, refaire ou revenir à un instant, appliquer un import,
+finir une génération — trier et enregistrer ses propositions, après la
+recherche —, ouvrir la section de l'impression, préparer, produire ou
+enregistrer ailleurs la planche de badges, écrire ailleurs : ces opérations
+calculent sur le fil de l'interface. Une pastille « Traitement en cours… », au
+bas de la fenêtre et centrée, se pose et se peint **avant** que le calcul ne
+parte, et ne se voit qu'au bout d'**une demi-seconde** : une opération brève
+passe sans rien montrer. Son apparition et la rotation de son signe sont jouées
+par le compositeur du navigateur pendant que le calcul tient le fil, sans
 minuterie ; sous la préférence de mouvement réduit, elle apparaît de même et son
 signe reste immobile. Le curseur dit l'attente tant qu'elle est là. Elle se
 retire à la fin de l'opération, aboutie ou refusée, et deux opérations qui se
-chevauchent n'en montrent qu'une. L'attente de la peinture ne change pas
-l'ordre des gestes : un geste fait pendant elle part après l'opération qui
-l'attend — « Défaire » puis un ajout défont le geste d'avant, et l'ajout suit.
-Un geste ordinaire du plan ne la montre jamais, et l'écran au repos ne la porte
-pas.
+chevauchent n'en montrent qu'une. L'attente de la peinture ne change pas l'ordre
+des gestes : un geste fait pendant elle part après l'opération qui l'attend —
+« Défaire » puis un ajout défont le geste d'avant, et l'ajout suit. Un geste
+ordinaire du plan ne la montre jamais, et l'écran au repos ne la porte pas.
 
 **Les propositions d'une génération se calculent en parallèle, sur les cœurs du
 poste.** Chaque proposition ne dépend que de sa graine dérivée — et, pour une
@@ -2549,39 +2901,60 @@ présents non exclus moins la somme des capacités —, l'avertissement offre,
 à côté de « Ouvrir les tables », « Créer les tables… », et la section des
 tables offre la même commande tant qu'il en manque. Elle déplie en place un
 petit formulaire, sans fenêtre : le nombre de places par table, pré-rempli
-du défaut, borné comme une table (§ 6.2), puis la conséquence chiffrée avant
-d'appliquer :
+du défaut, borné comme une table (§ 6.2), puis la forme des tables,
+« Rondes » ou « Carrées » — cochée d'abord à la forme de la dernière table
+créée dans l'événement, celle qui porte le plus grand identifiant, et à
+« Rondes » s'il n'y en a aucune ; le fichier ne porte aucun champ pour
+elle —, puis la conséquence chiffrée avant d'appliquer :
 
 > « 22 tables de 8 places : 176 places pour 171 participants »
 
 — sous une présence partielle, « … pour 112 personnes présentes au plus à un
 même tour ». Elle ajoute aux tables existantes ⌈manque / taille⌉ tables
-rondes de cette taille, numérotées à la suite, posées sur des cases libres,
-en **une seule entrée d'historique** ; une table à la taille du défaut le
-suit, une autre est surchargée. Elle se refuse en lecture et sur un plan
-bloqué comme tout geste sur les tables, et quand plus rien ne manque. Après,
-l'avertissement tombe, et le focus passe à l'annonce des tables créées.
+de cette taille et de la forme cochée, numérotées à la suite, posées sur des
+cases libres, en **une seule entrée d'historique** ; une table à la taille
+du défaut le suit, une autre est surchargée. Dans la même entrée, elle
+désigne sur ces tables les personnes à désigner animatrices (§ 2.1 étape 6),
+et le libellé de l'entrée les compte. Tant qu'une personne est à désigner,
+l'aperçu le dit d'une seconde phrase, sous la première :
+
+> « 2 personnes à l'animation réservée y seront désignées animatrices ;
+> 1 restera à désigner. »
+
+La phrase ne dit pas le geste qui désigne les restantes : il dépend de la
+cause de chacune. La création se refuse en lecture et sur un plan bloqué comme
+tout geste sur les tables, et quand plus rien ne manque. Après, l'avertissement
+tombe, et le focus passe à l'annonce des tables créées, qui compte les
+animateurs désignés ; l'avertissement `ANIMATEURS_A_DESIGNER` nomme chaque
+personne laissée à désigner, avec sa cause, et le geste qui la désigne (§ 2.1
+étape 6). Créer une seule table ne désigne personne.
 
 **Les animateurs d'une table.** Chaque table de la liste porte une rangée
 « Animateurs » : ses animateurs (§ 2.1 étape 6) en pastilles, chacun suivi d'un
 bouton de retrait, nommé « Retirer *personne* des animateurs de la table *n* »,
 puis « Ajouter… ». Être animateur se calcule — une réservation « tous les
-tours » qui pourvoit pour la soirée un titre de la table — et la rangée ne lit
-rien d'autre. « Ajouter… » ouvre une fenêtre modale, « Ajouter des animateurs
+tours » qui pourvoit pour la soirée un titre de la table, ou la désignation
+suspendue d'une absente à un tour qui en pourvoit un resté sans pourvoyeur
+(§ 4.4) — et la rangée ne lit rien d'autre. Une animatrice devenue absente à
+un tour y reste donc, avec son retrait, tant que sa réservation et son titre
+existent, et sa pastille est suivie de ses tours d'absence, « Absence au
+tour 3 ». « Ajouter… » ouvre une fenêtre modale, « Ajouter des animateurs
 à la table *n* », le focus dans sa recherche : la recherche porte sur le nom,
 le prénom et l'organisation, sans égard à la casse ni aux accents ; la case
 « Grouper par organisation », cochée à l'ouverture, range les personnes par
 organisation, « Sans organisation » en dernier, chaque groupe dans l'ordre de
-la grille des participants ; le champ « Titre », prérempli d'« animateur »,
-vaut pour toutes les personnes choisies. Chaque personne a sa case et son
-statut **en texte** : elle anime cette table (case cochée et désactivée), elle
-anime une autre table, elle est absente à un tour — ses tours d'absence,
-« Absence au tour 3 » —, une place lui est réservée à la main — sa table, puis
-son tour ou la soirée —, elle est exclue — case désactivée dans ces quatre cas
-—, elle est placée au plan retenu sans réservation — ses tables et leurs
-tours, et elle se choisit : le retenu passera en dérive comme sous toute
-réservation (§ 9) —, ou elle est disponible ; son titre pressenti s'y lit en
-information. Un compte dit « 2 choisies · 3 places libres à cette table ».
+la grille des participants ; le champ « Titre pour les personnes sans titre
+pressenti », prérempli d'« animateur », vaut pour les personnes choisies qui
+n'en ont pas, chacune des autres recevant son titre pressenti (§ 2.1 étape 6).
+Chaque personne a sa case et son statut **en texte** : elle anime cette table
+(case cochée et désactivée), elle anime une autre table, elle est absente à un
+tour — ses tours d'absence, « Absence au tour 3 » —, une place lui est
+réservée à la main — sa table, puis son tour ou la soirée —, elle est exclue —
+case désactivée dans ces quatre cas —, elle est placée au plan retenu sans
+réservation — ses tables et leurs tours, et elle se choisit : le retenu passera
+en dérive comme sous toute réservation (§ 9) —, ou elle est disponible ; son
+titre pressenti s'y lit en information. Un compte dit « 2 choisies · 3 places
+libres à cette table ».
 « Ajouter », désactivé sans choix, désigne les personnes choisies, dans
 l'ordre de la liste, en une entrée ; un refus se pose dans la fenêtre, qui
 reste ouverte, et « Ajouter » le nomme dans sa description : son remède abouti,
@@ -2601,6 +2974,11 @@ table refuse, l'opération entière est refusée, nommément, et rien ne change.
 
 - **Moins de 2 sièges.** Une table à 1 place est un participant qui ne
   rencontre personne de la soirée — c'est ce que le logiciel existe pour éviter.
+- **Plus de 1 000 sièges** (`TROP_DE_PLACES`, qui dit le maximum). Le plan
+  dessine une chaise par place : au-delà, l'événement deviendrait inaffichable
+  sans rien apporter. La borne vaut au défaut comme en surcharge, et pour
+  « Créer les tables… » (§ 6.1) ; l'analyse d'un fichier refuse de même une
+  capacité ou un défaut au-delà.
 - Une capacité inférieure au nombre de réservations portées par la table.
 - Une réduction qui retire un siège portant une réservation ou un titre — les
   sièges disparaissent par numéro décroissant ; le refus les liste.
@@ -2637,7 +3015,7 @@ l'opérateur agit directement dessus.
 | glisser une personne sur un siège libre | la déplace |
 | glisser une personne sur une autre | les échange |
 | glisser une personne hors des tables | la retire du tour ; elle attend dans la **réserve** visible, et sa chaise reste vide (§ 5.8) |
-| glisser une table | change sa position |
+| glisser une table | change sa position — sur un plan écarté, celle que le point lâché ramène (§ 7.4) |
 | tirer la poignée d'une table | **change son nombre de places** |
 | survoler une table en conflit | affiche le détail des règles violées |
 | zoomer, déplacer la vue | change le cadrage |
@@ -2652,8 +3030,27 @@ présence — « Prénom Nom — présente aux tours 1 et 2 » ; elle n'existe p
 le tour n'en a pas. Une absente n'a ni chaise ni place en réserve ; son bouton
 ouvre sa fiche, où sa présence se change (§ 10.2), et ne la choisit pas. Le
 plan n'offre pas de commande qui change une présence : la fiche et la grille
-en sont le lieu. La mise en évidence d'une personne absente au tour montré se
-dit dans la barre de vue : « — absente au tour 3 ».
+en sont le lieu. La mise en évidence marque la chaise que la personne occupe
+au tour montré, quand le plan dessine les chaises (§ 7.3) ; sans chaise à ce
+tour, rien n'est marqué, et la barre de vue dit l'absence ou la réserve :
+« — absente au tour 3 », ou « — dans la réserve au tour 3 ». Une exclue n'a
+de chaise à aucun tour ; la barre la nomme sans la qualifier.
+« Voir sur le plan », depuis la ligne d'une personne dans la grille des
+participants, la met en évidence et ouvre le plan au tour montré quand elle y
+a une chaise, sinon au premier tour où elle en a une : le plan la montre
+assise, sans que l'opérateur cherche son tour. Sans chaise à aucun tour, le
+tour montré reste.
+
+**« Voir sur le plan » amène la chaise de la personne au centre du plan.** Le
+plan s'ouvre avec sa chaise au centre de son cadre, au plus petit zoom où sa
+table dessine ses chaises (§ 7.3), ou au zoom de la vue quand l'opérateur est
+déjà plus près : sur une grande salle ajustée à la fenêtre, aucune chaise
+n'est dessinée, et la marque n'aurait ni où se poser ni où se voir. Ce
+cadrage est celui d'un zoom de l'opérateur, mémorisé comme lui (§ 8.5). Sans
+chaise au tour montré, la vue ne bouge pas. Le tableau des paires répétées
+mène au plan de même (§ 12.5). « Mettre en évidence », depuis le menu d'une
+personne sur le plan, ne déplace pas la vue : la personne est déjà sous les
+yeux de l'opérateur.
 
 **La poignée pilote le nombre de places, jamais une taille libre.** Chaque table
 est dessinée à l'échelle de son nombre de sièges ; une taille libre permettrait
@@ -2768,7 +3165,9 @@ utile, un siège n'est pas pointable au doigt.** La règle est donc : sous le zo
 où la cible tomberait en deçà de 24 px, **les sièges cessent d'être des cibles
 et la table devient la cible**, le siège se choisissant dans son panneau. Le
 logiciel le montre en cessant de dessiner les chaises individuellement, plutôt
-qu'en laissant l'opérateur manquer sa cible sans comprendre.
+qu'en laissant l'opérateur manquer sa cible sans comprendre. Sous ce zoom, la
+chaise d'une personne mise en évidence n'est pas dessinée non plus : « Voir
+sur le plan » zoome jusqu'au seuil de sa table (§ 7.1).
 
 **Le seuil se décide table par table**, sur le pas de chacune — la distance
 entre deux sièges voisins au bord du plateau. Au même zoom, une petite table
@@ -2816,13 +3215,75 @@ champ :**
 
 | document | règle |
 |---|---|
-| le plan de salle, à l'écran comme à l'impression | **abrège** avec une marque, la largeur d'un bloc de noms étant la même contrainte des deux côtés ; le libellé d'une table s'y **replie** dans son plateau, **puis s'abrège** |
+| le plan de salle, à l'écran comme à l'impression | **abrège** avec une marque, la largeur d'un bloc de noms étant la même contrainte des deux côtés ; le libellé d'une table s'y **replie** dans son plateau, **puis s'abrège** ; l'organisation, demandée, s'y **replie** sous le nom et **ne s'abrège jamais** |
 | la fiche à l'écran, la feuille par table, la liste d'accueil | **ne tronquent jamais** : elles replient |
-| le **badge** (§ 11.5) | **par champ** : le nom ne s'abrège jamais — il réduit de corps par paliers, puis se replie — tandis que l'organisation s'abrège sur une seule ligne |
+| le **badge** (§ 11.5) | **ne tronque jamais** : chaque texte se replie en paragraphe, et l'ordre change **par champ** — le nom réduit de corps par paliers, puis se replie ; l'organisation se replie, puis réduit de corps ; une ligne de tour se replie au corps plancher, sa suite en retrait |
 
 Un nom coupé sur la feuille que tient le personnel de salle ne sert à personne ;
 un nom de deux cents caractères déployé sur un plan de 33 tables détruit la
 page.
+
+**L'organisation se lit à côté du nom, sur demande.** La barre de vue du plan
+offre, à droite de « Listes de noms », la bascule « Organisation », éteinte à
+l'ouverture de chaque événement. Allumée, la ligne d'une personne assise porte,
+après son nom et un point médian, son organisation, à l'encre secondaire : « 3.
+Iris Ombrelle · Club des Merles — *animateur* ». Une personne sans organisation
+garde son nom seul ; la titulaire d'une réservation que la chaise n'assied pas
+n'est nommée que par son nom. Regarder n'écrit rien (§ 8.4) : la bascule ne
+touche ni l'événement ni les réglages du poste. Listes masquées, elle n'a rien à
+montrer : elle reste à sa place et garde son état, inactive, et dit qu'il faut
+montrer les listes. Le bloc de noms garde sa largeur, et **l'organisation ne
+s'abrège jamais** : quand la ligne entière ne tient pas, elle passe sous le nom,
+sans son point, en retrait d'un cadratin, et s'y replie sur autant de lignes
+qu'il faut, entre ses mots — entre deux caractères pour un mot plus large que la
+ligne, jamais entre une lettre et son accent. La ligne du nom s'ajuste alors
+comme sans elle : un nom trop long s'y abrège encore, et une organisation dont
+le nom tombe tombe avec lui. Le bloc s'allonge vers le bas de ces lignes, au
+pas des autres, et les sièges suivants descendent d'autant ; aucune ligne ne
+sort de la largeur du bloc.
+
+**Le plan s'écarte quand l'organisation allonge les listes.** Un bloc allongé
+dépasse vite le pas de rangée de la grille, qui ne compte que les emprises :
+c'est déjà le cas d'une ronde de huit places dont chaque ligne se replie une
+fois. Listes et organisation montrées, les rangées de tables descendent donc sur
+le dessin juste assez pour que l'organisation ne rapproche jamais deux blocs qui
+se recouvrent en largeur, de tables d'ordonnées différentes : ils restent à
+36 cm au moins l'un de l'autre, ou, s'ils étaient plus proches sans
+l'organisation, à l'écart qu'ils avaient sans elle. Aucune liste ne couvre ainsi
+celle du dessous, à l'écran comme sur le papier, quand elle ne la couvrait pas
+déjà sans l'organisation, et une organisation qui tient sur la ligne du nom ne
+déplace aucune table. L'écart se calcule sur les listes du tour montré, ou de la
+proposition montrée : leurs occupants, donc les organisations repliées, changent
+d'un tour à l'autre, et une table peut se dessiner plus haut ou plus bas en
+changeant de tour. L'écart s'ajoute entre deux rangées, dans le plus grand
+intervalle qui sépare les deux tables, le plus haut à égalité, et tout ce qui
+est dessous descend d'autant : une rangée reste alignée, même à quelques
+centimètres près, et ni l'ordre des rangées ni les abscisses ne changent ; deux
+tables de même ordonnée ne se séparent pas. Le plan s'écarte à tout zoom, que
+les listes s'y dessinent ou non, et franchir le seuil des listes ne déplace
+aucune table ; éteindre les listes ou l'organisation le resserre. Regarder
+n'écrit rien : la position enregistrée des tables, la grille et l'avertissement
+d'une liste sur une voisine, qui juge l'événement et ne compte pas ces lignes,
+ne changent pas. Le dessin écarté est celui que la vue regarde : l'emprise du
+plan, la vue où le plan s'ouvre, « Ajuster », « Voir sur le plan », la
+désignation d'une chaise, l'infobulle et le clavier le lisent.
+
+**Un geste passe du dessin à la position enregistrée.** Une table se saisit
+où elle est dessinée et glisse de l'écart du pointeur ; lâchée, son centre
+revient à une position enregistrée par les rangées du moment de l'appui :
+posée sur une rangée du dessin, elle prend l'ordonnée enregistrée de cette
+rangée, et la rejoint ; entre deux rangées, la même part de l'intervalle
+enregistré qui les sépare. Le plan s'écarte ensuite de nouveau, la table
+posée comprise. Sur le papier, le plan imprimé est le plan écarté, et sa
+découpe en pages compte chaque ligne (§ 11.7).
+
+**La largeur d'une ligne est celle que le moteur de rendu pose.** Chaque partie
+d'une ligne — numéro et état, nom, organisation, titre — est son propre
+`<tspan>`, dont le moteur de rendu arrondit la chasse à son unité de mise en
+page : une ligne de quatre parties peut rendre plus large que la même ligne
+mesurée d'un tenant. La ligne s'ajuste sur la plus grande des deux largeurs, et
+une épreuve du navigateur vérifie, sur le plan imprimé, que la chasse rendue de
+chaque ligne tient dans le bloc.
 
 **Sur une feuille imprimée, replier s'étend à la page.** La feuille par table
 garde à chaque colonne de tour au moins la largeur de son plus long mot ; des
@@ -2842,7 +3303,10 @@ ligne encore plus haute qu'une page — un nom de plusieurs milliers de caractè
 — ne se coupe pas au bord de la feuille : son texte se poursuit sur la page
 suivante, sous l'en-tête répété, coupé au début d'un mot, ou entre deux
 caractères quand un mot seul dépasse la page — jamais entre une lettre et son
-accent. Rien d'une ligne ne tombe hors de la page, et aucun nom n'est tronqué.
+accent. Sur la liste d'accueil, une ligne qui ouvre son organisation se poursuit
+de même, sous l'en-tête et l'intertitre répétés, dès qu'elle passe ce qu'ils
+laissent d'une page (§ 11.7). Rien d'une ligne ne tombe hors de la page, et
+aucun nom n'est tronqué.
 
 ### 7.5 Les tables en conflit
 
@@ -2913,6 +3377,13 @@ chaque personne tour par tour, et sa fiche les détaille dans une rubrique du
 même nom (§ 10.2). Hors du plan, le texte seul les dit : aucune couleur ne les
 distingue, la teinte de conflit reste au plan.
 
+**Une inclusion non satisfaite ne se peint sur aucune table** : elle n'est la
+faute d'aucune, et la pastille ne compte que les violations de sa table. Elle se
+lit dans la liste de travail « Inclusions non satisfaites » du plan (§ 5.8), et,
+pour chaque personne, dans la rubrique « Inclusions du placement » de sa fiche
+et dans la colonne du même nom de la grille (§ 10.2), tirées de la même mesure
+que le tableau des propositions et la page de qualité (§ 12.15).
+
 **Quand toutes les tables sont en conflit, le plan cesse de signaler quoi que ce
 soit** — cas que le diagnostic sait prédire. La pastille chiffrée garde sa
 valeur puisqu'elle ordonne les tables entre elles, et le bandeau énonce le
@@ -2930,6 +3401,14 @@ livraison hors ligne ne contrôle pas.
 | réservée à une personne / titre seul / ni l'un ni l'autre | **cadenas fermé** / **cadenas ouvert** / aucune marque |
 | pourvue / à pourvoir | remplissage **plein** / **hachuré** |
 | portée « tous les tours » | **anneau** autour de la chaise |
+
+**Une réservation remplit sa chaise quand le placement y assied sa personne ;
+un titre seul, dès qu'une réservation le pourvoit** (§ 4.1). La réservation que
+le placement ne tient pas — chaise vide, ou une autre personne assise — laisse
+sa chaise hachurée, au cadenas fermé. Le titre qu'une réservation pourvoit sans
+que la chaise la porte — une réservation sans siège, sa personne assise ailleurs
+ou nulle part — rend sa chaise pleine, au cadenas ouvert ; hachurée tant que
+rien ne le pourvoit à ce tour.
 
 **La chaise porte au plus deux marques ; la liste porte le texte.** Trois
 glyphes empilés sur une chaise deviennent illisibles au zoom par défaut. La
@@ -3071,15 +3550,18 @@ jamais nécessaire pour ouvrir.
 
 | | |
 |---|---|
-| participants | avec identifiant entier, titre pressenti, notes, **étiquettes**, **présence** |
-| tables | capacité **et son état** : `sieges: null` (suit le défaut) ou un entier (surcharge) |
+| participants | avec identifiant entier, nom, prénom, organisation, courriel, titre pressenti, notes, **exclusion**, **étiquettes**, **présence**, **conflits d'organisation**, **inclusions** d'organisation et de participant, chemin du **logo**, marque du **nom numéroté**, marque de l'**animation réservée** |
+| tables | numéro, capacité **et son état** : `sieges: null` (suit le défaut) ou un entier (surcharge) ; **forme**, **libellé** |
 | le **nombre de sièges par défaut** de l'événement | |
 | tours, réglages, réservations avec leur portée, **titres de place** | |
 | **objectifs des tables**, avec leur portée et leur règle propre | |
-| **règle par défaut** et **mode des objectifs**, **ordre des priorités** | dans les réglages, absents tant qu'ils valent leur défaut |
+| **règle par défaut**, case « Respecter les objectifs des tables », **mode des objectifs**, case « Rencontrer le plus d'animateurs différents », **ordre des priorités** | dans les réglages, absents tant qu'ils valent leur défaut |
 | placements engendrés, celui qui est retenu, état du plan | |
 | **positions en centimètres**, et l'unité déclarée | |
 | **filiation** : nom et identifiant de la source, instant d'origine | |
+
+Le § 8.9 donne la forme des placements et celle des champs facultatifs, chacun
+absent tant qu'il vaut son défaut.
 
 **Ce que le fichier ne porte pas : ni le mode, ni le cadrage.** Une liste de ce
 qui est dedans, sans son complément, laisse l'implémenteur ajouter.
@@ -3130,18 +3612,21 @@ en-têtes de colonnes se groupent en « Événement », « Placement retenu » e
 l'en-tête, la date et le chemin en petite ligne dessous. Sous le tableau, des
 cartes offrent la création, le dossier de travail et les démonstrations. Le
 formulaire de la création exige un nom ; la date, facultative, se choisit dans
-un sélecteur de date, et une date commencée mais incomplète, ou complète mais
-absente du calendrier, refuse la création (`DATE_INCOMPLETE`), contre le champ
-de la date, sans rien écrire. Deux
-colonnes résument en plus le **placement retenu**, sous l'en-tête du groupe qui
-les couvre toutes deux : « Collisions cumulées (paire et tour) », les collisions
-cumulées du retenu, puis « Rencontres répétées choisies (paires) », les paires
-réunies plus d'une fois que le placement a choisies, sans celles que les
-réservations imposent (§ 5.4) — dans chacune, le nombre que la colonne du même
-intitulé du tableau des propositions porte sur la ligne du retenu. Les deux se
-lisent dans une seule mesure du retenu, celle du tableau, sans rien écrire dans
-l'événement ; un événement sans retenu, ou dont le retenu est fautif ou en
-dérive (§ 8.9, § 9), porte « — » dans l'une et l'autre.
+un sélecteur de date, borné de 1900 à 9999. Une date commencée mais
+incomplète, ou complète mais absente du calendrier, refuse la création
+(`DATE_INCOMPLETE`) ; une date d'une année avant 1900 — par exemple tapée sur
+deux ou trois chiffres — la refuse aussi, sous un refus qui nomme ce
+minimum, « L'année de la date est 1900 au plus tôt » ; l'un et l'autre se
+posent contre le champ de la date, sans rien écrire. Deux colonnes résument
+en plus le **placement retenu**, sous l'en-tête du groupe qui les couvre
+toutes deux : « Collisions cumulées (paire et tour) », les collisions
+cumulées du retenu, puis « Rencontres répétées choisies (paires) », les
+paires réunies plus d'une fois que le placement a choisies, sans celles que
+les réservations imposent (§ 5.4) — dans chacune, le nombre que la colonne
+du même intitulé du tableau des propositions porte sur la ligne du retenu.
+Les deux se lisent dans une seule mesure du retenu, celle du tableau, sans
+rien écrire dans l'événement ; un événement sans retenu, ou dont le retenu
+est fautif ou en dérive (§ 8.9, § 9), porte « — » dans l'une et l'autre.
 Chaque ligne porte aussi la **« Meilleure proposition du classement »**, sous
 les libellés du bloc que la section de la génération montre en tête :
 l'identifiant de la proposition au rang 1 du classement (§ 5.7) — la même
@@ -3231,13 +3716,19 @@ seuil, et l'épreuve vérifie à part que le geste écrit sa ligne de journal, l
 `.precedent` et l'état, une fois chacun, et rien d'autre.
 
 **Est une entrée exactement ce qui change le contenu du fichier.** Changer de
-tour affiché, zoomer, mettre en évidence, masquer les listes **n'en sont pas**.
+tour affiché, zoomer, mettre en évidence, masquer les listes ou y montrer les
+organisations **n'en sont pas**.
 Déplacer une table **en est une** : sa position est une donnée du plan.
 
 **Chaque entrée porte un libellé en français, figé à l'écriture** — « Déplacé
 Camille Roy de la table 4 à la table 7, tour 2 ». Jamais reconstruit ensuite :
 les objets nommés peuvent avoir disparu, et un historique qui affiche « déplacé
-‹participant supprimé› » ne sert plus à rien.
+‹participant supprimé› » ne sert plus à rien. Une inclusion de participant, que
+le fichier ne désigne que par son identifiant, se nomme donc dans le libellé par
+le nom de la personne visée : « Inclusions de participant de Iris Ombrelle :
+ajouté Théo Pervenche » se lit encore après que Théo Pervenche a été renommée ou
+supprimée. La suppression d'une personne incluse compte les listes qu'elle
+quitte : « Supprimé Théo Pervenche ; retirée de 2 listes d'inclusions ».
 
 **Un retour fait au clavier nomme sa touche dans son libellé** : « Défait
 (Ctrl+Z) : », « Refait (Ctrl+Maj+Z) : » ou « Refait (Ctrl+Y) : », suivi du
@@ -3338,13 +3829,14 @@ fichier : c'est une posture de la séance, pas une propriété du plan.
 écrit. **Ouvrir un événement ne réécrit jamais son fichier d'état.**
 
 **Ce qui reste vivant en lecture** : le sélecteur de tour, le zoom, le cadrage,
-l'ajustement, le plein écran, la mise en évidence, l'affichage des listes, la
-**page de qualité** (§ 12), la comparaison de deux placements et le choix
-du second, le choix d'un départ et des tours à figer (§ 5.7), la lecture de
-l'historique, l'impression, et la **production de la planche de badges**, qui
-n'écrit aucun fichier d'événement (§ 11.6). C'est la condition pour que la
-protection tienne : si naviguer exigeait de passer en écriture, l'opérateur y
-resterait en permanence et le mode lecture ne protégerait plus rien.
+l'ajustement, le plein écran, la mise en évidence, l'affichage des listes et
+des organisations qu'elles portent, la **page de qualité** (§ 12), la
+comparaison de deux placements et le choix du second, le choix d'un départ et
+des tours à figer (§ 5.7), la lecture de l'historique, l'impression, et la
+**production de la planche de badges**, qui n'écrit aucun fichier d'événement
+(§ 11.6). C'est la condition pour que la protection tienne : si naviguer
+exigeait de passer en écriture, l'opérateur y resterait en permanence et le
+mode lecture ne protégerait plus rien.
 
 **On en sort par un seul geste délibéré** — une commande « Modifier » à place
 fixe — et le logiciel y retourne **seul après dix minutes d'inactivité**. Ce
@@ -3433,7 +3925,7 @@ d'état contredirait l'équivalence du § 8.2, et **zoomer sur un plan bloqué
 écrirait dans le fichier d'un plan qui refuse toute modification**. Ce réglage
 n'est ni transmis avec le fichier, ni restitué par un retour arrière.
 
-Ce fichier porte **sept choses, et sept seulement** :
+Ce fichier porte **dix choses, et dix seulement** :
 
 | réglage | portée |
 |---|---|
@@ -3443,15 +3935,20 @@ Ce fichier porte **sept choses, et sept seulement** :
 | la **case du pied TechnoLibre** des badges (§ 11.4), clé `pied_technolibre` | globale à la machine |
 | le **texte du pied TechnoLibre** (§ 11.4), clé `texte_pied_technolibre` | global à la machine |
 | les **cases de ce que le badge imprime** (§ 11.4), clé `donnees_badge` | globales à la machine |
+| la **case qui laisse en blanc le nom des doublons** (§ 11.4), clé `cacher_numero_doublon` | globale à la machine |
+| la **case qui met l'organisation en gros au-dessus du nom** (§ 11.4), clé `organisation_en_gros` | globale à la machine |
+| les **colonnes de la liste des badges en CSV** (§ 11.6), clé `colonnes_liste_badges` | globales à la machine |
 | la **taille du texte de l'écran** (§ 18.6), clé `taille_texte` | globale à la machine |
 
 Le format de papier décrit le bac de l'imprimante, pas le plan : l'écrire dans
 le fichier d'événement ferait voyager le bac d'un bureau avec le plan. Le
-logiciel le demande au premier aperçu d'impression et ne le redemande plus ; les
-badges ne le demandent jamais, et partent sur Lettre tant qu'aucun papier n'est
-choisi, sans le retenir (§ 11.2). La section des badges, pour l'A6, et l'aperçu
-le montrent, et il se change d'un geste. La question offre chaque papier comme
-un choix distinct, d'un geste. Le redemander chaque fois apprend à cliquer sans
+logiciel le demande au premier aperçu d'impression — la première ouverture de la
+section de l'impression, dont le titre « Plan » porte l'aperçu, même quand on
+n'y vient que pour les badges — et ne le redemande plus ; les badges ne le
+demandent jamais, et partent sur Lettre tant qu'aucun papier n'est choisi, sans
+le retenir (§ 11.2). La section de l'impression, pour l'A6, et l'aperçu le
+montrent, et il se change d'un geste. La question offre chaque papier comme un
+choix distinct, d'un geste. Le redemander chaque fois apprend à cliquer sans
 lire (§ 5.9). Le choix s'écrit dans tout mode, en lecture et sur un plan
 bloqué : c'est un réglage de la machine, pas une modification de l'événement. En
 mode portable (§ 8.6), ce fichier suit la clé avec les événements.
@@ -3460,37 +3957,47 @@ mode portable (§ 8.6), ce fichier suit la clé avec les événements.
 geste, jamais un minuteur » du § 8.2 : un zoom continu écrit une fois par délai,
 jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Le
 cadrage, le papier, le modèle de badge, la case du pied TechnoLibre et son
-texte, les cases de ce que le badge imprime et la taille du texte passent par
-une même file, qui relit le fichier avant chaque écriture : deux écrivains qui
-le liraient chacun avant que l'autre l'ait écrit perdraient le réglage de l'un.
-Un fichier que la lecture ne prend pas ne s'écrase pas. Ni lui, ni un dossier
+texte, les cases de ce que le badge imprime, celle du nom des doublons,
+celle de l'organisation en gros, les colonnes de la liste et la taille du
+texte passent par une même file, qui relit le fichier avant chaque
+écriture : deux écrivains qui le liraient chacun avant que l'autre l'ait
+écrit perdraient le réglage de l'un.
+Un fichier que la lecture ne prend pas ne s'écrase pas ; son avertissement
+dit pourquoi en clair — un texte qui n'est pas du JSON, une valeur hors de sa
+règle, des octets qui ne sont pas de l'UTF-8, un lien qui mène hors du dossier
+de travail, une lecture que le système refuse, la cause qu'il donne entre
+parenthèses —, jamais par le code interne du refus. Ni lui, ni un dossier
 qui refuse de l'écrire, ne bloque le choix du papier : le papier choisi vaut
 pour la séance sur ce dossier de travail, sans être retenu sur la machine, et un
 avertissement nomme le fichier et dit que le choix n'est pas retenu ; la
 première écriture des réglages qui y réussit le retient, et l'avertissement se
-retire. Le cadrage attend.
+retire. Le cadrage attend. Le papier se relit à chaque changement de dossier de
+travail, écrire ailleurs compris, que l'écriture y réussisse ou que le support
+y refuse l'état (§ 8.6) : l'écran ne montre le nouveau dossier qu'avec son
+papier, jamais avec celui de l'ancien, pas même quand un choix fait pour
+l'ancien finit de s'écrire pendant le changement.
 
 **Le modèle de badge** décrit le support que la machine garnit — des cartes
 Avery 5392 prédécoupées, ou des A6 à découper (§ 11.2) —, pas le plan. Le
 fichier ne le porte que choisi ; sans lui, les badges partent sur Avery 5392,
-qui impose le papier Lettre, sans rien demander : le papier choisi pour
-l'aperçu ne change pas pour autant, et il reste partagé avec les badges A6.
-Une valeur présente hors des deux modèles rend le fichier illisible, comme un
-papier inconnu, et une construction qui ne connaît pas la clé la garde telle
-quelle. Le modèle se choisit dans la section des badges, s'écrit au geste qui
-le choisit, dans tout mode, par la même file, et se relit comme la taille du
-texte : au lancement, puis à chaque changement de dossier de travail, celui
-que le fichier porte, à défaut celui de la séance. Un fichier que la lecture
-ne prend pas, ou un dossier qui refuse de l'écrire, ne bloque pas le choix : le
+qui impose le papier Lettre, sans rien demander : le papier choisi pour l'aperçu
+ne change pas pour autant, et il reste partagé avec les badges A6. Une valeur
+présente hors des deux modèles rend le fichier illisible, comme un papier
+inconnu, et une construction qui ne connaît pas la clé la garde telle quelle. Le
+modèle se choisit dans la section de l'impression, s'écrit au geste qui le
+choisit, dans tout mode, par la même file, et se relit comme la taille du
+texte : au lancement, puis à chaque changement de dossier de travail, celui que
+le fichier porte, à défaut celui de la séance. Un fichier que la lecture ne
+prend pas, ou un dossier qui refuse de l'écrire, ne bloque pas le choix : le
 modèle vaut pour la séance, et la section dit, sous ses réglages, qu'il n'est
 pas retenu sur ce poste.
 
 **La case du pied TechnoLibre** dit si les badges de la machine portent le pied
 de l'éditeur (§ 11.4) : un choix de la machine qui les imprime, pas du plan. Le
-fichier ne la porte que touchée, un booléen ; sans elle, la case est cochée.
-Une valeur présente qui n'est pas un booléen rend le fichier illisible, comme
-un papier inconnu. Elle se coche et se décoche dans la section des badges, sous
-les deux modèles, s'écrit au geste, dans tout mode, par la même file, et se
+fichier ne la porte que touchée, un booléen ; sans elle, la case est cochée. Une
+valeur présente qui n'est pas un booléen rend le fichier illisible, comme un
+papier inconnu. Elle se coche et se décoche dans la section de l'impression,
+sous les deux modèles, s'écrit au geste, dans tout mode, par la même file, et se
 relit comme le modèle de badge ; un fichier que la lecture ne prend pas, ou un
 dossier qui refuse de l'écrire, ne bloque pas le choix : la case vaut pour la
 séance, et la section dit, sous ses réglages, qu'elle n'est pas retenue sur ce
@@ -3498,7 +4005,7 @@ poste.
 
 **Le texte du pied TechnoLibre** remplace, sur les badges de la machine, la
 phrase d'origine du pied (§ 11.4) : un choix de la machine qui les imprime,
-comme la case. Il se saisit dans la section des badges, dans un champ de
+comme la case. Il se saisit dans la section de l'impression, dans un champ de
 quelques lignes sous la case, prérempli de la phrase d'origine et désactivé
 tant que la case est décochée ; « Texte par défaut » la remet. Il se garde
 **normalisé** : en NFC, chaque suite d'espaces, de tabulations ou de sauts de
@@ -3522,13 +4029,13 @@ pas retenu sur ce poste.
 l'événement », « Date de l'événement », « Date du placement », « Identifiant »
 (§ 11.4) — sont, comme celle du pied TechnoLibre, un choix de la machine qui
 imprime. Le fichier les porte sous `donnees_badge`, un objet d'un booléen par
-donnée — `organisation`, `evenement`, `date`, `horodatage`, `identifiant` —,
-qui n'existe que touché et ne porte que les cases touchées ; une case absente
-est cochée. Un objet qui n'en est pas un, ou une case connue qui n'est pas un
+donnée — `organisation`, `evenement`, `date`, `horodatage`, `identifiant` —, qui
+n'existe que touché et ne porte que les cases touchées ; une case absente est
+cochée. Un objet qui n'en est pas un, ou une case connue qui n'est pas un
 booléen, rend le fichier illisible, comme un papier inconnu ; une clé inconnue
 de l'objet se garde telle quelle. Chaque case se coche et se décoche dans la
-section des badges, sous les deux modèles, s'écrit au geste, dans tout mode,
-par la même file, et se relit comme le modèle de badge, chacune pour
+section de l'impression, sous les deux modèles, s'écrit au geste, dans tout
+mode, par la même file, et se relit comme le modèle de badge, chacune pour
 elle-même : une case que le fichier ne porte pas garde celle de la séance. Un
 fichier que la lecture ne prend pas, ou un dossier qui refuse de l'écrire, ne
 bloque pas le choix : la case vaut pour la séance, et la section dit, sous ses
@@ -3536,6 +4043,46 @@ réglages, que les cases ne sont pas retenues sur ce poste. Chaque écriture ne
 porte que sa case : une écriture qui réussit pour une case n'en retient pas une
 autre, et l'avertissement reste tant qu'une case non retenue garde la valeur
 choisie, jusqu'à ce qu'un choix de cette case soit retenu.
+
+**La case qui laisse en blanc le nom des doublons** — « Laisser le nom des
+doublons en blanc » (§ 11.4) — est, comme celle du pied TechnoLibre, un
+choix de la machine qui imprime, et non une sixième donnée de
+`donnees_badge` : cochée, elle vide la place d'un nom au lieu d'y garder
+une donnée. Le fichier ne la porte que touchée, un booléen sous
+`cacher_numero_doublon` ; sans elle, la case est cochée. Une valeur présente
+qui n'est pas un booléen rend le fichier illisible, comme un papier inconnu.
+Elle se coche et se décoche dans la section de l'impression, sous les deux
+modèles, s'écrit au geste, dans tout mode, par la même file, et se relit
+comme la case du pied TechnoLibre ; un fichier que la lecture ne prend pas,
+ou un dossier qui refuse de l'écrire, ne bloque pas le choix : la case vaut
+pour la séance, et la section dit, sous ses réglages, qu'elle n'est pas
+retenue sur ce poste.
+
+**La case qui met l'organisation en gros au-dessus du nom** — « Organisation
+en gros, au-dessus du nom » (§ 11.4) — est, comme celle du pied TechnoLibre,
+un choix de la machine qui imprime, et non une sixième donnée de
+`donnees_badge` : cochée, elle échange la place de deux données au lieu d'en
+retirer une. Le fichier ne la porte que touchée, un booléen sous
+`organisation_en_gros` ; sans elle, la case est cochée. Une valeur présente
+qui n'est pas un booléen rend le fichier illisible, comme un papier inconnu.
+Elle se coche et se décoche dans la section de l'impression, sous les deux
+modèles, s'écrit au geste, dans tout mode, par la même file, et se relit
+comme la case du pied TechnoLibre ; un fichier que la lecture ne prend pas,
+ou un dossier qui refuse de l'écrire, ne bloque pas le choix : la case vaut
+pour la séance, et la section dit, sous ses réglages, qu'elle n'est pas
+retenue sur ce poste.
+
+**Les colonnes de la liste des badges en CSV** — « Une colonne par tour » ou
+« Une seule colonne » (§ 11.6) — sont, comme le modèle de badge, un choix de
+la machine : elles décrivent le tableur qui reçoit la liste, pas le plan. Le
+fichier ne les porte que choisies, sous `colonnes_liste_badges`, `parTour` ou
+`unique` ; sans elles, une colonne par tour. Une autre valeur rend le fichier
+illisible, comme un papier inconnu. Elles se choisissent dans la section de
+l'impression, s'écrivent au geste, dans tout mode, par la même file, et se
+relisent comme le modèle de badge ; un fichier que la lecture ne prend pas, ou
+un dossier qui refuse de l'écrire, ne bloque pas le choix : il vaut pour la
+séance, et la section dit, sous ses réglages, qu'il n'est pas retenu sur ce
+poste.
 
 **La taille du texte de l'écran** se choisit dans le panneau « Paramètres »
 (§ 18.6), en paliers : 90, 100, 115, 130 et 150 %, une seule définition dans
@@ -3592,7 +4139,7 @@ règle écrite, et l'affiche :
    le dossier `data` d'un dossier nommé d'après le produit, dans les
    *Documents* de l'opérateur : `Documents\<produit>\data`. Le logiciel **dit
    pourquoi**, une fois par séance, sans bloquer : s'en souvenir d'une séance à
-   l'autre demanderait un réglage local de plus, et le § 8.5 les borne à trois.
+   l'autre demanderait un réglage local de plus, et le § 8.5 les borne à huit.
 
 Dans les deux modes, le dossier de travail s'appelle donc `data`. Il porte les
 événements et, à côté d'eux, la corbeille (§ 8.7), le fichier des réglages
@@ -3624,12 +4171,20 @@ avant d'ouvrir la liste, puisqu'aucun geste ne s'y écrirait.
   contient des événements, le logiciel le dit et propose de les importer (§ 8.7)
   plutôt que d'ouvrir sur la commande de création (§ 8.1). L'import **copie** :
   le logiciel annonce que les originaux restent où ils sont, sinon deux copies du
-  même événement dérivent sous le même identifiant interne.
+  même événement dérivent sous le même identifiant interne. Un dossier de
+  travail qui refuse l'écriture ne le propose pas : la copie y échouerait, et
+  la question posée avant d'ouvrir la liste, ou à défaut la première écriture
+  refusée, nomme ce refus.
 - **Le mode portable affaiblit une garantie du § 8.8** sur un support amovible,
   et le logiciel l'annonce.
 
 **Dans les deux modes, le logiciel affiche le chemin du dossier de travail en
 clair dans la liste des événements**, et une commande l'ouvre dans l'explorateur.
+Sous `electron`, hors de Windows et de macOS, l'explorateur s'ouvre par
+l'ouvreur du bureau, dont la coquille attend l'issue. Une ouverture qui échoue
+le dit à côté de la commande — l'ouverture a échoué, avec la raison que donne
+le système —, et la commande reste offerte : elle n'est pas absente, comme
+sous `web`.
 
 Ce que cette section défend n'est pas l'emplacement *Documents* : c'est que
 l'opérateur puisse copier un événement sur une clé, le joindre à un courriel et
@@ -3928,15 +4483,15 @@ support rompu, quand il les rend encore. Un logo qui ne se recopie pas — un
 fichier illisible, un support retiré, une écriture refusée — ne refuse jamais
 l'opération : l'événement est copié, importé ou écrit, et un avertissement
 compte les logos restés en arrière et les personnes dont la fiche les dira
-introuvables. Il se lit là où l'opération mène l'opérateur : dans la vue de
-la copie, qu'elle ouvre ; sur la liste des événements, un par événement
-importé ; dans la vue de l'événement écrit ailleurs. Le disque n'en garde
-rien : il vit jusqu'au geste suivant dans la vue, jusqu'à l'opération
-suivante sur la liste. Une panne pendant la recopie laisse l'original intact
-et l'événement neuf complet, à quelques logos près ; un état refusé là-bas
-lève avant la recopie, et les logos restent en arrière. Un **fichier d'état venu
-d'ailleurs** n'emporte aucun logo : ses personnes gardent leur chemin, et leur
-fiche dit le logo introuvable.
+introuvables, et dit quand l'image des badges (§ 11.4) en est un. Il se lit là
+où l'opération mène l'opérateur : dans la vue de la copie, qu'elle ouvre ; sur
+la liste des événements, un par événement importé ; dans la vue de l'événement
+écrit ailleurs. Le disque n'en garde rien : il vit jusqu'au geste suivant dans
+la vue, jusqu'à l'opération suivante sur la liste. Une panne pendant la recopie
+laisse l'original intact et l'événement neuf complet, à quelques logos près ; un
+état refusé là-bas lève avant la recopie, et les logos restent en arrière. Un
+**fichier d'état venu d'ailleurs** n'emporte aucun logo : ses personnes gardent
+leur chemin, et leur fiche dit le logo introuvable.
 
 **Importer** un fichier venu d'ailleurs le **copie** dans le dossier de travail,
 dans un dossier neuf qui porte son nom. Travailler en place écrirait dans un
@@ -4018,7 +4573,7 @@ plateforme**.
   prise, que la séance lit à l'horloge unique de l'application (§ 19.4), comme
   toute date qu'elle écrit.
 - **Contrôle de cohérence** : l'en-tête annonce ses comptes, sa révision, sa
-  **version de format** et `produit_version` (§ 18.6) ; l'analyse syntaxique
+  **version de format** et `produitVersion` (§ 18.6) ; l'analyse syntaxique
   seule ne distingue pas un fichier complet d'un fichier plausible. Le contrôle
   **s'étend aux placements** (§ 8.9) : longueurs déclarées contre listes
   écrites, identifiants vérifiés en multiensemble par tour, réserve comprise.
@@ -4031,24 +4586,24 @@ plateforme**.
   sérialiseur dérive de l'horloge ou d'un tirage au moment d'écrire.** La règle
   porte sur le **sérialiseur**, jamais sur la provenance de la donnée : une
   valeur tirée ou horodatée **une fois**, puis devenue partie de l'état — graine
-  d'une proposition, `produit_version`, identifiant d'événement — est une donnée
+  d'une proposition, `produitVersion`, identifiant d'événement — est une donnée
   ordinaire. Lue comme un interdit sur la provenance, cette règle interdirait
   d'enregistrer la graine, et une proposition retenue cesserait d'être
   régénérable. Lue comme un interdit sur le sérialiseur, elle garde tout son
   effet : ce qu'elle empêche est l'horodatage glissé à chaque écriture, qui fait
   enregistrer du bruit à chaque geste.
 - **Le fichier se partage en en-tête et charge utile.** En-tête : comptes,
-  révision, version de format, `produit_version`. Charge utile : tout le reste.
+  révision, version de format, `produitVersion`. Charge utile : tout le reste.
   La canonicité octet pour octet est exigée du **fichier entier**, pour un
   binaire donné ; mais les deux comparaisons qui **traversent les
   constructions** — l'empreinte des fichiers de démonstration (§ 15.5, point 5)
   et l'aller-retour sur les fichiers livrés (§ 8.9) — portent sur la **charge
-  utile seule**. Sans cette restriction, `produit_version` fait échouer
+  utile seule**. Sans cette restriction, `produitVersion` fait échouer
   l'empreinte à **chaque** livraison : le test exigerait alors de régénérer les
   démonstrations à chaque incrément de version, c'est-à-dire exactement la dérive
   que le § 15.5 existe pour empêcher, et le geste conscient qu'il réclame
   deviendrait mécanique, donc aveugle.
-- **Le journal note la construction qui change** : quand `produit_version`
+- **Le journal note la construction qui change** : quand `produitVersion`
   diffère de celle de l'entrée précédente, l'entrée de journal la porte. Le coût
   est d'un champ par remplacement d'exécutable ; sans lui, un fichier transmis
   pour diagnostic annonce la construction qui a écrit **en dernier**, et rien ne
@@ -4149,14 +4704,21 @@ lisent, et s'écrivent rangés.
 | `respecterObjectifs` | réglages | coché | booléen ; présent seulement à faux |
 | `modeObjectifs` | réglages | le plus de places servies | `chacun` (chacun au moins une fois) ou `minimum` (l'équité d'abord) ; présent seulement hors du défaut |
 | `rencontrerAnimateurs` | réglages | décoché | booléen ; présent seulement à vrai |
-| `priorites` | réglages | l'ordre par défaut (§ 5.7) | liste de paliers, chacun une liste non vide de `{critere, poids}` ; chaque critère du § 5.7 une fois ; l'écart au plafond a priori, les rencontres répétées et retours et les conflits d'organisation seuls à leur palier, au poids 1 ; sous `modeObjectifs` présent, les tours hors objectif aussi ; poids entiers de 1 à 100, un critère seul à son palier hors de ceux-là gardant le poids écrit (§ 5.7) ; chaque palier écrit dans l'ordre du tableau du § 5.7 ; absent quand il égale le défaut, chaque critère seul à son palier au poids 1 |
+| `priorites` | réglages | l'ordre par défaut (§ 5.7) | liste de paliers, chacun une liste non vide de `{critere, poids}` ; chaque critère du § 5.7 une fois, les inclusions non satisfaites pouvant manquer (plus bas) ; l'écart au plafond a priori, les rencontres répétées et retours, les conflits d'organisation et les inclusions non satisfaites seuls à leur palier, au poids 1 ; sous `modeObjectifs` présent, les tours hors objectif aussi ; poids entiers de 1 à 100, un critère seul à son palier hors de ceux-là gardant le poids écrit (§ 5.7) ; chaque palier écrit dans l'ordre du tableau du § 5.7 ; absent quand il égale le défaut, chaque critère seul à son palier au poids 1 |
 
-La liste `priorites` est complète : une liste qui ne nomme pas un critère est
-une faute de forme. Le lecteur de l'ordre sait compléter une liste qui ne
-nommerait pas un critère — chaque critère manquant à sa place de l'ordre par
-défaut, seul à son palier, au poids 1 — ; au format courant l'analyse la refuse
-avant, et ce complément sert la liste d'un format qui ne connaissait pas un
-critère.
+La liste `priorites` est complète, à une exception : un critère ajouté au
+format courant après que des listes ont pu s'écrire — les inclusions non
+satisfaites — peut y manquer. Le lecteur de l'ordre le place juste après le
+palier de son prédécesseur dans l'ordre par défaut, celui des conflits
+d'organisation, seul, au poids 1 ; la liste se juge ainsi complétée, et une
+liste qui, complétée, égalerait l'ordre par défaut reste une faute, comme
+l'ordre par défaut écrit. Le fichier garde la liste telle qu'il l'écrit : la
+relire et la réécrire ne la complète pas, et seule une commande de l'ordre en
+écrit une complète. Tout autre critère absent reste une faute de forme. Le
+lecteur sait compléter une liste à qui manqueraient d'autres critères —
+chacun à sa place de l'ordre par défaut, seul à son palier, au poids 1 — ; au
+format courant l'analyse la refuse avant, et ce complément sert la liste d'un
+format qui ne connaissait pas un critère.
 
 Un objectif appartient à sa table : supprimer la table l'emporte, et la fenêtre
 qui annonce la suppression le compte (§ 2.1). Retirer un tour détruit les
@@ -4216,6 +4778,67 @@ et le retire comme tout champ. Le moteur ne le lit pas : la configuration
 qu'il reçoit, les empreintes et les raisons de dérive restent les mêmes. Le
 champ fait partie du format 3.
 
+#### Un champ facultatif : les noms des tours
+
+Les noms des tours (§ 4) s'écrivent dans un champ facultatif de l'événement,
+absent quand aucun tour n'a de nom :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `nomsTours` | l'événement, après `filiation`, avant `imageBadges` | aucun tour n'a de nom | liste d'un élément par tour, R éléments, chacun le nom du tour, de la forme du libellé d'une table — texte bien formé, en NFC, sans blanc en bord, de 1 à 60 points de code —, ou `null` pour un tour sans nom ; au moins un nom |
+
+Une liste d'une autre longueur que le nombre de tours, une liste sans aucun nom
+— le défaut écrit —, `null` à la place de la liste et un élément d'une autre
+forme sont des fautes de forme, nommées par leur chemin (§ 8.8). Un événement
+sans nom de tour s'écrit octet pour octet comme sans ce champ, démonstrations
+comprises. Un nom se pose par une commande, `changerNomTour` — une entrée
+d'historique, refusée en lecture et sur un plan bloqué —, qui reçoit la saisie
+du champ de son tour dans « Tables et tours », la met en NFC, retire ses blancs
+de bord et remplace une moitié de paire isolée par le caractère de
+remplacement : vide, ou égale au nom par défaut du tour, « Tour 3 », elle retire
+le nom, et le champ avec le dernier nom ; au-delà de 60 caractères, elle refuse,
+contre le champ, en disant la longueur saisie et la longueur admise ; le même
+nom n'écrit rien. Changer le nombre de tours rogne la liste aux tours qui
+restent, et l'allonge de `null` pour un tour ajouté ; le champ part quand aucun
+tour restant n'a de nom, et le libellé de l'entrée compte les noms retirés. Un
+correctif du journal le pose et le retire comme tout champ. Le moteur ne le lit
+pas : la configuration qu'il reçoit, les empreintes et les raisons de dérive
+restent les mêmes. Le champ fait partie du format 3.
+
+#### Un champ facultatif : l'image des badges
+
+L'image que portent tous les badges (§ 11.4) s'écrit dans un champ facultatif
+de l'événement, réglages compris, absent à son défaut :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `imageBadges` | l'événement, en dernière clé, après `nomsTours` | la case décochée, aucune image, en haut | un objet de trois clés, dans cet ordre : `active`, la case, un booléen ; `chemin`, le chemin de l'image dans le dossier de l'événement, de la forme du logo d'une personne — `logo/`, les 64 chiffres hexadécimaux minuscules du SHA-256 de ses octets, `.png` —, ou `null` sans image ; `position`, `haut`, `centre` ou `bas` |
+
+Le défaut écrit — `active` faux, `chemin` `null`, `position` `haut` —, `null` à
+la place de l'objet, une clé manquante ou inconnue et une valeur d'une autre
+forme sont des fautes de forme, nommées par leur chemin (§ 8.8). Un événement
+sans image s'écrit octet pour octet comme sans ce champ, démonstrations
+comprises. L'image est un PNG d'au plus 1 200 pixels de côté, rangé avec les
+logos des personnes dans `logo/`, sous le même nom par contenu : elle suit
+l'événement copié, renommé, importé de son dossier ou mis à la corbeille comme
+eux, et une recopie qui la manque se compte parmi les logos non recopiés, et
+l'avertissement le dit (§ 8.7).
+
+Le champ change par une commande, `changerImageBadges`, qui reçoit une, deux
+ou trois de ses clés — une entrée d'historique, refusée en lecture et sur un
+plan bloqué, dont le libellé dit ce qui change : la case cochée ou décochée,
+l'image posée, remplacée ou retirée, la position ; rien qui change n'écrit
+rien. Revenu à son défaut, le champ part. **L'image s'écrit avant l'entrée**,
+comme le logo d'une personne : la séance refuse d'abord ce qu'un geste
+refuserait, contrôle le PNG, essaie la commande à blanc, écrit l'image dans
+`logo/` si elle n'y est pas encore, puis l'entrée ; une image que le disque
+refuse refuse le geste, `IMAGE_BADGES_NON_ECRITE`, le fichier et la cause
+nommés, sans rien enregistrer. Retirer l'image retire le chemin ; aucune image
+ne s'efface (§ 8.3). Un chemin dont le fichier manque se lit comme absent, sans
+faute du fichier. Le moteur ne lit pas le champ : la configuration qu'il
+reçoit, les empreintes et les raisons de dérive restent les mêmes. Le champ
+fait partie du format 3.
+
 #### Un champ facultatif : les conflits d'organisation
 
 Les conflits d'organisation d'une personne (§ 4) s'écrivent dans un champ
@@ -4223,7 +4846,7 @@ facultatif, absent quand elle n'en nomme aucun :
 
 | champ | où | absent, il vaut | forme |
 |---|---|---|---|
-| `conflits` | chaque participant, en dernier, après `presence` | aucun conflit | liste non vide de noms d'organisation, textes non vides, sans doublon exact, écrite triée par unités de code ; chacun est l'organisation d'un participant de la charge, exclus compris, comparée chaîne à chaîne, et jamais celle de la personne |
+| `conflits` | chaque participant, après `presence`, avant `inclusionsOrganisation` | aucun conflit | liste non vide de noms d'organisation, textes non vides, sans doublon exact, écrite triée par unités de code ; chacun est l'organisation d'un participant de la charge, exclus compris, comparée chaîne à chaîne, et jamais celle de la personne |
 
 Une liste vide, un doublon, une valeur qui n'est pas un texte non vide sont des
 fautes de forme ; la propre organisation de la personne aussi, nommée par le
@@ -4240,6 +4863,49 @@ liste garde les mêmes noms. Modifier, supprimer ou importer des participants
 fait suivre les listes dans la même entrée (§ 4). La configuration du moteur en
 porte une copie : sans liste, elle est celle d'avant le champ, et les
 empreintes avec elle. Le champ fait partie du format 3.
+
+#### Deux champs facultatifs : les inclusions
+
+Les inclusions d'une personne — les organisations et les participants qu'elle
+doit rencontrer au moins une fois à une table — s'écrivent dans deux champs
+facultatifs, absents quand elle n'en nomme aucun :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `inclusionsOrganisation` | chaque participant, après `conflits`, avant `inclusionsParticipant` | aucune organisation à rencontrer | liste non vide de noms d'organisation, textes non vides, sans doublon exact, écrite triée par unités de code ; chacun est l'organisation d'un participant de la charge, exclus compris, comparée chaîne à chaîne, et jamais celle de la personne |
+| `inclusionsParticipant` | chaque participant, après `inclusionsOrganisation`, avant `logo` | aucun participant à rencontrer | liste non vide d'identifiants entiers distincts, écrite croissante ; chacun est celui d'un participant de la charge, exclus compris, et jamais celui de la personne |
+
+Une liste vide, un doublon, une valeur d'une autre sorte sont des fautes de
+forme ; la propre organisation de la personne et son propre identifiant aussi,
+nommés par le rang qui les porte, pour chaque personne l'organisation d'abord,
+et contrôlés après les conflits ; une organisation que nul participant ne porte
+et un identifiant que nul participant n'a sont des fautes de référence, nommées
+après celles des conflits (§ 8.8), pour chaque personne l'organisation avant
+l'identifiant. **Une inclusion de participant désigne la personne par son
+identifiant, jamais par son nom** : la renommer ne la change pas, et deux
+homonymes restent distincts. Un collègue de la même organisation se nomme comme
+un autre. Une inclusion que contredit un conflit de la personne n'est pas une
+faute du fichier. La liste d'une exclue se garde, et une inclusion qui vise une
+exclue aussi. Une personne sans inclusion s'écrit octet pour octet comme sans
+ces champs, démonstrations comprises. Les champs se posent par trois commandes,
+`changerInclusionsOrganisation`, `changerInclusionsParticipant` et
+`changerInclusions` — une entrée d'historique chacune, refusées en lecture et
+sur un plan bloqué — : chacune pose une liste entière d'un geste, ajouts et
+retraits ensemble ; la première juge chaque organisation nouvelle comme
+`changerConflits`, sous `INCLUSION_PROPRE_ORGANISATION` pour la sienne ; la
+seconde refuse l'identifiant de la personne et un identifiant inconnu (§ 5.9) ;
+la troisième pose l'une des deux listes ou les deux en une seule entrée, chacune
+jugée comme par sa commande, les organisations d'abord, le premier fautif
+refusant le geste entier, et laisse la liste qu'elle ne nomme pas. Chacune rend
+les listes rangées, retire un champ quand sa liste se vide, et est sans effet
+quand aucune liste ne change de valeurs. Modifier, supprimer ou importer des
+participants fait suivre les listes dans la même entrée (§ 4). Un correctif du
+journal les pose et les retire comme tout champ. La configuration du moteur en
+porte une copie : sans liste, elle est celle d'avant les champs, et les
+empreintes avec elle. Les raisons de dérive ne les lisent pas : **changer une
+inclusion reclasse sans faire dériver**, comme un conflit, et une proposition
+calculée avant se mesure et se classe sous les listes d'aujourd'hui (§ 5.7).
+Les deux champs font partie du format 3.
 
 #### Deux champs facultatifs : la présence
 
@@ -4277,7 +4943,7 @@ porte pas :
 
 | champ | où | absent, il vaut | forme |
 |---|---|---|---|
-| `logo` | chaque participant, en dernier, après `conflits` | aucun logo | `logo/`, puis les 64 chiffres hexadécimaux minuscules du SHA-256 des octets de l'image, puis `.png` : un chemin relatif au dossier de l'événement |
+| `logo` | chaque participant, après `inclusionsParticipant`, avant `nomNumerote` | aucun logo | `logo/`, puis les 64 chiffres hexadécimaux minuscules du SHA-256 des octets de l'image, puis `.png` : un chemin relatif au dossier de l'événement |
 
 Une autre forme — des capitales, une autre longueur, un autre dossier ou une
 autre extension, une remontée `..`, un chemin absolu, un blanc, `null` — est une
@@ -4304,8 +4970,57 @@ s'efface (§ 8.3). L'image d'un chemin se lit dans tout mode, et un chemin dont
 le fichier manque se lit comme absent, sans faute du fichier.
 
 Le CSV des participants ne porte pas de logo : un import qui remplace la liste
-retire les logos avec les personnes, et le dit en comptant les logos retirés ;
+retire les logos avec les personnes : la fenêtre à confirmer compte les logos
+qui partiront, quand il y en a, et l'avis d'après le geste les compte encore ;
 mettre à jour les garde (§ 10.1). Le moteur ne lit pas le champ : la
+configuration qu'il reçoit, les empreintes et les raisons de dérive restent les
+mêmes. Le champ fait partie du format 3.
+
+#### Un champ facultatif : le nom numéroté
+
+La marque du nom numéroté d'une personne (§ 4) s'écrit dans un champ
+facultatif, absent quand son nom est celui qu'elle a reçu :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `nomNumerote` | chaque participant, après `logo`, avant `animationReservee` | aucun numéro ajouté au nom | `true` ; le nom finit alors par une espace (U+0020) et deux chiffres ASCII ou plus |
+
+`false`, `null` ou toute autre valeur que `true` est une faute de forme ; une
+marque posée sur un nom qui ne finit pas ainsi — un seul chiffre, un autre
+blanc, des chiffres d'une autre écriture, un mot après — aussi, nommée par le
+chemin de la marque et contrôlée après les conflits et les inclusions (§ 8.8).
+Une personne sans marque s'écrit octet pour octet comme sans ce champ,
+démonstrations comprises. **La marque ne se déduit jamais du nom** :
+« Galet 01 » écrit tel quel dans un CSV ne la porte pas.
+
+Aucune commande de saisie ne la pose ni ne la montre. L'import la pose sur
+chaque personne qu'il crée d'une ligne que « Rendre les noms uniques » a
+renommée, dans les trois modes (§ 10.1) ; une mise à jour la garde, sauf quand
+le nom qu'elle pose ne finit plus par le numéro. `modifierParticipant` la retire
+dès qu'il change le nom, par la fiche comme par la grille (§ 10.2), et garde la
+marque quand il change un autre champ. Un correctif du journal la pose et la
+retire comme tout champ : « Défaire » la rend avec l'ancien nom. Le CSV des
+participants ne la porte pas : un export puis un réimport rendent le nom entier,
+numéro compris, sans la marque (§ 10.2). Le moteur ne lit pas le champ : la
+configuration qu'il reçoit, les empreintes et les raisons de dérive restent les
+mêmes. Le champ fait partie du format 3.
+
+#### Un champ facultatif : l'animation réservée
+
+La marque de l'animation réservée d'une personne (§ 4) s'écrit dans un champ
+facultatif, absent quand rien ne l'appelle à animer :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `animationReservee` | chaque participant, en dernier, après `nomNumerote` | la personne n'est pas à désigner | `true` |
+
+`false`, `null` ou toute autre valeur que `true` est une faute de forme, nommée
+par le chemin de la marque (§ 8.8). Une personne sans marque s'écrit octet pour
+octet comme sans ce champ, démonstrations comprises. `modifierParticipant` la
+pose à vrai et la retire à faux, par la case de la fiche (§ 10.2), et
+`ajouterParticipant` la reçoit de même ; l'import la pose ou la retire par la
+colonne `animation_reservee` (§ 10.1), et l'export l'écrit. Elle ne dépend ni
+de l'exclusion ni de la présence. Le moteur ne lit pas le champ : la
 configuration qu'il reçoit, les empreintes et les raisons de dérive restent les
 mêmes. Le champ fait partie du format 3.
 
@@ -4318,12 +5033,34 @@ suite de graines dérivées (§ 5.7), et ne dérive ni de l'horloge ni d'un tira
 Il se compte à partir d'un compteur du fichier, `prochainsIds.proposition`, qui
 dépasse tout identifiant de proposition jamais attribué, celui d'où vient le
 placement retenu compris : une génération numérote ses propositions dans
-l'ordre de ses graines à partir de lui, puis le porte au-delà de la dernière. Le
+l'ordre de ses graines à partir de lui, puis le porte au-delà de la dernière.
+L'identifiant d'une proposition reste sous le compteur que le fichier porte,
+sous peine de la faute `IDENTIFIANT_HORS_COMPTEUR` : à l'ouverture, une
+proposition qui l'atteint est fautive, et l'événement s'ouvre sans elle ; un
+retenu dont la proposition d'origine l'atteint porte la même faute, qui le
+rend fautif (point 3). Ces fautes se jugent contre le compteur reçu. Le
 compteur ne recule jamais — ni quand une commande efface les propositions
-(§ 5.7), ni quand une main l'abaisse dans le fichier, l'ouverture le relevant
-au-delà de chaque identifiant qu'elle lit. Les générations s'accumulent ainsi
-sans qu'un identifiant se répète ni revienne, et le retenu désigne toujours la
-même proposition d'origine.
+(§ 5.7), ni quand une main l'abaisse dans le fichier : l'ouverture le relève
+ensuite au-delà de chaque identifiant qu'elle lit, propositions écartées et
+origine du retenu comprises. Un compteur abaissé à la main écarte donc les
+propositions qu'il ne couvre plus, sans faire réattribuer aucun de leurs
+identifiants. Les générations s'accumulent ainsi sans qu'un identifiant se
+répète ni revienne, et le retenu ne désigne jamais une autre proposition que
+la sienne.
+
+**Un identifiant entier tient de 1 à 2³¹ − 1** — celui d'un participant, d'une
+table, d'une proposition, ou de ce qu'une réservation, un titre ou un placement
+désigne —, dans un entier signé de 32 bits, la largeur des tableaux du moteur.
+Chaque compteur de `prochainsIds` suit la même borne : relevé au-delà d'un
+identifiant lu, il reste ainsi loin de 2⁵³, où l'analyse ne le relirait plus.
+Une valeur au-delà sort de sa règle, comme toute valeur que le format refuse.
+Chaque identifiant attribué reste sous son compteur (`id < prochainsIds`), qui
+ne passe pas 2³¹ − 1 : un identifiant attribué vaut donc au plus 2³¹ − 2. Un
+compteur arrivé à 2³¹ − 1 est saturé : la création d'un participant, d'une
+table ou d'une proposition qui demanderait un identifiant de plus est refusée
+(`COMPTEUR_SATURE`), et rien ne se crée. Un geste qui en crée plusieurs — un
+import, une génération, « Créer les tables… » — est refusé entier quand son
+dernier identifiant passerait 2³¹ − 2 : aucun ne se crée.
 
 Chaque proposition déclare, **une fois** :
 
@@ -4339,7 +5076,7 @@ Chaque proposition déclare, **une fois** :
 
 Ces trois champs sont le support de « à graine et entrée égales, placement
 identique » (§ 5.10) : à configuration égale et pour une même version du moteur
-(`produit_version`, § 8.8), la régénération d'une proposition à partir d'eux
+(`produitVersion`, § 8.8), la régénération d'une proposition à partir d'eux
 seuls rend son plan, quel que soit son rang dans sa génération. Sans eux, cette
 phrase n'existe que dans un scénario de pilotage, et une proposition retenue
 cesse d'être régénérable. La longueur de l'historique a une valeur par défaut,
@@ -4394,6 +5131,8 @@ identifiant croissant dans tous les cas : ce sont des ensembles.
 propositions: [
   { id: 3,
     graine: 48271, arret: 20000, historique: 1000,
+    produitVersion: "...",             la construction qui l'a produite (§ 8.8)
+    siegesAttribues: true,             listes de table rangées par siège (§ 5.3)
     tables:    [7, 12, 2, ...],        identifiants de table (§ 4)
     capacites: [8, 8, 7, ...],
     tours: 4,
@@ -4475,11 +5214,15 @@ Quatre exigences rendent ce coût acceptable, et aucune n'est facultative.
    même capacité, conservent le multiensemble et les longueurs. Rien dans le
    fichier ne les distingue d'un placement légitime ; ils se voient sur le plan.
 3. **Fautif et périmé sont deux choses, et le logiciel ne les confond pas.**
-   Fautif = le fichier se contredit lui-même : une longueur fausse, un identifiant
-   dupliqué, un identifiant absent de l'ensemble déclaré. Périmé = la proposition
-   est cohérente mais ne décrit plus la configuration courante : une table
-   supprimée, une capacité changée, une personne exclue depuis (§ 4.4), une
-   présence changée depuis, un tour retiré.
+   Fautif = le fichier se contredit lui-même : une longueur fausse, un
+   identifiant dupliqué, un identifiant absent de l'ensemble déclaré, une
+   proposition qui porte l'identifiant d'une proposition gardée avant elle
+   (`IDENTIFIANT_REPETE`), un identifiant de proposition qui atteint le
+   compteur reçu (`IDENTIFIANT_HORS_COMPTEUR`). Une proposition écartée n'en
+   écarte aucune autre : celle qui porte l'identifiant d'une fautive n'est pas
+   une répétition. Périmé = la proposition est cohérente mais ne décrit plus la
+   configuration courante : une table supprimée, une capacité changée, une
+   personne exclue depuis (§ 4.4), une présence changée depuis, un tour retiré.
    Une proposition **fautive** est nommée, comptée, et l'événement s'ouvre sans
    elle. Une proposition **périmée** n'est pas écartée : c'est la **dérive** du
    § 9, qui avertit et ne bloque pas, et le logiciel dit laquelle et pourquoi.
@@ -4610,16 +5353,41 @@ organisations sans rien signaler.
 | `etiquettes` | non | plusieurs par cellule, séparées par `,`, `;`, `\|` ou une fin de ligne (§ 4.5) ; synonymes : `étiquette`, `mots-clés` |
 | `presence` | non | les tours de présence : des tours et des plages — « 1-3 », « 2, 3 », « tours 1 et 2 » ; `tous` ou `tous les tours` valent tous les tours ; vide, voir plus bas ; synonymes : `présence`, `tours de présence` |
 | `conflit_organisation` | non | les organisations que la personne nomme en conflit (§ 4), plusieurs par cellule, séparées par `;`, `\|` ou une fin de ligne — une virgule reste dans le nom ; voir plus bas ; synonymes : `conflits`, `conflit d'organisation` sous ses deux apostrophes |
+| `animation_reservee` | non | la marque de l'animation réservée (§ 4), par la liste fermée d'`exclu` ; voir plus bas ; synonymes : `animation réservée`, `animation réservé` — **l'import ne désigne personne** |
+| `inclusion_organisation` | non | les organisations que la personne doit rencontrer au moins une fois (§ 4), séparées comme les conflits ; voir plus bas ; synonymes : `inclusions d'organisation` sous ses deux apostrophes |
+| `inclusion_participant` | non | les personnes qu'elle doit rencontrer au moins une fois (§ 4), chacune par son prénom puis son nom, séparées comme les conflits ; voir plus bas ; synonyme : `inclusions de participant` |
 
-Les en-têtes se reconnaissent **sans tenir compte de la casse, des accents ni
-des espaces**. **Deux colonnes reconnues sous le même nom** ne se départagent
+Les en-têtes se reconnaissent **sans tenir compte de la casse, des accents,
+des blancs, des traits de soulignement ni des traits d'union** :
+« Titre-Pressenti », « titre pressenti » et « titre_pressenti » désignent la
+même colonne. **Deux colonnes reconnues sous le même nom** ne se départagent
 pas toutes seules : le logiciel n'associe ni l'une ni l'autre et demande.
 
 **La valeur de `exclu`** appartient à une liste fermée : `oui`, `o`, `vrai`,
 `1` ou `x` pour une exclusion ; `non`, `n`, `faux`, `0` ou vide pour aucune ;
-sans égard à la casse, aux accents ni aux espaces. Toute autre valeur **refuse
-la ligne**. Traiter l'inconnu comme `non` placerait dans la salle une personne
-qui s'est désistée, et la chaise vide ne se verrait que le soir même.
+sur la forme normalisée de la clé de doublon (plus bas) — casse et accents
+ignorés, blancs de bord retirés, une suite de blancs réduite à une espace : un
+blanc à l'intérieur d'une valeur compte, et « o u i » n'est pas « oui ». Toute
+autre valeur **refuse la ligne**. Traiter l'inconnu comme `non` placerait dans
+la salle une personne qui s'est désistée, et la chaise vide ne se verrait que le
+soir même.
+
+**La valeur de `animation_reservee`** se lit par la même liste fermée, sur la
+même forme normalisée : `oui`, `o`, `vrai`, `1` ou `x` posent la marque de
+l'animation réservée ; `non`, `n`, `faux` ou `0` l'écartent. Toute autre valeur
+**refuse la ligne** (`ANIMATION_INCONNUE`, qui cite la valeur), après le refus
+d'`exclu` et avant ceux des étiquettes : une cellule « Table d'honneur »
+écrite là où l'on attend oui ou non ne dit pas si la personne est à désigner.
+À la création, une cellule vide vaut `non` ; en mise à jour, elle garde la
+marque de la personne, et une cellule non vide la pose ou la retire. **L'import
+ne désigne personne** : il ne crée ni réservation ni titre, puisque les tables
+qui recevront les animateurs ne sont pas encore connues. Quand la liste des
+participants, après l'import, compte des personnes marquées, non exclues, qui
+n'animent aucune table, le rapport d'import les compte, en information, et nomme
+les gestes qui les désignent : « Créer les tables… », s'il manque des places,
+puis la rangée « Animateurs » d'une table, dans « Tables et tours » (§ 2.1
+étape 6, § 6.1). Une personne absente à un tour en est, et se désigne une fois
+sa présence rendue (§ 5.9).
 
 **La valeur de `presence`** se lit par une seule grammaire, celle que l'aperçu,
 l'export et le modèle emploient (§ 13.2) : sans égard à la casse, chaque morceau
@@ -4677,6 +5445,45 @@ Importer le reste ferait d'un conflit mal écrit un conflit perdu, sans que rien
 ne le dise. À la création, une cellule vide ne nomme aucun conflit ; en mise à
 jour, elle garde la liste de la personne, et une cellule non vide la remplace,
 la comparaison se faisant sur la liste rangée.
+
+**Les valeurs des colonnes `inclusion_organisation` et `inclusion_participant`
+se lisent elles aussi avant de valider quoi que ce soit**, après celles des
+conflits, ligne à ligne dans l'ordre du fichier, la cellule des organisations
+avant celle des personnes. Les deux cellules se découpent comme celle des
+conflits, par le plus long assemblage de morceaux, et aucun synonyme ne dit
+« inclusion » seul, qui ne dirait pas laquelle. **Une organisation incluse** se
+lit contre les mêmes organisations que les conflits, par la même clé, sous la
+même orthographe : celle qu'aucune ne porte refuse le fichier entier
+(`INCLUSION_ORGANISATION_INCONNUE`), comme la propre organisation de la personne
+(`INCLUSION_ORGANISATION_PROPRE`). **Une personne incluse** se nomme par son nom
+affiché — le prénom, une espace, puis le nom, le nom seul sans prénom (§ 8.2) —
+et se lit contre les personnes que l'import laisse dans la liste, sous le nom
+qu'il leur laisse : les participants existants, hors du mode « remplacer », et
+les lignes valides que l'import crée, même plus bas que la ligne qui les nomme ;
+en mise à jour, une personne que le fichier met à jour ne compte qu'une fois,
+sous le nom et le prénom que sa ligne lui pose ; une ligne que l'import refuse,
+dans tout mode, ne crée personne, si bien que son nom ne s'y trouve pas. Le nom
+s'apparie par la clé normalisée. Un nom qu'aucune personne ne porte refuse le
+fichier entier (`INCLUSION_PARTICIPANT_INCONNU`), comme un nom que plusieurs
+portent (`INCLUSION_PARTICIPANT_AMBIGU`) — deux homonymes ne se départagent
+jamais au hasard ; un nom que « Rendre les noms uniques » a numéroté,
+« Roger Galet 01 », n'en est pas un — et le nom de la personne de la ligne
+elle-même (`INCLUSION_PARTICIPANT_SOI`). La première faute est nommée, avec
+l'organisation ou le nom tels que la cellule les écrit et le rang de sa ligne ;
+l'aperçu ne montre alors aucune ligne, et son remède dit la correction :
+corriger la cellule ou ajouter au fichier la personne ou l'organisation — ou
+corriger la ligne refusée qui porte la personne —, distinguer par leur nom, dans
+le fichier ou dans leur fiche, les personnes qui portent un nom ambigu, retirer
+la sienne ou soi-même ; puis importer le fichier de nouveau, ou, sous un texte
+collé, le coller de nouveau. Un collègue de sa propre organisation se nomme
+comme un autre, et une inclusion que contredit un conflit de la personne s'admet
+(§ 4). L'import écrit chaque personne incluse sous son identifiant, celui
+qu'elle a ou celui que sa ligne reçoit, la liste rangée ; à la création, une
+cellule vide n'inclut rien ; en mise à jour, elle garde la liste de la personne,
+et une cellule non vide la remplace, la comparaison se faisant sur la liste
+rangée. Les colonnes des inclusions ne se montrent dans le tableau des lignes de
+l'aperçu que lorsque le fichier les porte, chaque nom en pastille à l'icône
+« ajouter » ; montrées, le tableau peut défiler dans son cadre, jamais la page.
 
 **L'encodage se tranche en quatre temps, dans cet ordre :** marque d'ordre
 d'octets UTF-8 ; marque UTF-16 ; **un octet nul dans les quatre premiers
@@ -4750,7 +5557,7 @@ L'aperçu et le rapport classent chacun de leurs messages en **refus** — le re
 global, les lignes refusées —, **avis** — les doublons, les homonymes d'une mise
 à jour, les cellules sur plusieurs lignes qui portent le séparateur — ou
 **information** — les orthographes fondues, les noms rendus uniques, un import
-qui n'a rien écrit. Une
+qui n'a rien écrit, les personnes à désigner animatrices qu'il laisse. Une
 pastille nomme la classe en texte, avec son icône ; la couleur la redit.
 
 **La ligne invalide : importer le reste.** Le logiciel importe les lignes
@@ -4761,14 +5568,19 @@ numéro de l'enregistrement, en-tête compris : celui qu'un tableur affiche, un
 champ cité sur plusieurs lignes du texte n'y comptant qu'une fois. Sur 260
 lignes, un refus global coûterait l'import entier pour une faute en ligne 213.
 
-Hors de l'encodage et du séparateur, cinq cas restent des refus **globaux** :
+Hors de l'encodage et du séparateur, six cas restent des refus **globaux** :
 aucun en-tête reconnaissable, aucune colonne associée à `nom`, zéro ligne
 valide, **un guillemet resté ouvert** jusqu'à la fin du texte
 (`GUILLEMET_OUVERT`, avec l'enregistrement où il s'ouvre) — tout ce qui le suit
-tiendrait dans un seul champ, et deux personnes se fondraient en une —, et
-**un conflit d'organisation fautif**, vu plus haut.
+tiendrait dans un seul champ, et deux personnes se fondraient en une —,
+**un conflit d'organisation fautif** et **une inclusion fautive**, vus plus
+haut.
 
-**L'import entier est une seule entrée d'historique.**
+**L'import entier est une seule entrée d'historique.** Les personnes qu'il crée
+prennent leurs identifiants à la suite du compteur, dans l'ordre du fichier ;
+quand la dernière demanderait plus que 2³¹ − 2, l'import est refusé entier
+(`COMPTEUR_SATURE`, § 8.9) avant qu'aucune ne soit numérotée. En mise à jour,
+seule une ligne qui ne désigne personne en demande un.
 
 **Les doublons** se repèrent sur le triplet (nom, prénom, organisation)
 normalisé, et le logiciel **ne fusionne jamais tout seul** : deux personnes
@@ -4793,10 +5605,13 @@ changerait en création ; sous « Remplacer », la liste retirée ne compte pas.
 Le fichier n'est jamais réécrit : l'aperçu se recalcule sur les noms rendus, le
 bloc des doublons se vide — sauf, en mise à jour, les lignes qui mettent à jour
 leur personne —, et l'import applique ces noms ; l'aperçu, puis le rapport
-d'import, comptent les noms rendus uniques, en information. La commande n'est
-offerte que lorsqu'elle rend un nom au moins, et vaut pour le texte ouvert,
-sous chaque mode et chaque choix de colonnes, jusqu'à ce qu'un autre texte ou
-une autre nature l'ouvre de nouveau.
+d'import, comptent les noms rendus uniques, en information. Chaque personne
+créée sous un nom rendu porte la marque du nom numéroté (§ 8.9), **cachée** : la
+fiche ne la montre ni ne la saisit, et aucune colonne CSV ne la porte, ni à
+l'import ni à l'export ; un nom que le fichier écrit déjà suivi d'un numéro ne
+la reçoit pas. La commande n'est offerte que lorsqu'elle rend un nom au moins,
+et vaut pour le texte ouvert, sous chaque mode et chaque choix de colonnes,
+jusqu'à ce qu'un autre texte ou une autre nature l'ouvre de nouveau.
 
 **Mettre à jour n'efface pas** : un champ vide dans le fichier laisse la valeur
 existante. Un fichier ne portant que les noms effacerait sinon tous les
@@ -4804,29 +5619,67 @@ courriels, d'un geste qui s'annonce comme une mise à jour.
 
 **Remplacer annonce ce qu'il détruit**, réservations et titres compris :
 « 260 personnes seront supprimées » laisse croire qu'on ne perd que des noms.
+La fenêtre à confirmer compte les personnes, les réservations, les titres qui
+perdront leur réservation et les propositions qui deviendront périmées, puis
+les inclusions que portent les personnes retirées — chacune vise une personne
+retirée ou part avec elle —, seulement quand elles en portent, puis les logos
+que le remplacement retire, seulement quand il en retire.
 
 **Importer selon l'état** : sans avertissement en brouillon et proposé ; en
 retenu, avec l'avertissement que le placement retenu suit la présence de chacun,
 les arrivées en réserve et les départs laissant leur chaise vide (§ 5.8) ;
 **refusé** en bloqué, le message nommant la commande qui déverrouille.
 
-**Le modèle à télécharger.** La section d'import offre « Télécharger un
-modèle » pour la nature cochée (§ 10.4) ; la commande passe par « Enregistrer
-sous… » et n'écrit rien dans l'événement : elle est permise en lecture et sur
-un plan bloqué. Son nom accessible nomme la nature, et le chemin enregistré
-s'annonce sous elle. Le modèle a la forme de l'export — UTF-8 avec marque, `;`,
-CRLF, les en-têtes de l'import — et **s'importe tel quel sans refuser aucune
-ligne**. Celui des participants, `modele-participants.csv`, est réglé par le
-nombre de tours de l'événement pour sa seule colonne `presence` : quatre
-personnes inventées, dont les cellules remplissent chaque colonne du tableau
-ci-dessus, `exclu` sous ses deux valeurs, une cellule à deux étiquettes, un
-conflit, que la personne sans organisation nomme envers l'organisation de
-l'exclue — une organisation existe aussi par ses exclus —, et deux présences,
-l'une de 1 à l'avant-dernier tour, l'autre aux tours 2 et 3 : « 1-3 » et
-« 2, 3 » à quatre tours, « 1, 2 » et « 2, 3 » à trois, « 1 » et « 2 » à deux ;
-à un tour, la colonne reste vide. Il s'importe tel quel sous tout nombre de
-tours.
+**Le modèle à télécharger.** La section d'import offre « Télécharger un modèle »
+pour la nature cochée (§ 10.4) ; la commande passe par « Enregistrer sous… » et
+n'écrit rien dans l'événement : elle est permise en lecture et sur un plan
+bloqué. Son nom accessible nomme la nature, et le chemin enregistré s'annonce
+sous elle. Le modèle a la forme de l'export — UTF-8 avec marque, `;`, CRLF, les
+en-têtes de l'import — et **s'importe tel quel sans refuser aucune ligne**.
+Celui des participants, `modele-participants.csv`, est réglé par le nombre de
+tours de l'événement pour sa seule colonne `presence` : quatre personnes
+inventées, dont les cellules remplissent chaque colonne du tableau ci-dessus,
+`exclu` sous ses deux valeurs, `animation_reservee` aussi — `oui` pour la
+personne au titre pressenti —, une cellule à deux étiquettes, un conflit, que la
+personne sans organisation nomme envers l'organisation de l'exclue — une
+organisation existe aussi par ses exclus —, une inclusion de cette même
+organisation, celle de l'exclue, que nomme une autre personne, une inclusion de
+participant, la personne sans organisation, et deux présences, l'une de 1 à
+l'avant-dernier tour, l'autre aux tours 2 et 3 : « 1-3 » et « 2, 3 » à quatre
+tours, « 1, 2 » et « 2, 3 » à trois, « 1 » et « 2 » à deux ; à un tour, la
+colonne reste vide. Il s'importe tel quel sous tout nombre de tours, dans une
+liste vide, en mise à jour ou en remplacement ; ajouté à une liste qui porte
+déjà la personne sans organisation, son inclusion de participant nomme deux
+personnes et refuse le fichier entier (`INCLUSION_PARTICIPANT_AMBIGU`).
 Celui des objectifs suit l'événement (§ 10.4).
+
+**Le guide de l'import.** Sous « Télécharger un modèle », dernier de la carte
+de l'import, un bloc replié, « Guide import », décrit le fichier attendu pour
+la nature cochée. Il est **fermé à l'ouverture de la section** ; son bouton
+l'ouvre et le ferme, à la souris comme au clavier, dit son état par
+`aria-expanded` et désigne le contenu ouvert par `aria-controls`. Son état
+n'appartient qu'à l'écran : il ne s'écrit ni dans l'événement ni dans les
+réglages, et il n'écrit rien, en lecture comme sur un plan bloqué. Ouvert, il
+porte quelques consignes — les en-têtes reconnus sans égard à la casse, aux
+accents, aux blancs, à « _ » ni à « - », l'ordre des colonnes libre et une
+colonne inconnue ignorée ; le séparateur et l'encodage détectés, et nommés
+par l'aperçu ; le modèle aux bons en-têtes ; rien d'importé avant l'aperçu —,
+puis un tableau, **une ligne par colonne reconnue**, dans l'ordre de la table
+d'en-têtes de la nature : l'en-tête, s'il est obligatoire, ce que la colonne
+contient et comment une cellule sépare plusieurs valeurs, et les synonymes.
+**En-têtes et synonymes se lisent dans la table d'en-têtes**, celle de la
+reconnaissance (§ 19.8), jamais recopiés — deux écritures qui ne diffèrent
+que par l'apostrophe, droite ou typographique, s'y montrent une fois, la
+première : une colonne ajoutée à la table paraît au guide, et une colonne
+sans texte de guide fait échouer une épreuve.
+Le texte d'une colonne suit ce paragraphe et le § 10.4 : une liste fermée —
+`exclu`, `animation_reservee`, `regle` — s'y donne en entier, la ligne
+`animation_reservee` dit que l'import ne désigne personne et que « Créer les
+tables… » désigne les personnes marquées, la ligne `conflit_organisation` et
+celle d'`inclusion_organisation` disent qu'une virgule ne sépare pas deux
+organisations, qu'elle reste dans le nom, et la ligne `inclusion_participant`
+qu'une personne s'y écrit par son prénom puis son nom.
+Changer de nature change le tableau, le bloc restant ouvert.
 
 ### 10.2 La saisie
 
@@ -4838,10 +5691,27 @@ Trois mécanismes rendent tenable la saisie de 260 personnes :
 1. **Le collage en bloc**, passé **au même analyseur** que l'import — un second
    analyseur « simplifié » divergerait sur les accents et les guillemets, et les
    tests des deux resteraient verts.
-2. **L'organisation collante** : le champ conserve sa dernière valeur. Saisir
-   les sept personnes d'une organisation, c'est taper sept noms.
+2. **Le formulaire d'ajout repart vide** : un ajout abouti vide tous ses
+   champs, l'organisation comprise, et rend le focus au nom. Une valeur restée
+   d'un ajout passerait inaperçue et s'enregistrerait sur la personne suivante.
 3. **La grille éditable**, au clavier, avec tri et filtre. Corriger est ce que
    l'opérateur fait le plus, la veille et sur place.
+
+**Le formulaire d'ajout confirme chaque ajout.** « Ajouter », ou Entrée dans un
+champ, écrit `ajouterParticipant` ; abouti, un message nomme la personne
+ajoutée — « Personne ajoutée : Iris Ombrelle », son nom lu comme la commande
+l'enregistre —, dans une région `role="status"` qui l'annonce sans prendre le
+focus. Il paraît sur la ligne du titre de la bande, à sa droite, ou dessous
+quand la bande est étroite, au-dessus du nom où revient le focus ; la ligne en
+garde la hauteur, et sur une bande large les champs ne bougent ni quand il
+paraît ni quand il se retire. Il se retire seul au bout de cinq secondes, ou au
+prochain envoi : un ajout suivant le remplace par le sien, un refus le retire.
+Il ne vaut que pour la révision de son ajout : Défaire, ou toute autre
+écriture, le retire, et il ne nomme jamais une personne absente de la liste.
+Le formulaire remonté — retour d'une autre section, fermeture d'« À propos » —
+repart vide et sans message. Pendant l'écriture d'un ajout, une seconde
+soumission ne fait rien ; ce que l'opérateur tape entre-temps reste dans ses
+champs, et seuls ceux qui portent encore la valeur envoyée se vident.
 
 La liste des participants porte une ligne de comptes — personnes, à placer,
 exclues, organisations, et « 2 présences partielles » quand des personnes non
@@ -4853,32 +5723,44 @@ et l'exclusion en pastilles à icône.
 **Les informations d'une personne se modifient dans sa fiche.** En tête de la
 fiche, ses six valeurs de texte — nom, prénom, organisation, courriel, titre
 pressenti, notes — se lisent chacune sous l'intitulé de sa colonne, « — » quand
-elle manque, puis son statut calculé et la commande « Modifier ». « Modifier »
-ouvre à leur place un formulaire prérempli, un champ par valeur, les notes en
-zone de texte, l'organisation proposant celles de l'événement ; le focus va au
-nom. « Enregistrer », ou Entrée — Maj+Entrée garde un saut de ligne dans les
-notes —, écrit **une** entrée d'historique, `modifierParticipant` des seuls
-champs que la saisie change depuis l'ouverture et qui diffèrent encore de la
-personne, lus comme la saisie les enregistre, que son libellé nomme ; sans champ
-changé, le formulaire se referme sans rien écrire. Une écriture venue d'ailleurs
-pendant la saisie — une autre fenêtre, Défaire — garde les champs que la saisie
-ne touche pas, et ne tient pas le geste. « Annuler », ou Échap, le referme sans
-rien écrire ; refermé, il rend le focus à « Modifier ». Une organisation saisie
-qui ne diffère de celle d'une autre personne que par la casse, les accents ou
-les blancs s'enregistre sous l'orthographe existante, et un signal le dit sous
-le bloc ; une organisation que la saisie ne touche pas reste la sienne, même
-voisine d'une autre ; la seule personne à porter une organisation en change la
-casse ; une saisie dont l'orthographe retenue est déjà celle de la personne ne
-change rien et ne se signale pas. Quand les listes de conflits suivent le
-changement d'organisation (§ 4), un avis le dit sous le bloc ; signal et avis
-tombent avec la révision qui les a produits. Un refus garde le formulaire ouvert
-et la saisie : un nom vide se refuse contre le nom (`NOM_REQUIS`), tout autre
-refus sous « Enregistrer », avec son remède. En lecture et sur un plan bloqué,
-« Modifier » refuse à côté du bouton, avec son remède, avant d'ouvrir le
-formulaire. Ouvrir la fiche d'une autre personne referme le formulaire sans rien
-écrire. Les conflits d'organisation, la présence et l'exclusion gardent leurs
+elle manque, puis son animation réservée (§ 4), « oui » ou « non », son statut
+calculé et la commande « Modifier ». « Modifier » ouvre à leur place un
+formulaire prérempli, un champ par valeur, les notes en zone de texte,
+l'organisation proposant celles de l'événement, puis la case « Animation
+réservée », cochée sous la marque ; le focus va au nom. Cocher ou décocher la
+case est un changement comme un autre : il part dans la même entrée, la marque
+posée ou retirée, et « Défaire » la rend. « Enregistrer », ou Entrée —
+Maj+Entrée garde un saut de ligne dans les notes —, écrit **une** entrée
+d'historique, `modifierParticipant` des seuls champs que la saisie change depuis
+l'ouverture et qui diffèrent encore de la personne, lus comme la saisie les
+enregistre, que son libellé nomme ; sans champ changé, le formulaire se referme
+sans rien écrire. Une écriture venue d'ailleurs pendant la saisie — une autre
+fenêtre, Défaire — garde les champs que la saisie ne touche pas, et ne tient pas
+le geste. « Annuler », ou Échap, le referme sans rien écrire ; refermé, il rend
+le focus à « Modifier ». Une organisation saisie qui ne diffère de celle d'une
+autre personne que par la casse, les accents ou les blancs s'enregistre sous
+l'orthographe existante, et un signal le dit sous le bloc ; une organisation que
+la saisie ne touche pas reste la sienne, même voisine d'une autre ; la seule
+personne à porter une organisation en change la casse ; une saisie dont
+l'orthographe retenue est déjà celle de la personne ne change rien et ne se
+signale pas. Quand les listes de conflits suivent le changement d'organisation
+(§ 4), un avis le dit sous le bloc, et un second quand les listes d'inclusions
+d'organisation le suivent ; signal et avis tombent avec la révision qui les a
+produits. Un refus garde le formulaire ouvert et la saisie : un nom vide se
+refuse contre le nom (`NOM_REQUIS`), tout autre refus sous « Enregistrer », avec
+son remède. En lecture et sur un plan bloqué, « Modifier » refuse à côté du
+bouton, avec son remède, avant d'ouvrir le formulaire. Ouvrir la fiche d'une
+autre personne referme le formulaire sans rien écrire. Les conflits
+d'organisation, les inclusions, la présence et l'exclusion gardent leurs
 commandes, hors du formulaire, et leurs rubriques restent actives pendant la
 saisie.
+
+**Renommer une personne retire la marque du nom numéroté** (§ 8.9) : un
+`modifierParticipant` qui change le nom, par la fiche ou par la cellule de la
+grille, la retire dans la même entrée, même quand le nom saisi finit par un
+numéro — un nom retapé est voulu tel quel —, et « Défaire » la rend avec
+l'ancien nom. Changer un autre champ la garde ; le libellé de l'entrée ne la
+nomme pas.
 
 La fiche d'une personne porte ses étiquettes, en pastilles **neutres** — la
 teinte d'organisation ne sert qu'à l'organisation (§ 12.7) —, chacune suivie,
@@ -4915,22 +5797,22 @@ la vignette ; la vue se lit dans tout mode, et un autre chemin la referme.
 « Présence » de la grille, après celle de l'exclusion, écrit « tous », en encre
 secondaire, ou les tours de présence en pastille d'information à calendrier —
 « tour 2 », « tours 1 et 2 », « tours 1 à 3 et 5 ». Entrée ou F2 l'ouvre en
-cases, une par tour, nommées « Tour 2 » pour les technologies d'assistance,
-dans un groupe nommé « Présence de Prénom Nom, une case par tour » ; ← et →
-passent d'une case à l'autre, Début et Fin à la première et à la dernière, sans
-boucler, et l'espace coche ou décoche **sans rien écrire**. **Entrée, Tab ou la
-sortie du groupe valident**, en une seule entrée d'historique, qui ajuste le
-retenu (§ 5.8) ; Tab puis la sortie qui le suit ne valident pas deux fois, et
-une saisie revenue à la présence enregistrée n'écrit rien. Échap rend la
-présence enregistrée. La fiche porte une rubrique « Présence », entre les
-étiquettes et les réservations : un résumé, les mêmes cases, « Tous les
-tours », qui coche chaque case sans rien écrire, et « Appliquer », qui écrit en
-une entrée ; l'itinéraire du placement retenu y dit « absente » à un tour
-d'absence. Une saisie sans aucun tour est refusée contre les cases, sans
-remède : son texte nomme l'exclusion. Un changement est refusé en lecture et
-sur un plan bloqué, le refus posé dans la cellule ou sous les cases, avec son
-remède. La grille trie la colonne « tous » en tête, puis par la liste des
-tours, et se groupe par présence.
+cases, une par tour, nommées « Tour 2 » — ou du nom du tour (§ 4) — pour les
+technologies d'assistance, dans un groupe nommé « Présence de Prénom Nom, une
+case par tour » ; ← et → passent d'une case à l'autre, Début et Fin à la
+première et à la dernière, sans boucler, et l'espace coche ou décoche **sans
+rien écrire**. **Entrée, Tab ou la sortie du groupe valident**, en une seule
+entrée d'historique, qui ajuste le retenu (§ 5.8) ; Tab puis la sortie qui le
+suit ne valident pas deux fois, et une saisie revenue à la présence enregistrée
+n'écrit rien. Échap rend la présence enregistrée. La fiche porte une rubrique
+« Présence », entre les étiquettes et les réservations : un résumé, les mêmes
+cases, « Tous les tours », qui coche chaque case sans rien écrire, et
+« Appliquer », qui écrit en une entrée ; l'itinéraire du placement retenu y dit
+« absente » à un tour d'absence. Une saisie sans aucun tour est refusée contre
+les cases, sans remède : son texte nomme l'exclusion. Un changement est refusé
+en lecture et sur un plan bloqué, le refus posé dans la cellule ou sous les
+cases, avec son remède. La grille trie la colonne « tous » en tête, puis par la
+liste des tours, et se groupe par présence.
 
 **Les conflits d'organisation se saisissent dans la grille et dans la fiche.**
 La colonne « Conflit d'organisation » de la grille suit celle de
@@ -4951,7 +5833,7 @@ geste entier en une commande** — `changerConflits` de la liste saisie, ajouts
 et retraits ensemble, une seule entrée d'historique (§ 8.2), que « Défaire »
 reprend d'un coup —, et rien quand la saisie revient à la liste enregistrée. La
 fiche porte une rubrique « Conflits d'organisation », entre les étiquettes et
-la présence : un résumé — les organisations en pastilles, ou « Aucun conflit
+les inclusions : un résumé — les organisations en pastilles, ou « Aucun conflit
 d'organisation. » —, le même choix multiple sous la légende « Organisations à
 éviter », et « Appliquer », qui écrit de même ; Entrée dans les cases applique,
 Échap rend la liste enregistrée. Un refus — séance en lecture, plan bloqué — se
@@ -4959,6 +5841,63 @@ pose dans la cellule ou sous les cases, avec son remède, la saisie gardée. La
 grille trie la colonne sur la liste rangée de ses clés normalisées, une
 personne sans conflit après toutes les autres ; elle ne se groupe ni ne se
 filtre par elle : une personne y porte plusieurs noms.
+
+**Les inclusions se saisissent dans la fiche et dans la grille** (§ 4). La fiche
+porte deux rubriques, l'une sous l'autre entre les conflits d'organisation et la
+présence : « Inclusions d'organisation » et « Inclusions de participant ».
+Chacune a son résumé — les organisations incluses en pastilles neutres à l'icône
+« ajouter », les personnes incluses par leur nom, ou « Aucune inclusion
+d'organisation. », « Aucune inclusion de participant. » —, son choix multiple et
+son « Appliquer », qui écrit la liste entière en une commande,
+`changerInclusionsOrganisation` ou `changerInclusionsParticipant`, une seule
+entrée d'historique, et rien quand la saisie revient à la liste enregistrée. Le
+choix des organisations offre une case par organisation de l'événement, exclus
+compris, hors la sienne, rangées par clé normalisée, sous la légende
+« Organisations à rencontrer », dans un groupe nommé « Inclusions d'organisation
+de Prénom Nom, une case par organisation ». Celui des personnes offre une case
+par personne de l'événement hors elle-même, exclues comprises, rangées par la
+clé normalisée de leur nom puis par identifiant, jamais par une comparaison de
+langue, sous la légende « Personnes à rencontrer », dans un groupe nommé
+« Inclusions de participant de Prénom Nom, une case par personne » : un homonyme
+y porte son identifiant, « Iris Ombrelle (n° 4) », une exclue « (exclue) ». Un
+nom que la liste porte et que l'événement n'a plus y reste, coché, pour qu'il se
+décoche. Une zone de recherche, en tête des personnes, « Chercher une
+personne », ne montre que les cases dont le nom contient le texte tapé, sans
+égard à la casse ni aux accents, et dit quand aucune ne le contient ; elle ne
+change pas la saisie — une case cochée qu'elle cache reste cochée —, et Échap la
+vide. Les touches des cases sont celles des conflits ; Entrée, dans les cases
+comme dans la recherche, applique, et Échap dans les cases, ou dans la recherche
+vide, rend la liste enregistrée. Un refus — séance en lecture, plan bloqué — se
+pose sous les cases de sa rubrique, avec son remède, la saisie gardée. Ouvrir la
+fiche d'une autre personne repart de ses listes, sans brouillon ni refus. Sous
+le résumé de chaque rubrique, les inclusions de la liste que le diagnostic dit
+hors d'atteinte (§ 5.6), sous « Hors d'atteinte, aucun placement ne peut les
+satisfaire : », chacune par sa cible et sa raison — « Théo Pervenche : les deux
+ne sont jamais présentes au même tour » — : une information, que la saisie ne
+refuse pas, et qui suit la configuration, placement ou non.
+
+La colonne « Inclusions » de la grille, juste après celle des conflits du
+placement, est **masquée par défaut**, avec celle des inclusions du placement
+qui la suit (plus bas) : la case « Montrer les inclusions », dans la barre de la
+liste, les montre et les masque ensemble, sans rien écrire, le temps que la
+section est ouverte, et les masquer retire le tri que la première portait.
+Montrée, elle écrit chaque organisation incluse en pastille neutre à l'icône
+« ajouter », puis chaque personne incluse, et rien sans inclusion. Entrée ou F2
+l'ouvre en deux choix multiples, ceux de la fiche, sans légende, la recherche
+comprise. Tab et Maj+Tab passent d'abord d'un contrôle à l'autre — les cases des
+organisations, la recherche, les cases des personnes — ; Tab depuis le dernier,
+Maj+Tab depuis le premier, valident et mènent à la cellule voisine, comme Entrée
+et la sortie de l'éditeur valident ; Échap rend la saisie. **Valider écrit une
+seule commande, `changerInclusions` des listes que la saisie change**, une seule
+entrée d'historique, que « Défaire » reprend d'un coup, et rien quand la saisie
+ne change plus rien ; une liste que la saisie ne touche pas ne part jamais, même
+changée ailleurs pendant la saisie, et un refus n'écrit aucune des deux. Quitter
+l'éditeur pour la case « Montrer les inclusions » valide la saisie comme toute
+sortie ; une saisie refusée, restée ouverte, s'abandonne quand la colonne se
+masque, sans rien écrire, son refus et son geste avec elle. La grille trie la
+colonne par le nombre d'inclusions de chaque personne, une personne sans
+inclusion après toutes les autres ; elle ne se groupe ni ne se filtre par elle,
+et l'export écrit ses deux listes dans deux colonnes à lui (plus bas).
 
 **Les conflits du placement de chaque personne se lisent dans la grille et
 dans la fiche** (§ 7.5). La colonne « Conflits du placement », juste après celle
@@ -4988,39 +5927,94 @@ commande, et se lit en lecture et sur un plan bloqué comme en écriture. La
 marque d'un groupe en conflit et celle d'une personne, dans la liste groupée,
 restent les leurs.
 
-La tenue de la grille suit la place que la carte lui laisse, non la largeur
-de la fenêtre ; ses en-têtes sont en petit corps. Sous 86 rem de place, les
-cellules et les actions se serrent, et les dix colonnes tiennent dans la carte
-pleine largeur d'une fenêtre de 1024 px. À partir de 80 rem — la carte d'une
-fenêtre de 1 366 px —, chaque en-tête tient sur une ligne, hors de celui des
-conflits du placement, qui se replie toujours entre ses mots, les quatre
+**Les inclusions du placement de chaque personne se lisent de même** (§ 7.5,
+§ 12.15), dans le placement que la fiche mesure, sous les avis de sa ligne
+d'évaluation — ceux du tableau des propositions. La fiche porte une rubrique
+« Inclusions du placement », juste après celle des conflits, sous la même ligne
+de source : ses inclusions satisfaites sur ses inclusions actives, « 1 inclusion
+satisfaite sur 2. » ; quand sa liste dépasse ce qu'elle peut rencontrer, la
+phrase qui dit combien de ses inclusions au plus peuvent être satisfaites, et
+combien d'inclusions encore possibles le placement n'atteint pas, « Ce n'est pas
+un avis. » ; puis la phrase de chaque avis qui la concerne, celle de la page de
+qualité : qu'elle le porte, qu'elle soit la personne incluse, ou qu'elle demande
+aussi la rencontre que l'autre personne porte par une inclusion de son
+organisation, dont elle est le seul membre à sa portée. Sans rien de cela,
+« Aucune inclusion active ne la nomme. » ; une personne exclue, un
+placement qui ne se mesure pas, une phrase le dit ; sans placement, ou quand
+aucune inclusion n'est active, la rubrique est absente. Elle n'a aucune
+commande. La colonne « Inclusions du placement » de la grille, juste après celle
+des inclusions et masquée avec elle, en écrit le résumé : « 1 sur 2 », « liste
+au-delà du plafond », puis « sans » et l'autre partie de chaque avis qui la
+concerne — la personne ou l'organisation incluse, ou la personne qui l'inclut —,
+chaque nom dans son propre nœud ; un tiret sans rien de cela, et « non
+comptées » quand le placement montré ne se mesure pas. C'est une mesure, comme
+les conflits du placement : elle se lit seulement, son en-tête ne trie pas, la
+liste ne se groupe ni ne se filtre par elle, et l'export ne l'écrit pas.
+
+**La colonne « Animation » dit qui anime quelle table**, juste après celle du
+titre pressenti : les numéros affichés des tables que la personne anime —
+« 3 », « 3, 5 » —, lus dans les titres que ses réservations « tous les tours »
+pourvoient, désignation suspendue par une absence comprise (§ 2.1 étape 6) ;
+« à désigner », en pastille d'avis à triangle, pour une personne non exclue qui
+porte la marque de l'animation réservée (§ 4) et n'anime encore aucune table ;
+rien sinon. Une personne exclue n'anime rien et n'est pas à désigner. C'est une
+mesure, non une donnée, comme les conflits du placement : elle se lit
+seulement — sa cellule prend le focus, Entrée et F2 n'y ouvrent rien —, son
+en-tête ne trie pas, la liste ne se groupe ni ne se filtre par elle, et
+l'export ne l'écrit pas ; la marque, elle, s'exporte dans sa propre colonne.
+
+La tenue de la grille suit la place que la carte lui laisse, non la largeur de
+la fenêtre ; ses en-têtes sont en petit corps. Sous 86 rem de place, les
+cellules et les actions se serrent, et les onze colonnes que la grille montre
+par défaut tiennent dans la carte pleine largeur d'une fenêtre de 1024 px ; les
+colonnes des inclusions montrées, la grille défile au besoin dans son conteneur,
+sans sortir de la carte. À partir de 80 rem — la carte d'une fenêtre de 1 366 px
+—, chaque en-tête tient sur une ligne, hors de ceux des conflits et des
+inclusions du placement, qui se replient toujours entre leurs mots, les quatre
 actions d'une ligne vont en deux rangées de deux, en colonnes alignées d'une
-ligne à l'autre, un prénom ne se coupe qu'entre ses mots, et les tours nommés
-de la présence ne se coupent pas ; en deçà, un en-tête se replie entre ses
-mots et les actions passent à la ligne.
+ligne à l'autre, un prénom ne se coupe qu'entre ses mots, et les tours nommés de
+la présence ne se coupent pas ; en deçà, un en-tête se replie entre ses mots et
+les actions passent à la ligne.
 
 **La liste s'exporte en CSV dans la forme exacte qu'il importe.** L'aller-retour
 est éprouvé par un test qui importe, exporte et compare champ par champ : il
 fait du fichier une sauvegarde, et de l'export le gabarit que personne n'a
-besoin de documenter.
+besoin de documenter. Seule une inclusion qui vise un homonyme non numéroté
+n'y entre pas (plus bas).
 
 L'export écrit toujours la colonne `etiquettes`, puis la colonne `presence`,
 les étiquettes jointes par une virgule suivie d'une espace (`, `) ; la
 présence s'écrit vide pour tous les tours, sinon chaque suite d'au moins trois
 tours consécutifs en plage `a-b`, les autres tours un à un, joints par `, ` —
 « 1-3 », « 2, 3 », « 1-3, 5 ». Dès qu'une personne de la liste nomme un
-conflit, la colonne `conflit_organisation` suit, en dernière position, ses
+conflit, la colonne `conflit_organisation` suit, après la présence, ses
 noms joints par un point-virgule suivi d'une espace (`; `), vide pour une
 personne sans conflit. Quand une organisation de la liste porte elle-même
 « ; » et que la cellule se relirait ainsi en d'autres noms — « Alpha; Beta »
 lu comme une seule organisation de ce nom —, les noms se joignent par ` | `,
 puis par une fin de ligne : la première jointure que la lecture de l'import
 rend en la même liste. Sans conflit dans la liste, la colonne manque, et son
-réimport en mise à jour ne touche aucune liste. Le collage en bloc suit le
-même ordre de colonnes, la huitième étant celle des étiquettes, la neuvième
-celle de la présence, la dixième celle des conflits. Les
-objectifs des tables s'exportent par leur propre CSV, dans la forme exacte qu'il
-importe (§ 10.4).
+réimport en mise à jour ne touche aucune liste. Dès qu'une personne de la liste
+porte la marque de l'animation réservée, la colonne `animation_reservee` suit,
+`oui` pour la marque, `non` sans elle ; sans marque dans la liste, elle manque
+de même. Puis viennent les deux colonnes des inclusions, chacune dès qu'une
+personne de la liste porte une telle liste, et absente sinon :
+`inclusion_organisation`, ses organisations jointes comme les conflits, puis
+`inclusion_participant`, chaque personne incluse par son nom affiché, numéro
+compris, dans l'ordre de ses identifiants, jointes de même — un nom qui porte
+« ; » se joint par ` | `, puis par une fin de ligne. L'identifiant ne s'écrit
+pas : le réimport relit chaque personne incluse par son nom, si bien que
+l'aller-retour vaut **hors des inclusions qui visent un homonyme non
+numéroté**, que l'import refuse (`INCLUSION_PARTICIPANT_AMBIGU`). Un export
+qui en porte le dit, en avis sous l'en-tête de la liste, leur nombre en tête :
+« 2 inclusions visent une personne dont une autre porte le même nom… » ;
+l'avis tombe dès que la liste change. Comme le logo, la marque du nom
+numéroté (§ 8.9) n'a pas de colonne : le nom s'écrit entier, numéro compris,
+et se réimporte sans elle. Le collage en bloc suit le même ordre de colonnes,
+la huitième étant celle des étiquettes, la neuvième celle de la présence, la
+dixième celle des conflits, la onzième celle de l'animation réservée, la
+douzième et la treizième celles des inclusions. Les objectifs des tables
+s'exportent par leur propre CSV, dans la forme exacte qu'il importe (§ 10.4).
 
 ### 10.3 Les fichiers d'exemple livrés
 
@@ -5052,17 +6046,18 @@ d'orthographes d'une même étiquette à fondre, et une cellule vide. Sa colonne
 non reconnue reste la dernière. Il porte aussi une colonne `Présence`, avant la
 colonne non reconnue : des cellules vides, un « Tous », et une plage qui
 commence avant la soirée, « 0-2 », qui refuse sa ligne sous tout nombre de
-tours. Il ne porte aucune présence partielle admise : ses lignes valides
-passent par le moteur dans les épreuves d'intégration, et y gardent leurs
-personnes. Les deux fichiers `participants_demo_*.csv`, exports des
-démonstrations, portent la colonne `etiquettes`, vide, et la colonne
-`presence`, vide ; les
-démonstrations elles-mêmes ne changent pas. Le fichier des objectifs exerce un
-numéro de table inconnu, un tour hors de la soirée, une règle inconnue, deux
-lignes pour une même table et un même tour, une orthographe qui se fond avec une
-étiquette des participants, et une table qui porte un objectif de soirée et un
-objectif de tour ; il alimente la capture d'écran de l'aperçu des objectifs
-(§ 19.3).
+tours. Il ne porte aucune présence partielle admise : ses lignes valides passent
+par le moteur dans les épreuves d'intégration, et y gardent leurs personnes. Les
+deux fichiers `participants_demo_*.csv`, exports des démonstrations, portent la
+colonne `etiquettes`, vide, et la colonne `presence`, vide ; les démonstrations
+elles-mêmes ne changent pas. Aucun fichier livré ne porte de colonne
+d'inclusion : une inclusion fautive refuse le fichier entier et vide l'aperçu,
+si bien que son refus s'éprouve, et se montre, sur un texte à part. Le fichier
+des objectifs exerce un numéro de table inconnu, un tour hors de la soirée, une
+règle inconnue, deux lignes pour une même table et un même tour, une orthographe
+qui se fond avec une étiquette des participants, et une table qui porte un
+objectif de soirée et un objectif de tour ; il alimente la capture d'écran de
+l'aperçu des objectifs (§ 19.3).
 
 Tous sont en **UTF-8 avec marque d'ordre d'octets, séparés par `;`** — la forme
 qu'un tableur francophone sous Windows rouvre sans manipulation — sauf
@@ -5085,7 +6080,10 @@ participants arrive sous « participants ».
 | `table` | **oui** | le **numéro affiché** de la table, jamais son identifiant |
 | `tour` | non | vide pour la soirée, sinon un tour de 1 à R |
 | `objectif` | **oui** | les étiquettes, découpées comme la colonne `etiquettes` (§ 10.1) ; synonyme : `objectifs` |
-| `regle` | non | liste fermée, sans égard à la casse, aux accents ni aux espaces, comme `exclu` (§ 10.1) : `ou`, `une`, `au moins une` ; `et`, `toutes` ; vide pour suivre le défaut ; synonyme : `règle` |
+| `regle` | non | liste fermée, sur la forme normalisée, comme `exclu` (§ 10.1) — casse et accents ignorés, blancs réduits, si bien que « Au moins une » se lit et « aumoinsune » non : `ou`, `une`, `au moins une` ; `et`, `toutes` ; vide pour suivre le défaut ; synonyme : `règle` |
+
+Sous la nature « Objectifs de table », le guide de l'import (§ 10.1) décrit
+ces colonnes.
 
 **Tout le § 10.1 vaut, sauf ce qui nomme les participants** : aperçu
 obligatoire, encodage en quatre temps, séparateur analysé, colonnes par en-tête,
@@ -5113,6 +6111,12 @@ objectif vide sous une règle écrite ; étiquette mal formée ou vingt-et-uniè
 défaut ; deuxième ligne pour un même couple (table, tour), qui nomme la
 première. **Avis** : après l'import, un objectif écrit par le fichier auquel
 aucune personne présente ne correspond ; l'aperçu ne le calcule pas.
+
+**Un aperçu lu avant un changement du nombre de tours ne s'applique pas**
+(`APERCU_TOURS_CHANGES`, § 10.1) quand une colonne est associée à `tour` : un
+tour admis sous l'ancien nombre sortirait de la soirée, et un tour refusé ne le
+serait peut-être plus. Relire le fichier refait l'aperçu. Sans colonne `tour`,
+le fichier ne parle que de la soirée, et l'aperçu s'applique.
 
 **La ligne à remplir.** Une ligne dont la cellule `objectif` ne porte aucune
 étiquette — vide, ou faite de blancs et de séparateurs — et dont la cellule
@@ -5244,7 +6248,7 @@ Conséquences à tenir :
 par défaut est **Avery 5392** : des cartes prédécoupées de 4 po × 3 po, six par
 feuille Lettre, qui n'ont besoin d'aucune coupe. Le second est **l'A6 à
 découper**, sur A4 ou sur Lettre. Le modèle est un réglage local de la
-machine (§ 8.5), choisi dans la section des badges, qui ne voyage pas avec
+machine (§ 8.5), choisi dans la section de l'impression, qui ne voyage pas avec
 l'événement. Avery 5392 impose son papier, le Lettre : la section ne montre
 alors ni l'imposition ni le papier. L'A6 prend le papier de la machine, que
 l'aperçu d'impression partage, et le Lettre tant qu'aucun n'est choisi : les
@@ -5403,8 +6407,9 @@ planche cesserait alors de pouvoir s'annoncer A6, et **une sortie qui ment sur s
 format est pire qu'une sortie qui coûte une coupe**.
 
 **La feuille de contrôle de l'A6 est la page 1 du document**, et les pages qui
-la suivent quand ses lignes — la liste des noms d'une réédition — ne tiennent
-pas sur une page ; **elle ne se découpe pas**, ses pages de suite non plus.
+la suivent quand ses lignes — la liste des noms entiers d'une réédition, ceux
+que la case des doublons laisse en blanc compris (§ 11.4) — ne tiennent pas sur
+une page ; **elle ne se découpe pas**, ses pages de suite non plus.
 **Celle d'Avery 5392 est un second PDF**, écrit à côté du premier sous le même
 nom, `.controle` à la place de `.badges` (§ 11.6) : une feuille de cartes gâchée
 pour une règle coûterait six badges, et la feuille de contrôle s'imprime sur
@@ -5445,71 +6450,153 @@ cherche à qui il parle.
 
 | rang | contenu | pourquoi |
 |---|---|---|
-| 1 | **prénom et nom**, le plus grand corps de la planche | c'est l'identité, et c'est ce que lit l'hôte à un mètre |
-| 2 | **une ligne par tour** : « Tour 1 — table 12 », le libellé de la table entre parenthèses après son numéro quand elle en porte un (§ 4) — « Tour 1 — table 5 (Terrasse), siège 3 — animation » —, et le siège quand les sièges sont attribués ; une ligne aussi pour un tour d'absence, qui dit « absente » | c'est la question à laquelle le badge existe pour répondre |
-| 3 | **organisation**, un corps réduit, sous le nom | elle distingue deux homonymes à l'accueil |
+| 1 | **prénom et nom**, le plus grand corps de la planche — l'organisation prend cette place sous la case de l'organisation en gros, cochée par défaut (ci-dessous) | c'est l'identité, et c'est ce que lit l'hôte à un mètre |
+| 2 | **une ligne par tour** : « Tour 1 — table 12 », le tour par son nom quand il en porte un (§ 4) — « Plat principal — table 12 » —, le libellé de la table entre parenthèses après son numéro quand elle en porte un (§ 4) — « Tour 1 — table 5 (Terrasse), siège 3 — animation » —, et le siège quand les sièges sont attribués ; une ligne aussi pour un tour d'absence, qui dit « absente » | c'est la question à laquelle le badge existe pour répondre |
+| 3 | **organisation**, un corps réduit, sous le nom — le nom de la personne prend cette place sous la même case (ci-dessous) | elle distingue deux homonymes à l'accueil |
 | 4 | **nom de l'événement et date**, en pied, corps minimal | deux soupers dans la même salle le même mois |
 | 5 | **l'horodatage du placement**, en pied, corps minimal, lisible en main et non à un mètre | sans lui, deux versions d'un plan circulent autour de deux cous et personne ne dit laquelle fait foi |
 | 6 | **le logo du participant**, quand sa fiche en porte un (§ 10.2), entre les tours et le pied, le plus grand que l'écart permette | l'hôte de salle reconnaît l'organisation d'un coup d'œil ; il ne prend que la place que tout le texte laisse |
-| 7 | **le pied TechnoLibre**, sous le pied, quand la case de la machine est cochée (§ 8.5) : « Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise », ou le texte que la machine garde à sa place (§ 8.5), suivi du logo de TechnoLibre en couleurs d'origine ; un texte vide laisse le logo seul | l'éditeur du logiciel s'y fait connaître ; il ne prend que la place que tout le reste laisse |
+| 7 | **le pied TechnoLibre**, sous le pied, quand la case de la machine est cochée (§ 8.5) : « Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise », ou le texte que la machine garde à sa place (§ 8.5), suivi du logo de TechnoLibre en couleurs d'origine ; un texte vide laisse le logo seul | l'éditeur du logiciel s'y fait connaître ; il ne prend que la place que le texte et le logo du participant laissent |
+| 8 | **l'image des badges**, quand sa case est cochée et qu'une image est choisie (ci-dessous), la même sur chaque badge, en haut, au centre ou en bas | l'événement se reconnaît d'un coup d'œil, l'emblème d'un congrès ou d'une association ; elle ne prend que la place que le texte, le logo du participant à son plancher et le pied TechnoLibre laissent |
 
 Le pied des **pages** imprimées porte cinq éléments, la version comprise
 (§ 11.7). Le badge n'est pas une page : il porte le nom de l'événement, sa date
 et l'horodatage, **pas le tour** — il les porte tous — et **pas la version**, qui
 ne sert à aucun diagnostic au cou d'un invité et dont la place est comptée.
 
-**Cinq cases retirent des données du badge.** La section des badges porte, à
-côté de la case du pied TechnoLibre, cinq cases, **toutes cochées par défaut**
+**Cinq cases retirent des données du badge.** La section de l'impression porte,
+à côté de la case du pied TechnoLibre, cinq cases, **toutes cochées par défaut**
 et **gardées sur le poste** comme elle (§ 8.5) : « Organisation » (rang 3),
 « Nom de l'événement » et « Date de l'événement » (rang 4), « Date du
-placement » — la ligne « Placement du … à … », rang 5 — et « Identifiant » —
-la ligne « Identifiant n° … » d'un homonyme. Le nom de la personne et ses
-tours s'impriment toujours. Une case décochée retire sa donnée de chaque badge
-du PDF, A6 comme Avery 5392, et la place libérée revient au reste comme celle
-d'une ligne absente (§ 11.5) : au nom et aux tours, puis au logo du
-participant et au pied TechnoLibre. Le nom et la date de l'événement se
+placement » — la ligne « Placement du … à … », rang 5 — et « Identifiant » — la
+ligne « Identifiant n° … » d'un homonyme. Le nom de la personne et ses tours
+s'impriment toujours. Une case décochée retire sa donnée de chaque badge du PDF,
+A6 comme Avery 5392, et la place libérée revient au reste comme celle d'une
+ligne absente (§ 11.5) : au nom et aux tours, puis au logo du participant, au
+pied TechnoLibre et à l'image des badges. Le nom et la date de l'événement se
 combinent : la date décochée, le nom reste seul sur sa ligne ; le nom décoché,
-la date seule ; les deux décochés, la ligne disparaît. Un nom de l'événement
-que sa case retire n'est pas un nom perdu au sens de l'ordre de sacrifice : le
-logo du participant et le pied TechnoLibre s'y posent encore quand l'écart le
-permet. La feuille de contrôle nomme les données retirées, d'une ligne
-(§ 11.3) ; l'annonce nomme toujours les homonymes que rien ne sépare,
-« Identifiant » décoché compris, et l'opérateur décide. La liste des badges en
-CSV (§ 11.6) ne lit aucune case : elle ne change pas. Toutes les cases
+la date seule ; les deux décochés, la ligne disparaît. Un nom de l'événement que
+sa case retire n'est pas un nom perdu au sens de l'ordre de sacrifice : le logo
+du participant, le pied TechnoLibre et l'image des badges s'y posent encore
+quand l'écart le permet. La feuille de contrôle nomme les données retirées,
+d'une ligne (§ 11.3) ; l'annonce nomme toujours les homonymes que rien ne
+sépare, « Identifiant » décoché compris, et l'opérateur décide. La liste des
+badges en CSV (§ 11.6) ne lit aucune case : elle ne change pas. Toutes les cases
 cochées, la planche garde exactement ses octets.
 
-**Le logo du participant passe après tout le texte.** La place du badge se
-donne dans cet ordre : le nom et les tours toujours ; puis l'organisation et
-le pied, dans l'ordre de sacrifice du § 11.5 ; puis le logo du participant ;
-le pied TechnoLibre en dernier. Le logo ne prend que l'écart que le texte
-laisse entre les tours et le pied, moins un dégagement au-dessus et
-au-dessous : il ne réduit ni ne retire aucun texte. Il s'y pose le plus grand
-possible, proportions gardées, sans plafond, centré, et ne se pose pas sur un
-badge où sa plus petite cote n'atteindrait pas son plancher, ni sur un badge
-qui a perdu le nom de l'événement (§ 11.5). Son image se lit dans le dossier
-de l'événement, au chemin que porte la fiche, à la première préparation qui
-la demande, puis se garde pour cet événement ; un échec ne se garde pas. La
-planche l'embarque une fois par fichier, quel que soit le nombre de badges
-qui la portent.
+**Une case laisse en blanc le nom des doublons.** Juste avant celle du pied
+TechnoLibre, la case « Laisser le nom des doublons en blanc », **cochée par
+défaut** et **gardée sur le poste** comme elle (§ 8.5), vise les personnes
+que « Rendre les noms uniques » a numérotées à l'import et dont la marque
+cachée tient encore (§ 8.9, § 10.1). Une note sous la case dit pourquoi :
+la place du nom reste vide, pour l'écrire à la main. Cochée, le badge d'une
+telle personne n'imprime **aucun nom**, prénom compris : la place où
+« Roger Galet 01 » s'imprimerait reste blanche. La mise en page mesure le
+nom entier et lui réserve exactement sa place — même corps, mêmes lignes,
+même hauteur —, si bien que le reste de la carte est celui du badge au nom
+imprimé, ligne pour ligne ; la couche de texte du PDF ne porte pas le nom.
+Décochée, le badge imprime le nom entier, numéro compris. Un nom sans marque
+s'imprime toujours, chiffres compris, saisis à la main ou importés tels
+quels. Seul le nom du badge change : le plan, les listes, la liste des
+badges en CSV et la feuille de contrôle gardent le nom entier, comme l'ordre
+de la pile (§ 11.6) et le refus d'un nom trop long, qui nomme la personne
+(§ 11.5). Sans personne marquée, la planche garde exactement ses octets, la
+case cochée ou non.
 
-**Le pied TechnoLibre passe après tout le reste.** Il se compose d'un texte,
+**Une case met l'organisation en gros, au-dessus du nom.** Sous les cinq cases,
+la case « Organisation en gros, au-dessus du nom », **cochée par défaut** et
+**gardée sur le poste** comme elles (§ 8.5), échange les rangs 1 et 3 sur le
+badge d'une personne qui a une organisation. L'organisation prend la place et la
+règle du nom : le plus grand corps de la carte, en gras, réduite jusqu'à son
+plancher puis repliée sur trois lignes au plus, jamais abrégée. Le nom de la
+personne prend la place et la règle de l'organisation, en petit sous elle.
+Décochée, le nom est en gros, au-dessus de l'organisation en petit. Une personne
+sans organisation, ou dont la case « Organisation » retire l'organisation — la
+case de l'organisation en gros est alors désactivée —, garde son nom en gros.
+L'ordre de sacrifice suit les rôles, non les données (§ 11.5) : le gros texte ne
+se retire jamais, et c'est le nom, en petit, qui part après le nom de
+l'événement quand la carte ne tient pas. Un nom que la case des doublons laisse
+en blanc garde sa place de petit texte, vide. Une organisation trop longue pour
+le gros texte refuse la planche comme un nom trop long, en nommant la personne
+(§ 11.5). La feuille de contrôle et la liste des badges en CSV ne lisent pas la
+case. Sans organisation imprimée, la planche garde exactement ses octets, la
+case cochée ou non.
+
+**Une case pose une image sur tous les badges.** Sous le groupe des cases, la
+case « Image sur tous les badges », **décochée par défaut**, n'est pas un
+réglage du poste : l'événement la garde, avec l'image et sa position (§ 8.9), et
+chaque geste qui la change est une entrée d'historique, refusée en lecture et
+sur un plan bloqué, à côté du contrôle, avec son remède. Cochée, elle montre
+sous elle la vignette de l'image, ou « Aucune image choisie. », ou, quand le
+fichier manque au dossier de l'événement, « Image introuvable » ; « Choisir
+l'image », qui accepte les mêmes images que le logo d'une personne et les réduit
+de même à 1 200 pixels de côté au plus (§ 10.2) ; « Retirer l'image » ; et la
+position, « En haut », « Au centre » ou « En bas ». En haut, l'image se pose au
+haut du cadre utile, et le nom, l'organisation et les tours descendent sous
+elle ; au centre, entre le bloc du nom — le gros et le petit texte — et les
+lignes de tour ; en bas, entre les tours et le pied, au-dessus du pied. Elle se
+centre en largeur, proportions gardées, à sa hauteur maximale quand l'écart le
+permet : 30 mm sur l'A6, 15 mm sur la carte Avery 5392, sans dépasser la largeur
+du cadre. Elle ne retire ni ne réduit aucun texte, ne prend rien au pied
+TechnoLibre et ne prive jamais le logo du participant de sa place : elle
+**rapetisse** avec l'écart qu'ils laissent, puis **se retire** de ce badge, la
+première, avant tout refus. Un badge qui a perdu le nom de l'événement ou
+l'organisation ne la porte pas ; sur un badge resserré, elle ne prend que
+l'écart que le resserrement laisse (§ 11.5). Décochée, l'image et la position
+restent dans l'événement. Une image introuvable ou illisible, ou cochée sans
+image, s'annonce, et les badges s'impriment sans elle ; la planche ne se refuse
+jamais pour elle. La feuille de contrôle et la liste des badges en CSV ne la
+lisent pas. Sans image posée, la planche garde exactement ses octets.
+
+**Le logo du participant passe après tout le texte.** La place du badge se donne
+dans cet ordre : le nom et les tours toujours ; puis l'organisation et le pied,
+dans l'ordre de sacrifice du § 11.5 ; puis le logo du participant ; puis le pied
+TechnoLibre ; l'image des badges en dernier. Le logo ne prend que l'écart que le
+texte laisse entre les tours et le pied, moins un dégagement au-dessus et
+au-dessous : il ne réduit ni ne retire aucun texte. Il s'y pose le plus grand
+possible, proportions gardées, sans plafond, centré, et n'en cède à l'image des
+badges que ce qui dépasse son plancher. Il ne se pose pas sur un badge où sa
+plus petite cote n'atteindrait pas son plancher, ni sur un badge qui a perdu le
+nom de l'événement ou l'organisation ; sur un badge resserré, il ne prend que
+l'écart que le resserrement laisse (§ 11.5). Son image se lit dans le dossier de
+l'événement, au chemin que porte la fiche, à la première préparation qui la
+demande, puis se garde pour cet événement ; un échec ne se garde pas. La planche
+l'embarque une fois par fichier, quel que soit le nombre de badges qui la
+portent.
+
+**Le pied TechnoLibre passe après tout le texte.** Il se compose d'un texte,
 centré, replié comme le pied, puis du logo, centré, posé sur le bord bas du
 cadre utile, le pied remontant d'autant. Le texte est la phrase d'origine, ou
 celui que la machine garde à sa place (§ 8.5), sans borne de longueur : il se
-replie et rapetisse comme elle. Un texte vide ne pose que le logo, à la même
-taille. La phrase d'origine, que la machine n'en garde pas d'autre ou qu'elle
-y soit revenue, laisse la planche exactement à ses octets. Il ne prend que
+replie et rapetisse comme elle. Le repli ne laisse un mot seul sur la dernière
+ligne que si les deux derniers mots, le dernier morceau d'un mot coupé compris,
+ne tiennent pas ensemble sur une ligne. Il garde le nombre de lignes du repli
+mot à mot, et quand celui-ci finit sur un mot seul, les mots se répartissent sur
+autant de lignes, la dernière de deux mots au moins, la plus large ligne la plus
+étroite possible ; à largeur égale, la première ligne la plus longue, les lignes
+suivantes se répartissant de même entre elles (leur plus large ligne la plus
+étroite possible, puis leur première ligne la plus longue) — la phrase
+d'origine, sur deux lignes, finit par « avec https://technolibre.ca pour votre
+entreprise ». Un mot plus large qu'une ligne se coupe comme au pied : les lignes
+qui précèdent celle du dernier morceau du dernier mot coupé restent celles du
+repli mot à mot, ce morceau compte pour un mot, et lui et la suite se
+répartissent sur les lignes restantes. Un texte vide ne pose que le logo, à la
+même taille. La phrase d'origine donne la même planche, octet pour octet, que la
+machine n'en garde pas d'autre ou qu'elle y soit revenue. Il ne prend que
 l'écart que le badge, composé sans lui, laisse entre ses tours et son pied : il
 ne réduit ni le nom, ni les tours, ni l'organisation, ni le pied, et ne les
 déplace pas, le pied excepté. Il rapetisse jusqu'à un plancher lisible à la
 loupe, puis se retire, et l'annonce le dit (§ 11.5). Un badge qui a perdu le nom
 de l'événement, et à plus forte raison l'organisation, ne le porte pas : il
 vient après eux dans l'ordre de sacrifice, et la place que leur retrait libère
-ne lui revient pas. Sous un logo de participant, il cède au logo tout ce qui
-dépasse son plancher, puis reprend le plus grand palier que le logo laisse ;
-quand même ainsi le logo n'atteint pas son plancher, il se retire pour lui
-(§ 11.5). Son logo, l'un des deux seuls éléments en couleur du badge
-(§ 11.2), se dessine en vecteurs, chemins et couleurs du fichier de l'éditeur,
+ne lui revient pas ; un badge resserré qui les garde le porte, quand il tient
+dans l'écart que le resserrement laisse. Sous un logo de participant, il cède au
+logo tout ce qui dépasse son plancher, puis reprend le plus grand palier que le
+logo laisse ; quand même ainsi le logo n'atteint pas son plancher, il se retire
+pour lui (§ 11.5). Il passe en revanche avant l'image des badges : son corps est
+celui du badge sans elle, et elle ne prend que l'écart qu'il laisse. Son logo,
+l'un des deux seuls éléments en couleur du badge (§ 11.2), se dessine en
+vecteurs, chemins et couleurs du fichier de l'éditeur,
 `src/actifs/full_logo_technolibre_2023.svg`, et un logo que l'éditeur changerait
 pour une forme que la planche ne sait pas rendre fidèlement — un dégradé, une
 transparence, un arc, une transformation — se refuse à la production au lieu de
@@ -5561,71 +6648,166 @@ deux personnes passent la soirée aux tables l'une de l'autre, sans que rien ne 
 signale. Le logiciel **compte ces collisions avant de produire, les nomme, et
 porte l'identifiant en pied des seuls badges concernés** — sauf quand la case
 « Identifiant » est décochée : l'annonce les nomme encore, et aucun badge ne le
-porte.
+porte. Les homonymes se comptent sur le nom entier : la case des doublons n'en
+fait pas, si bien que « Roger Galet 01 » et « Roger Galet 02 », la case
+cochée, sortent en deux badges au nom laissé en blanc, sans ligne
+« Identifiant n° … », et l'annonce ne les nomme pas.
 
 ### 11.5 Les cas qui cassent la mise en page
 
 Le badge A6 est un cadre utile de **89 × 132 mm** — 105 et 148 moins deux fois
 la zone de silence ; la carte Avery 5392, de **91,6 × 66,2 mm** — 101,6 et 76,2
 moins deux fois la sienne. Chaque modèle a ses corps de départ, au registre des
-constantes : sur la carte, la capitale du nom part de 7 mm, les tours de
-12 pt, l'organisation de 10 pt, le pied de 7 pt ; les planchers de
-lisibilité — la capitale du nom à 4 mm, les tours à 10 pt — sont communs aux
-deux modèles. Mesuré sur la police embarquée, un nom qui demande deux lignes,
-quatre tours titrés sous sièges attribués, l'organisation et le pied entier
-tiennent ensemble sur la carte ; la ligne « Toute la soirée — table 13 —
+constantes : sur la carte, la capitale du nom part de 7 mm, les tours de 12 pt,
+l'organisation de 10 pt, le pied de 7 pt ; les planchers de lisibilité — la
+capitale du nom à 4 mm, les tours à 10 pt, l'organisation à 8 pt, le pied à 5 pt
+— sont communs aux deux modèles, comme le plancher du nom au dernier recours,
+une capitale de 3 mm. Mesuré sur la police embarquée, un nom qui demande deux
+lignes, quatre tours titrés sous sièges attribués, l'organisation et le pied
+entier tiennent ensemble sur la carte ; la ligne « Toute la soirée — table 13 —
 animation » mesure 65,3 mm au plancher des tours, et tient sur une ligne. Ce
-qu'on y met est variable. Le logiciel fixe donc un **ordre de
-sacrifice**, écrit une fois, et ne laisse jamais la mise en page se résoudre par
-un débordement.
+qu'on y met est variable. Le logiciel fixe donc un **ordre de sacrifice**, écrit
+une fois, et ne laisse jamais la mise en page se résoudre par un débordement.
+**Aucun texte du badge ne s'abrège** : ce qui ne tient pas sur sa ligne se
+replie sur la suivante, comme un paragraphe, au dernier espace qui tient ; un
+mot plus large que la ligne s'y coupe entre deux lettres, jamais entre une
+lettre et son accent. Le badge porte son texte entier, ou se refuse.
 
-> nom › lignes de tour › organisation › nom de l'événement › logo du participant › pied TechnoLibre
+> nom › lignes de tour › organisation › nom de l'événement › logo du participant › pied TechnoLibre › image des badges
 
-- **Un nom très long.** Le nom **ne s'abrège jamais**. Le logiciel réduit le
-  corps par paliers jusqu'à un plancher de lisibilité **mesuré sur les métriques
-  de la police embarquée**, puis replie sur une seconde ligne, puis sur une
-  troisième — aux espaces, et entre deux lettres seulement quand un mot seul ne
-  tient pas, jamais entre une lettre et son accent. Si, le nom au plancher, le
-  badge ne tient toujours pas, il se dépouille dans l'ordre de sacrifice : le
-  nom de l'événement quitte le pied, sa date restant, puis l'organisation part.
-  **Au-delà de trois lignes, le nom continue de se replier** au corps plancher,
-  sur autant de lignes qu'il lui faut, et le badge perd d'emblée le nom de
-  l'événement, puis l'organisation s'il le faut ; si les lignes de tour ne
-  tiennent plus sous lui, le logiciel **refuse de produire la planche** et nomme
-  la personne, dont le nom se corrige dans la liste des participants.
+Le nom et l'organisation y sont des **rôles** : le gros texte et le petit.
+Sous la case de l'organisation en gros (§ 11.4), l'organisation tient le rôle
+du nom, et le nom celui de l'organisation ; tout ce que cette section dit du
+nom vaut alors pour elle, corps, repli, plancher et refus compris, et ce
+qu'elle dit de l'organisation vaut pour le nom de la personne.
+
+**Le badge se resserre avant de perdre un texte.** Un badge dont les lignes de
+tour ne tiennent pas, le nom à son plancher, réduit encore ce qui n'est pas ses
+tours, dans cet ordre, avant de perdre le nom de l'événement. D'abord ses lignes
+se resserrent, juste assez : par huit paliers égaux, chacune passe de la hauteur
+que la police réserve à tout glyphe à celle de l'encre que posent les textes de
+ce badge — le nom, l'organisation, les tours et le pied, tels que le badge les
+porte, un texte laissé en blanc compté comme imprimé —, du plus haut accent au
+plus bas jambage. Au dernier palier, deux lignes ne mêlent toujours pas leur
+encre, mais aucun jeu ne les sépare : un jambage peut toucher l'accent de la
+ligne suivante, à sa verticale. Puis, à l'encre, le pied rapetisse d'un point
+par palier jusqu'à son plancher, 5 pt, date et horodatage toujours entiers.
+Alors seulement le nom de l'événement part, et le badge qui l'a perdu reprend le
+pas de la police et son pied à son corps de départ ; s'il ne tient pas, il se
+resserre de même avant de perdre l'organisation, puis encore sans elle. La
+première étape qui tient l'emporte : un badge qui tient au pas de la police
+n'est jamais serré, et l'écart qu'un badge serré laisse entre ses tours et son
+pied reste sous ce qu'un palier libère. Un badge serré qui garde ses textes
+porte encore le logo du participant, le pied TechnoLibre et l'image des badges,
+dans le même ordre et par les mêmes règles qu'un autre badge, chacun seulement
+s'il tient à sa plus petite taille dans cet écart ; le badge ne se serre jamais
+pour eux. Un badge dépouillé n'en porte aucun : ils suivent tous les textes dans
+l'ordre de sacrifice, et la place que le retrait d'un texte libère ne leur
+revient pas. Mesuré sur la police embarquée, sous un nom court et son
+organisation, sur la carte Avery 5392 : un libellé de soixante caractères, sous
+sièges attribués, garde l'organisation et le nom de l'événement jusqu'à sept
+tours, au lieu de quatre au pas de la police ; des lignes de tour sans siège ni
+titre, jusqu'à trente, au lieu de dix-huit. L'écart d'un badge serré reste
+petit : de cinq à sept tours de ce libellé, aucun des trois n'y tient sur la
+carte ; sur l'A6, à quinze et seize tours, seul le logo d'un pied TechnoLibre
+sans texte y tient, et ni le pied TechnoLibre avec son texte, ni le logo du
+participant, ni l'image des badges n'y tiennent.
+
+**Le refus vient après le dernier recours.** Un badge dont les lignes de tour ne
+tiennent pas même dépouillé et serré — le nom à son plancher, sans le nom de
+l'événement ni l'organisation, donc sans image des badges, ni logo du
+participant, ni pied TechnoLibre, le pied à son plancher — passe son nom sous
+son plancher avant que le logiciel ne refuse la planche : d'un point par palier,
+replié chaque fois sur le moins de lignes qui tient, jusqu'à une capitale de
+3 mm, et jamais sous le corps des tours à leur plancher, le nom restant le plus
+grand texte du badge. Les lignes de tour gardent leur plancher de 10 pt ; le
+papier ne change pas, rien ne s'abrège. Au pas serré, la gouttière entre deux
+colonnes et le retrait d'une suite gardent leur cadratin : la gouttière seule
+sépare deux colonnes de lignes inégales, le retrait seul dit qu'une ligne
+continue la précédente. Ces deux planchers sont au registre des constantes
+(`CORPS_PIED_PLANCHER_PT`, `HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM`, § 14.1),
+défauts de travail jusqu'à leur relevé sur une impression réelle ; ce relevé dit
+aussi si des lignes serrées dont l'encre se touche se lisent, et relève les
+planchers sinon.
+
+- **Un nom très long.** Le nom **ne s'abrège jamais**. Un nom que la case des
+  doublons laisse en blanc (§ 11.4) se mesure entier, comme imprimé : sa place
+  vide est celle qu'il prendrait, et il se refuse comme lui. Le logiciel réduit
+  le corps par paliers jusqu'à un plancher de lisibilité **mesuré sur les
+  métriques de la police embarquée**, puis replie sur une seconde ligne, puis
+  sur une troisième — aux espaces, et entre deux lettres seulement quand un mot
+  seul ne tient pas, jamais entre une lettre et son accent. Si, le nom au
+  plancher, le badge ne tient toujours pas, il se resserre, puis se dépouille
+  dans l'ordre de sacrifice : le nom de l'événement quitte le pied, sa date
+  restant, puis, le badge resserré de nouveau, l'organisation part. **Au-delà de
+  trois lignes, le nom continue de se replier** au corps plancher, sur autant de
+  lignes qu'il lui faut, et le badge perd d'emblée le nom de l'événement, puis,
+  après s'être resserré, l'organisation s'il le faut ; si les lignes de tour ne
+  tiennent plus sous lui, même au dernier recours, le logiciel **refuse de
+  produire la planche** et nomme la personne, dont le nom se corrige dans la
+  liste des participants. Une organisation en gros (§ 11.4) qui ne tient pas se
+  refuse de même, et le refus nomme la personne : l'organisation se raccourcit
+  dans la liste des participants, ou sa case se décoche, qui la remet en petit.
   L'horodatage ne quitte jamais le pied ; seule sa case le retire (§ 11.4). Le
   seuil se cale sur le **glyphe le plus large** de l'alphabet visé, jamais sur
   une moyenne (§ 14.1) : un nom en capitales larges déborde sinon par-dessus la
   première ligne de tour, en silence.
-- **Une organisation très longue.** Elle **s'abrège** avec une marque, sur une
-  seule ligne. C'est une étiquette de contexte, pas une identité, et un
-  repliement sur trois lignes mange les tours.
-- **Beaucoup de tours.** Le logiciel passe à deux colonnes au-dessus d'un nombre
-  de tours **mesuré sur le gabarit**, et **n'affiche jamais une liste tronquée** :
-  un badge qui omet le tour 5 envoie son porteur nulle part. Si la liste ne tient
-  pas à deux colonnes au corps plancher, le logiciel **refuse de produire la
-  planche** et nomme le nombre de tours en cause. Le gabarit tient largement les
-  deux à six tours d'une soirée ordinaire ; ce refus est une garde contre la
-  troncature silencieuse, pas un comportement attendu. Sur la carte Avery 5392,
-  sous un nom court et son organisation, vingt lignes de tour sans titre tiennent
-  sur deux colonnes, et la vingt et unième se refuse.
+- **Une organisation très longue.** Elle **se replie** sur autant de lignes
+  qu'il lui faut, chacune centrée, et ne s'abrège jamais. C'est une étiquette de
+  contexte, pas une identité : repliée, elle rapetisse, quand le badge ne tient
+  pas, avant le nom et les tours, d'un point par palier, de son corps de départ
+  jusqu'à son plancher, 8 pt, au registre des constantes (§ 14.1). Une
+  organisation qui tient sur une ligne garde son corps de départ. Si même ainsi
+  le badge ne tient pas, le nom au plancher, les lignes resserrées, le pied à
+  son plancher et le nom de l'événement parti, elle part entière, dans l'ordre
+  de sacrifice, plutôt que de sortir tronquée.
+- **Beaucoup de tours.** Le logiciel passe à deux colonnes au-dessus d'un
+  nombre de tours **mesuré sur le gabarit**, et **n'affiche jamais une liste
+  tronquée** : un badge qui omet le tour 5 envoie son porteur nulle part. Si la
+  liste ne tient pas à deux colonnes au corps plancher, même au dernier recours,
+  le logiciel **refuse de produire la planche** et nomme le nombre de tours en
+  cause ; les lignes repliées (puce suivante) y comptent chacune. Sans libellé
+  de table ni titre longs, le gabarit tient largement les deux à six tours d'une
+  soirée ordinaire ; ce refus est une garde contre la troncature silencieuse,
+  pas un comportement attendu. Sur la carte Avery 5392, sous un nom court et son
+  organisation, quarante-quatre lignes de tour sans siège ni titre tiennent sur
+  deux colonnes, au dernier recours, et la quarante-cinquième se refuse. Quand
+  ce sont des lignes repliées par un libellé ou un titre qui débordent, et non
+  leur nombre, le refus le dit autrement (puce suivante).
 - **Un titre long, ou un long libellé de table, sur une ligne de tour.** Une
   ligne de tour s'écrit entière ; au corps plancher seulement, une ligne trop
-  large pour sa colonne **abrège d'abord le libellé de la table**, entre ses
-  parenthèses, puis, le libellé réduit à sa première lettre, **son titre** —
-  chacun avec une marque, une lettre au moins. Le numéro de la table et le
-  siège ne s'abrègent jamais : c'est la réponse que le badge porte, et le
-  libellé n'en est qu'un repère. Un libellé de soixante caractères, le plus
-  long que la saisie admet (§ 4), tient ainsi sur la carte Avery 5392
-  comme sur l'A6 ; une ligne sans titre ni libellé qui ne tient pas se
-  refuse.
+  large pour sa colonne **se replie**, au dernier espace qui tient, et sa suite
+  descend sous elle **en retrait** d'un cadratin, dans la même colonne : l'œil
+  retrouve le début de chaque tour. Un numéro ne quitte pas le mot qui l'annonce
+  — « Tour 2 », « table 5 », « siège 3 » restent sur une même ligne —, car la
+  table et le siège sont la réponse que le badge porte. Rien ne s'y abrège, ni
+  le libellé de la table, ni le titre, ni le numéro de la table, ni le siège ;
+  un mot plus large que la ligne s'y coupe comme ailleurs. Les lignes repliées
+  comptent dans la hauteur des tours : elles avancent le passage à deux colonnes
+  et le refus. Tout voir a donc un prix, mesuré sur la police embarquée sous un
+  nom court, son organisation et des sièges attribués, le dernier recours
+  compris : sur la carte Avery 5392, un libellé de soixante caractères, le plus
+  long que la saisie admet (§ 4), tient replié jusqu'à huit tours, sous le titre
+  « animation » comme sans titre, et jusqu'à cinq sous un titre de trente-deux
+  caractères, « Animatrice de la table d'honneur » ; un libellé de quarante
+  caractères, jusqu'à dix ; un libellé court sous le titre « animateur VIP »,
+  jusqu'à douze. Sur l'A6, le libellé de soixante caractères tient jusqu'à
+  quatorze ou dix-sept tours, selon le titre. Au-delà, le logiciel **refuse de
+  produire la planche**, et ce refus ne met pas en cause le nombre de tours : il
+  **nomme la personne** dont les lignes débordent, dit qu'un libellé de table ou
+  un titre trop long les replie, et offre d'ouvrir la section des tables, où
+  l'un et l'autre se raccourcissent.
 - **Un caractère que la police n'a pas** — un nom écrit hors de l'alphabet latin,
   par exemple, ou un caractère du texte du pied TechnoLibre saisi sur la
   machine (§ 8.5). La police le dessinerait comme une case vide, et l'opérateur ne le
   verrait qu'au cou de l'invité. Le logiciel nomme ces caractères dans l'annonce,
   **avant de produire** ; la feuille de contrôle les liste par leur point de code
-  — « U+674E » — et n'en écrit jamais un tel quel. La planche se produit : le
-  remède est dans la liste des participants, et l'opérateur décide.
+  — « U+674E » — et n'en écrit jamais un tel quel. Ceux du nom de l'événement,
+  que la feuille de contrôle écrit toujours, se nomment de même, même quand
+  sa case le retire des badges (§ 11.4), comme ceux d'un nom que la case des
+  doublons laisse en blanc, que la liste d'une réédition écrit entier. La
+  planche se produit : le remède est dans la liste des participants, et
+  l'opérateur décide.
 - **Un participant sans organisation.** La ligne **n'existe pas**. Ni espace
   réservé, ni tiret : le « — » signale une mesure vide dans la page de qualité
   (§ 5.4), et sur un carton il se lit comme une donnée manquante dont la personne
@@ -5634,7 +6816,9 @@ un débordement.
   organisation, ou une ligne de pied, que sa case retire (§ 11.4) s'en va de
   même, et sa place revient au reste.
 - **Une personne en réserve à un tour.** La ligne porte « pas de table » en toutes
-  lettres. Une ligne blanche se lit comme un défaut d'impression.
+  lettres. Une ligne blanche se lit comme un défaut d'impression. En réserve à
+  tous les tours, elle garde une ligne par tour : la réserve n'est pas une
+  table, et son badge n'a jamais la ligne « Toute la soirée ».
 - **Une personne absente à un tour.** La ligne de ce tour porte « absente » en
   toutes lettres — « Tour 3 — absente » —, ni table, ni siège, ni titre, et
   chaque tour garde sa ligne : une personne absente à un tour n'a jamais la
@@ -5645,41 +6829,77 @@ un débordement.
   produit et le compte attendu — « 257 badges pour 260 participants, 3 exclus » —
   sur la feuille de contrôle, pour que l'écart soit lu avant la coupe et non à
   l'accueil.
-- **Un badge sans place pour le pied TechnoLibre.** Le pied TechnoLibre
-  (§ 11.4) part de 6 pt, et descend d'un point par palier jusqu'à son
-  plancher, 4 pt, lisible à la loupe ; son logo mesure deux cadratins de ce
-  corps de haut — 4,2 mm au départ, 2,8 mm au plancher —, cinq fois plus en
-  largeur. Ces valeurs sont communes aux deux modèles ; le corps de départ et
-  le plancher sont au registre des constantes (§ 14.1), défauts de travail
-  jusqu'à leur relevé sur une impression réelle. Il prend le plus grand
-  palier dont le texte et le logo tiennent dans l'écart libre ; quand même le
-  plancher ne tient pas, ou que le badge a perdu le nom de l'événement, qui
-  le précède dans l'ordre de sacrifice, il se retire de ce badge, qui sort
-  tel qu'il serait sans lui, et l'annonce compte les badges concernés —
-  « Pied TechnoLibre : retiré de 3 badges, faute de place sous leurs
-  tours. ». Ce n'est jamais un refus : la planche se produit. Mesuré sur la
-  police embarquée, sous un nom d'une ligne et son organisation, avec des
-  lignes de tour sans siège ni titre, il tient au corps de départ jusqu'à
-  cinq tours sur la carte Avery 5392 et treize sur l'A6. Un texte que la
-  machine garde à la place de la phrase d'origine (§ 8.5) suit la même
-  règle : plus long, il rapetisse plus tôt et se retire plus tôt ; vide, le
-  bloc n'est que le logo. Sous un logo de
-  participant, il se compte d'abord à son plancher, puis reprend le plus grand
-  palier que le logo laisse, et se retire quand le logo ne trouve qu'ainsi sa
-  place : le retrait se compte de même.
+- **Un badge sans place pour le pied TechnoLibre.** Le pied TechnoLibre (§ 11.4)
+  part de 6 pt, et descend d'un point par palier jusqu'à son plancher, 4 pt,
+  lisible à la loupe ; son logo mesure deux cadratins de ce corps de haut —
+  4,2 mm au départ, 2,8 mm au plancher —, cinq fois plus en largeur. Ces valeurs
+  sont communes aux deux modèles ; le corps de départ et le plancher sont au
+  registre des constantes (§ 14.1), défauts de travail jusqu'à leur relevé sur
+  une impression réelle. Il prend le plus grand palier dont le texte et le logo
+  tiennent dans l'écart libre ; quand même le plancher ne tient pas, ou que le
+  badge a perdu le nom de l'événement ou l'organisation, qui le précèdent dans
+  l'ordre de sacrifice, il se retire de ce badge, qui sort tel qu'il serait sans
+  lui, et l'annonce compte les badges concernés — « Pied TechnoLibre : retiré de
+  3 badges, faute de place sous leurs tours. ». Ce n'est jamais un refus : la
+  planche se produit. Mesuré sur la police embarquée, sous un nom d'une ligne et
+  son organisation, avec des lignes de tour sans siège ni titre, il tient au
+  corps de départ jusqu'à cinq tours sur la carte Avery 5392 et treize sur l'A6.
+  Un texte que la machine garde à la place de la phrase d'origine (§ 8.5) suit
+  la même règle : plus long, il rapetisse plus tôt et se retire plus tôt ; vide,
+  le bloc n'est que le logo. Sous un logo de participant, il se compte d'abord à
+  son plancher, puis reprend le plus grand palier que le logo laisse, et se
+  retire quand le logo ne trouve qu'ainsi sa place : le retrait se compte de
+  même. L'image des badges ne change rien à son corps ni à son retrait : elle ne
+  prend que l'écart qu'il laisse.
 - **Un badge sans place pour le logo du participant.** Le logo prend l'écart
   entre les tours et le pied, moins 1,5 mm au-dessus et au-dessous ; sa plus
-  petite cote dessinée ne descend pas sous 8 mm. Ces deux valeurs, communes
-  aux deux modèles, sont au registre des constantes
-  (`LOGO_PARTICIPANT_ECART_MM`, `LOGO_PARTICIPANT_PLANCHER_MM`), défauts de
-  travail jusqu'à leur relevé sur une impression réelle. Quand même sans le
-  pied TechnoLibre il n'atteint pas son plancher, ou que le badge a perdu le
-  nom de l'événement, il ne se pose pas sur ce badge, qui sort tel qu'il
-  serait sans logo, et l'annonce compte les badges concernés — « Logo du
-  participant : retiré de 3 badges, faute de place sous leurs tours. ». Un
-  logo très large bute sur la largeur du cadre, un logo très haut sur la
-  hauteur de l'écart ; l'un et l'autre peuvent ainsi manquer leur plancher
-  sur tous les badges. Ce n'est jamais un refus.
+  petite cote dessinée ne descend pas sous 8 mm. Ces deux valeurs, communes aux
+  deux modèles, sont au registre des constantes (`LOGO_PARTICIPANT_ECART_MM`,
+  `LOGO_PARTICIPANT_PLANCHER_MM`), défauts de travail jusqu'à leur relevé sur
+  une impression réelle. Quand même sans le pied TechnoLibre il n'atteint pas
+  son plancher, ou que le badge a perdu le nom de l'événement ou l'organisation,
+  il ne se pose pas sur ce badge, qui sort tel qu'il serait sans logo, et
+  l'annonce compte les badges concernés — « Logo du participant : retiré de
+  3 badges, faute de place sous leurs tours. ». Un logo très large bute sur la
+  largeur du cadre, un logo très haut sur la hauteur de l'écart ; l'un et
+  l'autre peuvent ainsi manquer leur plancher sur tous les badges. Ce n'est
+  jamais un refus. L'image des badges ne le retire jamais : elle ne lui prend
+  que ce qui dépasse son plancher.
+- **Un badge sans place pour l'image des badges.** L'image se taille après le
+  logo du participant et le pied TechnoLibre : la plus grande boîte, au rapport
+  de l'image, sous sa hauteur maximale — `IMAGE_BADGES_HAUTEUR_MAX_MM`, 30 mm
+  sur l'A6, `IMAGE_BADGES_HAUTEUR_MAX_CARTE_MM`, 15 mm sur la carte —, dans la
+  largeur du cadre et dans l'écart que le texte laisse entre les tours et le
+  pied, moins le bloc TechnoLibre au corps du badge sans image, moins, sous un
+  logo du participant qui se pose, la plus petite zone où il atteint son
+  plancher et ses deux dégagements, et moins son propre dégagement,
+  `LOGO_PARTICIPANT_ECART_MM`, sous elle en haut, de part et d'autre au centre
+  et en bas. Le logo prend ensuite tout l'écart qu'elle laisse : il ne lui cède
+  que ce qui dépasse son plancher, et elle rapetisse, puis se retire, avant
+  qu'il ne se retire. Quand sa plus petite cote n'atteint pas le plancher du
+  logo, `LOGO_PARTICIPANT_PLANCHER_MM`, ou que le badge a perdu le nom de
+  l'événement ou l'organisation, elle ne se pose pas sur ce badge, qui sort tel
+  qu'il serait sans elle, et l'annonce compte les badges concernés — « Image des
+  badges : retirée de 3 badges, faute de place. ». Deux colonnes de tours
+  libèrent de la hauteur : l'image peut y reparaître. Mesuré sur la police
+  embarquée, sous un nom d'une ligne, son organisation et deux tours sans siège
+  ni titre, une image carrée ou deux fois plus large que haute tient à sa
+  hauteur maximale sur la carte Avery 5392, à chaque position, avec le pied
+  TechnoLibre à son corps de départ ; au troisième tour, elle rapetisse, et au
+  quatrième, elle se retire, où, sans le pied TechnoLibre, elle garderait sa
+  hauteur maximale. Une image très large bute sur la largeur du cadre, une image
+  très haute sur sa hauteur maximale : sur la carte, une image plus étroite que
+  8 mm de large pour 15 mm de haut — près de deux fois plus haute que large —
+  n'atteint pas son plancher, et ne se pose sur aucun badge. Les deux hauteurs
+  maximales sont au registre des constantes (§ 14.1), défauts de travail jusqu'à
+  leur relevé sur une impression réelle. Ce n'est jamais un refus.
+- **Une image des badges introuvable ou illisible.** Le fichier que
+  l'événement désigne peut manquer au dossier de l'événement ou ne pas se lire
+  comme un PNG. L'annonce le dit — « Image des badges introuvable dans le
+  dossier de l'événement : les badges s'impriment sans image. », « Image des
+  badges illisible : … » —, de même qu'une case cochée sans image choisie, et
+  les badges s'impriment sans elle. Ce n'est jamais un refus : un fichier
+  remis se lit à la préparation suivante.
 - **Un logo introuvable ou illisible.** Le fichier qu'une fiche désigne peut
   manquer au dossier de l'événement — un événement importé d'un seul fichier
   d'état —, ne pas se lire, ou ne pas être un PNG. L'annonce nomme les
@@ -5697,7 +6917,9 @@ un débordement.
 **L'ordre est alphabétique**, sur la **forme normalisée** du § 10.1 — espaces
 réduits, casse et accents ignorés — appliquée au couple (nom, prénom), et
 départagée par identifiant entier pour que deux productions de la même planche
-soient identiques.
+soient identiques. Le nom est le nom entier, numéro compris, même quand la case
+des doublons le laisse en blanc sur le badge (§ 11.4) : « Roger Galet 01 » se
+range après « Zoé Galet », et non à côté de « Roger Galet ».
 
 **La comparaison n'emploie pas `localeCompare`** : le § 15.5 l'interdit pour la
 même raison qu'ici, l'ordre dépendrait de la langue du système et deux machines
@@ -5762,21 +6984,20 @@ rang n d'un nom déjà pris dans le dossier. Il ne contient aucun deux-points,
 que Windows refuse.
 
 **Le nom est injectif sur ce qui change la pile.** Une génération date toutes
-les propositions qu'elle ajoute du même instant (§ 8.9) : sans leur
-identifiant, deux propositions donneraient le même nom, et la seconde planche
-remplacerait la première sans rien dire. L'ordre par table change la pile
-autant que l'imposition, et se lit donc dans le nom de la même façon. Même
-événement, même source, même papier, même imposition, même ordre, même
-placement : même nom, et la planche entière remplace la sienne, qui imprime la
-même pile. Le logo d'une personne et la case du pied TechnoLibre n'entrent pas
-dans le nom : une planche refaite après un changement de logo remplace celle
-du même placement. **Une réédition ne remplace jamais un fichier** : deux
-rééditions de trois personnes différentes partagent tout le reste du nom, et
-la seconde prend le premier rang libre, `_2`, `_3`…, comme le dossier daté de
-la corbeille (§ 8.7). Une planche dont la base se raccourcit (ci-dessous) prend
-aussi le premier rang libre : la base d'un événement et celle de sa copie
-(§ 8.7), qui partagent propositions et horodatages, peuvent se raccourcir en une
-même tête.
+les propositions qu'elle ajoute du même instant (§ 8.9) : sans leur identifiant,
+deux propositions donneraient le même nom, et la seconde planche remplacerait la
+première sans rien dire. L'ordre par table change la pile autant que
+l'imposition, et se lit donc dans le nom de la même façon. Même événement, même
+source, même papier, même imposition, même ordre, même placement : même nom, et
+la planche entière remplace la sienne, qui imprime la même pile. Le logo d'une
+personne, la case du pied TechnoLibre et celle des doublons n'entrent pas dans
+le nom : une planche refaite après un changement de logo remplace celle du même
+placement. **Une réédition ne remplace jamais un fichier** : deux rééditions de
+trois personnes différentes partagent tout le reste du nom, et la seconde prend
+le premier rang libre, `_2`, `_3`…, comme le dossier daté de la corbeille
+(§ 8.7). Une planche dont la base se raccourcit (ci-dessous) prend aussi le
+premier rang libre : la base d'un événement et celle de sa copie (§ 8.7), qui
+partagent propositions et horodatages, peuvent se raccourcir en une même tête.
 Une base lue sur le disque qui finit par un point — celle d'un fichier
 « Gala..gtt.json » déposé dans le dossier — prend aussi le premier rang libre :
 son nom entier est celui qu'une base plus longue raccourcit en la même tête.
@@ -5802,55 +7023,79 @@ l'écriture refusée se dit, et « Enregistrer sous… » dépose la planche ail
 
 **Sous `electron`, le fichier se dépose dans le dossier de l'événement**
 (§ 8.6), `<racine>\<dossier>\<nom>`, par une écriture atomique ; les noms déjà
-pris se lisent dans ce dossier, et le logiciel nomme le chemin de chaque
-fichier — les cartes d'abord, puis la feuille de contrôle à part, chacune
-nommée ; une écriture refusée se dit en nommant le fichier en cause et le
-dossier — une feuille de contrôle refusée après les cartes dit aussi que les
-cartes, elles, sont déposées, et où — et offre « Enregistrer sous… », qui ouvre
-un dialogue par fichier et nomme chaque chemin choisi ; une feuille de contrôle
-refusée au second dialogue se dit de même, le chemin des cartes écrites montré.
-Un dossier d'événement qui disparaît pendant la séance — déplacé, renommé ou
-retiré hors de l'application — ne se recrée pas (§ 8.6) : la production se
-refuse en disant le dossier introuvable, et « Enregistrer sous… » reste offert.
-La section des badges offre **en tout temps « Ouvrir le dossier »**, parmi ses
-commandes, avant toute production comme après : la commande montre dans
-l'explorateur du système le dossier de l'événement, où la planche se dépose,
-sous la racine où l'événement est ouvert — la nouvelle, après l'écriture
-ailleurs (§ 8.6) —, et jamais l'emplacement choisi par « Enregistrer sous… » ;
-un dossier disparu s'y refuse de même, nommé. L'accueil garde « Ouvrir dans
-l’explorateur », qui montre le dossier de travail (§ 8.6). **Sous `web`, la
-planche se télécharge** : le dossier de travail y est invisible à l'opérateur,
-la section nomme le fichier — les deux fichiers d'Avery 5392 —, sans chemin, et
-n'offre pas « Ouvrir le dossier ».
+pris se lisent dans ce dossier, et le logiciel nomme le chemin de chaque fichier
+— les cartes d'abord, puis la feuille de contrôle à part, chacune nommée ; une
+écriture refusée se dit en nommant le fichier en cause et le dossier — une
+feuille de contrôle refusée après les cartes dit aussi que les cartes, elles,
+sont déposées, et où — et offre « Enregistrer sous… », qui ouvre un dialogue par
+fichier et nomme chaque chemin choisi ; une feuille de contrôle refusée au
+second dialogue se dit de même, le chemin des cartes écrites montré. Un dossier
+d'événement qui disparaît pendant la séance — déplacé, renommé ou retiré hors de
+l'application — ne se recrée pas (§ 8.6) : la production se refuse en disant le
+dossier introuvable, et « Enregistrer sous… » reste offert. La section de
+l'impression offre **en tout temps « Ouvrir le dossier »**, parmi ses commandes,
+avant toute production comme après : la commande montre dans l'explorateur du
+système le dossier de l'événement, où la planche se dépose, sous la racine où
+l'événement est ouvert — la nouvelle, après l'écriture ailleurs (§ 8.6) —, et
+jamais l'emplacement choisi par « Enregistrer sous… » ; un dossier disparu s'y
+refuse de même, nommé. L'accueil garde « Ouvrir dans l’explorateur », qui montre
+le dossier de travail (§ 8.6). **Sous `web`, la planche se télécharge** : le
+dossier de travail y est invisible à l'opérateur, la section nomme le fichier —
+les deux fichiers d'Avery 5392 —, sans chemin, et n'offre pas « Ouvrir le
+dossier ».
 
 **La planche se produit depuis le retenu, ou depuis une proposition choisie**
-(§ 2.1, étape 12). La section des badges offre le retenu quand il existe, et la
-proposition choisie dans la section des propositions ; l'annonce nomme la source.
-Une planche tirée d'une proposition sort **toujours** en BROUILLON (§ 11.7), à
-l'horodatage de cette proposition : elle n'est pas le plan retenu. Sans retenu ni
-proposition désignée, la production se refuse et renvoie aux propositions. Une
-proposition qui se contredit se refuse aussi, et renvoie aux propositions : la
-version précédente du fichier, le remède d'un retenu qui se contredit, ne se
-reprend pas pour elle, puisque le retenu est sain.
+(§ 2.1, étape 12). La section de l'impression offre le retenu quand il existe,
+et la proposition choisie dans la section des propositions ; l'annonce nomme la
+source. Une planche tirée d'une proposition sort **toujours** en BROUILLON
+(§ 11.7), à l'horodatage de cette proposition : elle n'est pas le plan retenu.
+Sans retenu ni proposition désignée, la production se refuse et renvoie aux
+propositions. Une proposition qui se contredit se refuse aussi, et renvoie aux
+propositions : la version précédente du fichier, le remède d'un retenu qui se
+contredit, ne se reprend pas pour elle, puisque le retenu est sain.
 
-**La liste des badges, en CSV.** La section des badges offre, à côté de
-« Produire la planche (PDF) », **« Produire la liste (CSV) »**, sans réglage à
-garder : la liste se tire de la même source et dans le même ordre que la
-planche, pour toute la soirée ; une réédition ne produit que la planche. Un
-enregistrement par badge, sous l'en-tête `Nom;Prénom;Organisation;Tours` : le
-nom et le prénom de la personne — le prénom vide quand elle n'en a pas —,
-l'organisation telle que le badge l'imprime, vide sans elle, et, dans une seule
-cellule, les lignes de tour du badge, **texte pour texte**, une par ligne —
-« Toute la soirée — table 13 — animation », « Tour 1 — table 5 (Terrasse) » —,
-jamais abrégées. Les personnes exclues n'y figurent pas. **Elle ne porte jamais
-le logo** : un logo ne se range pas dans une cellule, ses octets sont les mêmes
-avec et sans logos, et elle ne lit aucun fichier de logo. Le fichier est celui de
-l'export des participants (§ 10.3) : UTF-8 avec marque d'ordre d'octets, `;`,
-CRLF entre les enregistrements, un saut de ligne dans la cellule des tours, qui
-s'écrit alors entre guillemets (RFC 4180). Mêmes entrées, mêmes octets. Il se
-dépose dans le dossier de l'événement, comme la planche, et « Ouvrir le
-dossier » le montre ; sous `web`, il se télécharge. Son nom suit le gabarit de
-la planche, sans papier, imposition ni modèle, qui ne changent pas la liste :
+**La liste des badges, en CSV.** La section de l'impression offre, à côté de
+« Produire la planche (PDF) », **« Produire la liste (CSV) »** : la liste se
+tire de la même source et dans le même ordre que la planche, pour toute la
+soirée ; la réédition de la section ne produit que la planche. La séance
+accepte aussi une demande de liste qui porte une sélection : la liste n'a alors
+que les badges choisis, et son nom porte leur nombre k, comme la planche d'une
+réédition. Un enregistrement par badge : le nom entier et le prénom de la
+personne — même quand la case des doublons les laisse en blanc sur le badge
+(§ 11.4), le prénom vide quand elle n'en a pas —, l'organisation telle que le
+badge l'imprime, vide sans elle, puis ses tours, sous les en-têtes `Nom`,
+`Prénom`, `Organisation`. Les personnes exclues n'y figurent pas.
+
+**Ses tours prennent l'une de deux formes**, que le réglage « Colonnes de la
+liste (CSV) », parmi ceux de la planche, choisit pour la machine (§ 8.5) :
+
+- **Une colonne par tour**, par défaut. Chaque tour a sa colonne, dont
+  l'en-tête est le nom du tour (§ 4), ou « Tour 3 » sans lui, et dont la
+  cellule porte la place de la personne à ce tour, sans le tour : « table 5
+  (Terrasse), siège 2 — animation », « pas de table », « absente ». Un
+  itinéraire constant remplit chaque colonne de la même place : le tableur
+  trie et filtre tour par tour.
+- **Une seule colonne**, sous l'en-tête `Tours`. La cellule porte les lignes
+  de tour du badge, **texte pour texte**, jointes par « ; » : « Plat
+  principal — table 3 ; Dessert — table 5 », ou « Toute la soirée — table 13
+  — animation » quand rien ne change.
+
+Dans les deux formes, rien n'est abrégé, et la cellule, comme la tête de sa
+colonne, tient sur une ligne : un saut de ligne qu'un nom de tour, un libellé
+de table ou un titre lu d'un fichier porte devient une espace. Les têtes ne
+sont pas garanties uniques : deux tours de même nom, ou un tour nommé `Nom`,
+donnent deux colonnes de même tête. Le choix ne change ni la pile ni le nom du
+fichier : une liste produite de nouveau sous l'autre forme, du même placement,
+remplace la précédente.
+**Elle ne porte jamais le logo** : un logo ne se range pas dans une cellule, ses
+octets sont les mêmes avec et sans logos, et elle ne lit aucun fichier de logo.
+Le fichier est celui de l'export des participants (§ 10.3) : UTF-8 avec marque
+d'ordre d'octets, `;`, CRLF entre les enregistrements, et une cellule qui porte
+le séparateur s'écrit entre guillemets (RFC 4180). Mêmes entrées, même choix,
+mêmes octets. Il se dépose dans le dossier de l'événement, comme la planche, et
+« Ouvrir le dossier » le montre ; sous `web`, il se télécharge. Son nom suit le
+gabarit de la planche, sans papier, imposition ni modèle, qui ne changent pas la
+liste :
 
 ```
 <base>.badges[-p<id>][-<k>][_table][_BROUILLON]_<AAAA-MM-JJ_HH-MM-SS>[_<n>].csv
@@ -5871,8 +7116,13 @@ refusée nomme la liste et offre « Enregistrer sous… ».
 d'événement et n'ajoute aucune entrée d'historique (§ 8.2), donc elle reste
 disponible en **mode lecture** et sur un plan **bloqué**, où la lecture et
 l'impression restent ouvertes (§ 9). Ses seules écritures sont ses PDF, sa
-liste CSV et, au premier choix, le papier ou le modèle de badge dans les
-réglages locaux (§ 8.5).
+liste CSV et, dans les réglages locaux (§ 8.5), les choix de la section,
+chacun au geste qui le fait : le papier, le modèle de badge, la case du pied
+TechnoLibre et son texte, les cases de ce que le badge imprime, celle qui
+laisse en blanc le nom des doublons et celle qui met l'organisation en gros
+(§ 11.4), et les colonnes de la liste. L'image des badges fait exception : un
+réglage de l'événement, non du poste, dont chaque geste est une entrée
+d'historique (§ 8.9), et que la section ne change qu'en écriture.
 
 ### 11.7 Les autres sorties, et ce que porte toute page imprimée
 
@@ -5887,47 +7137,98 @@ page ; aucune ne se découpe, aucune ne doit entrer dans une pochette.
 | **feuille par table** | l'animateur de table, à chaque changement de tour | chacun connaît sa table par son badge, donc la rotation se fait ; ce qui disparaît est l'appel nominal, et une place vide ne se remarque plus |
 | **plan de salle** | l'opérateur et le personnel, au montage | il reste à l'écran, où il est interactif ; c'est la vue qui perd le plus à n'être pas sur papier pendant le montage d'une salle sans portable |
 
-**Toute impression passe par un écran d'aperçu**, que la commande « Imprimer… »
-de l'événement ouvre et qui se referme vers la section d'où il vient. Il offre
-**trois vues** : le plan, tour par tour ; la liste d'accueil ; la feuille par
-table. Le tableau des propositions (§ 5.7) et la page de qualité (§ 12) se
-lisent à l'écran, où l'opérateur choisit sa proposition : ils ne s'impriment
-pas, et aucun indicateur ne s'exporte en CSV. L'aperçu imprime la source que le
-plan montre — le retenu, la proposition montrée, ou les seules réservations — et
-n'écrit rien dans l'événement : il vit en lecture et sur un plan bloqué. Sa
-commande « Imprimer » demande à la plateforme le papier et l'orientation de la
-vue : la boîte de dialogue du navigateur sous `web`, celle du système sous
-`electron`. Un échec se dit sur la commande ; une annulation ne dit rien. La
-barre de l'aperçu, qui ne s'imprime pas, groupe ses commandes : la vue imprimée,
-les réglages de la vue, le papier et « Imprimer », puis « Fermer l'aperçu » à
-part.
+**Toute impression passe par l'aperçu**, que la section « Impression » de
+l'événement porte sous son titre « Plan », après la partie « Badges » — la
+planche, sa liste CSV, la réédition. C'est le seul endroit d'où l'on imprime :
+l'événement n'a pas d'autre commande d'impression, et l'aperçu n'a ni écran à
+lui ni commande pour se refermer. Il s'ouvre avec la section, sur le plan au
+tour que le plan montre, et tombe quand une autre section s'ouvre ; ses réglages
+ne s'écrivent nulle part. Il offre **trois vues** : le plan, tour par tour ; la
+liste d'accueil ; la feuille par table. Le tableau des propositions (§ 5.7) et
+la page de qualité (§ 12) se lisent à l'écran, où l'opérateur choisit sa
+proposition : ils ne s'impriment pas, et aucun indicateur ne s'exporte en CSV.
+L'aperçu imprime la source que le plan montre — le retenu, la proposition
+montrée, ou les seules réservations — et n'écrit rien dans l'événement : il vit
+en lecture et sur un plan bloqué. Sa commande « Imprimer » demande à la
+plateforme le papier et l'orientation de la vue : la boîte de dialogue du
+navigateur sous `web`, celle du système sous `electron`. Un échec se dit sur la
+commande ; une annulation ne dit rien. La barre de l'aperçu, qui ne s'imprime
+pas, groupe ses commandes : la vue imprimée, les réglages de la vue, le papier
+et « Imprimer ». À l'impression, la feuille de style ne peint que les pages : ni
+la navigation, ni la partie « Badges », ni les titres de la section, ni la
+barre.
 
 **La feuille par table couvre la soirée** : une feuille par table, une colonne
 par tour, que l'animateur garde d'un tour à l'autre. L'aperçu offre aussi « Une
-feuille par tour », une feuille par table et par tour. Ses colonnes et ses
-lignes suivent le § 7.4 : des tours qui ne tiennent pas côte à côte se scindent
-en groupes de tours consécutifs, et une ligne plus haute qu'une page se poursuit
-sur la suivante. La liste d'accueil couvre aussi la soirée, une colonne par
-tour ; la case d'un tour où la personne est absente porte « absente », ni table,
-ni siège, ni réserve. La feuille par table ne nomme pas une personne absente à
-son tour : l'appel nominal ne la cherche pas. Son titre nomme la table par son
+feuille par tour », une feuille par table et par tour. **Une table où personne
+n'est assis aux tours d'une feuille n'a pas cette feuille**, même quand ses
+places portent un titre ; une soirée sans table occupée imprime une feuille qui
+le dit. **Chaque table commence une page**, et chaque occupant y porte son
+organisation après son nom, séparée d'un tiret, à l'encre secondaire — rien
+quand il n'en a pas. Ses colonnes et ses lignes suivent le § 7.4 : des tours
+qui ne tiennent pas côte à côte se scindent en groupes de tours consécutifs,
+et une ligne plus haute qu'une page se poursuit sur la suivante.
+
+**Le texte d'une feuille par table grandit pour remplir sa page, sans
+exagérer.** Le corps des noms part de celui de toute liste imprimée, 12 pt, et
+monte au plus à 18 pt, titre et retraits dans la même proportion : la plus
+grande taille, par pas d'un trente-deuxième, où la table tient sur sa page —
+mesurée sur les dimensions du papier choisi, jamais sur la fenêtre — et où
+chaque mot tient encore dans sa colonne, sans se couper. Chaque table a sa
+taille, la même sur toutes ses pages. Une table qui ne tient pas sur une page au
+plancher le garde, et se poursuit sur la suivante : jamais de texte tronqué ni
+qui déborde.
+
+**« Dessiner la table »**, décochée par défaut, pose en tête de chaque page de
+la feuille par table, à la place de son titre, le dessin de la table tel que le
+plan imprimé la dessine au premier tour de la feuille — sa forme, ses chaises,
+son numéro et son libellé —, réduit à 40 mm de haut ; la taille du texte se
+règle sur la place qu'il laisse. Décochée, le titre nomme la table par son
 numéro et, quand elle en porte un, par son libellé (§ 4), entier : il replie
-dans la largeur de la page, entre deux caractères au besoin. Des tours trop nombreux pour la
-page se répartissent en blocs de tours consécutifs, chacun sous l'en-tête qui
-nomme ses tours (§ 7.4). **Les listes s'impriment en portrait.**
+dans la largeur de la page, entre deux caractères au besoin. C'est un réglage
+de l'aperçu, que rien n'écrit.
+
+La liste d'accueil couvre aussi la soirée, une colonne par tour ; la case d'un
+tour où la personne est absente porte « absente », ni table, ni siège, ni
+réserve. La feuille par table ne nomme pas une personne absente à son tour :
+l'appel nominal ne la cherche pas. Des tours trop nombreux pour la page se
+répartissent en blocs de tours consécutifs, chacun sous l'en-tête qui nomme ses
+tours (§ 7.4). **Les listes s'impriment en portrait.**
+
+**La liste d'accueil se trie par organisation, par nom ou par prénom**, au choix
+de « Trier par », dans les réglages de sa vue ; elle s'ouvre triée par
+organisation. Par organisation, les personnes d'une même organisation se
+suivent, par prénom puis par nom — une personne sans prénom en tête de la
+sienne —, et celles qui n'en ont pas viennent à la fin. **Un intertitre ouvre
+chaque organisation**, en gras, sur toute la largeur de la liste : son nom,
+écrit comme sa première personne l'écrit, ou « Sans organisation » pour les
+personnes de la fin ; chaque bloc de tours reprend les siens, et une liste où
+personne n'a d'organisation n'en porte aucun. **Un intertitre ne finit jamais
+une page** : quand la première personne de son organisation passe sur la page
+suivante, il l'y accompagne. Une ligne qui ouvre son organisation et passe ce
+que l'en-tête et l'intertitre laissent d'une page — même si elle tiendrait sous
+l'en-tête seul — se poursuit sous lui, répété sur chacune de ses pages (§ 7.4).
+Par nom : le nom, puis le prénom, puis l'organisation. Par prénom : le prénom,
+puis le nom, puis l'organisation, et les personnes sans prénom à la fin. Ces
+deux tris n'ont pas d'intertitre. Toutes les clés sont les formes normalisées du
+§ 10.1, comparées par points de code, comme l'ordre des badges (§ 11.6) ; un
+champ absent, ou fait de blancs, compte comme le texte vide là où il départage,
+et l'identifiant départage en dernier. C'est un réglage de l'aperçu, que rien
+n'écrit.
 
 **Chaque page imprimée porte un pied de cinq éléments** : le nom de l'événement,
-sa date, **le tour** — ou la soirée, pour une vue qui les couvre tous —,
-**l'horodatage du placement** et **la version** (§ 18.6).
-Une feuille sans horodatage circule après avoir été invalidée et personne ne peut
-dire laquelle des deux versions posées sur la table est la bonne. La règle vise
-la **page** ; un carton découpé et porté au cou n'est pas une page (§ 11.4).
-Le pied porte le nom entier, jamais tronqué. Un nom qui passe la borne du § 8.1
-ne s'imprime pas : l'aperçu le refuse avant de mettre une page en forme, dans
-aucune vue, et pose sur « Imprimer » le refus `NOM_EVENEMENT_TROP_LONG` avec le
-remède « Renommer ». Ce remède ferme l'événement et rend la liste des
-événements, où il se renomme. « Imprimer » rend ce refus sans appeler
-l'imprimante.
+sa date, **le tour** — par son nom quand il en porte un (§ 4), ou la soirée,
+pour une vue qui les couvre tous —, **l'horodatage du placement** et **la
+version** (§ 18.6). Une feuille sans horodatage circule après avoir été
+invalidée et personne ne peut dire laquelle des deux versions posées sur la
+table est la bonne. La règle vise la **page** ; un carton découpé et porté au
+cou n'est pas une page (§ 11.4). Le pied porte le nom entier, jamais tronqué. Un
+nom qui passe la borne du § 8.1 ne s'imprime pas : l'aperçu le refuse avant de
+mettre une page en forme, dans aucune vue, et pose sur « Imprimer » le refus
+`NOM_EVENEMENT_TROP_LONG` avec le remède « Renommer ». Ce remède ferme
+l'événement et rend la liste des événements, où il se renomme : la liste lue, le
+focus va à la commande « Renommer » de sa ligne, un filtre qui la cachait levé.
+« Imprimer » rend ce refus sans appeler l'imprimante.
 
 **Toute page imprimée porte la mention BROUILLON en filigrane, sauf dans un seul
 cas** : celle qui imprime le placement retenu, quand le plan est retenu ou
@@ -5957,6 +7258,35 @@ sa rangée, ses voisines. Le choix reste offert — tenir sur une page, ou déco
 l'orientation qui donne le moins de pages ; à pages égales, à la plus grande
 échelle ; à échelle égale aussi, en paysage.
 
+**Le plan s'imprime aussi une colonne de tables par page.** L'aperçu du plan
+offre « Une colonne par page », éteinte par défaut. Une colonne de tables réunit
+les tables que relie leur étendue horizontale, celle de l'emprise et, listes
+imprimées, du bloc de noms : deux tables dont les étendues se recouvrent sont de
+la même colonne, de proche en proche, et une colonne ne se coupe jamais entre
+deux tables qu'un bloc de noms relie. Chaque colonne se découpe seule, selon le
+choix du découpage, et ses pages ne dessinent que ses tables. Toutes les pages
+partagent une orientation, celle que l'imprimante reçoit, et une échelle, la
+plus petite de celles des colonnes prises seules : une table a la même taille
+sur chaque page, et chaque colonne tient dans ses pages. Les pages se suivent
+colonne par colonne, de gauche à droite ; le cartouche compte les colonnes de
+pages sur tout le plan, et une page voisine à gauche ou à droite, au bord d'une
+colonne, est la page de la même rangée dans la colonne voisine. L'orientation
+est celle qui donne le moins de pages en tout ; à pages égales, la plus grande
+échelle ; à échelle égale aussi, le paysage.
+
+**Les listes imprimées portent l'organisation comme l'écran** (§ 7.4) : à
+l'ouverture, l'aperçu reprend la bascule de l'écran, puis la sienne,
+« Organisation », la change pour le papier seul ; listes masquées, elle reste
+offerte, inactive. Une organisation repliée sous le nom allonge le bloc sur le
+papier comme à l'écran : la hauteur de chaque bloc, qui entre dans l'emprise du
+plan imprimé, dans ses colonnes de tables et dans sa découpe en pages, compte
+ces lignes, mesurées sur la police rendue comme celles de l'écran. Un bloc ne
+déborde ainsi d'aucune page ; découpé, il passe d'une page à sa voisine comme
+le reste du dessin. Listes et organisation imprimées, la découpe pagine le plan
+écarté (§ 7.4), calculé sur ces mêmes lignes : aucune organisation repliée
+n'y pousse une liste sur celle du dessous, et la position enregistrée des
+tables ne change pas.
+
 **Le plan imprimé est le dessin de l'écran** : chaque table y porte son numéro au
 centre du plateau et sa pastille sur son bord, aux mêmes places et aux mêmes
 corps (§ 7.5, § 7.7). Le numéro n'étant jamais plus petit que les listes, le
@@ -5974,11 +7304,13 @@ regardée avant d'être envoyée à l'imprimante — là où l'aperçu d'une mis
 PDF en serait une seconde, avec le défaut que les deux dérivent et que les tests
 des deux restent verts. C'est cette vue que le guide photographie (§ 19.6).
 
-**Ce qu'une feuille porte hors de sa zone de contenu se mesure sur le rendu** —
-le pied et, sur le plan, ses mentions, son échelle graphique et son cartouche —,
-à chaque ouverture de l'aperçu. La zone de contenu prend le reste de la page,
-marges ôtées, et la découpe du plan reçoit la même hauteur. Le registre n'en
-écrit aucune valeur (§ 14.1) : elle suit la police et le rendu.
+**La hauteur de ce qu'une feuille porte hors de sa zone de contenu se mesure
+sur le rendu** — le pied et, sur le plan, ses mentions, son échelle graphique
+et son cartouche —, à chaque ouverture de l'aperçu. La zone de contenu prend
+le reste de la page, marges et hauteur mesurée ôtées, et la découpe du plan
+reçoit cette même hauteur mesurée, qu'elle ôte de chaque orientation qu'elle
+essaie. Le registre n'écrit aucune valeur de la hauteur mesurée (§ 14.1) :
+elle suit la police et le rendu.
 
 **Fiches participants : la sortie imprimée est supprimée.** Son contenu — nom,
 organisation, titre, table et siège par tour — est exactement celui du badge.
@@ -6001,8 +7333,9 @@ jamais.
   celui de la première planche — c'est ce qu'on attend d'un badge perdu ; si le
   placement a bougé, l'horodatage diffère, et c'est ce qu'on attend d'un badge
   refait. Un logo changé change le badge sans faire dériver le placement : il
-  ne garde pas la planche. Une case de ce que le badge imprime (§ 11.4)
-  changée sur le poste le change de même.
+  ne garde pas la planche. Une case de ce que le badge imprime (§ 11.4), ou
+  celle des doublons pour une personne numérotée, changée sur le poste le
+  change de même.
 
 ---
 
@@ -6058,19 +7391,20 @@ mène à chacune.
 | profil trié (§ 12.3) | qui est le plus mal servi, de combien, et combien sont-ils ? | deux graphiques au même ordre de rangs : l'escalier en comptes, deux séries, le plafond réalisé et la borne de diversité en repères ; dessous, les rencontres en pourcentage du plafond réalisé | une ligne par personne dans l'ordre du profil, comptes et pourcentage, et la répartition des rencontres |
 | comparaison (§ 12.10.6) | laquelle des deux sert mieux, et qui y perd ? | un tracé, le manque des deux placements en escaliers superposés sur un axe commun, en comptes ; au-dessus, leurs chiffres en deux colonnes côte à côte, chacun en compte, ou en pourcentage suivi du compte du pire là où sa tuile en porte un | l'escalier du manque : une ligne par valeur de manque, et par placement l'effectif et l'effectif cumulé, en comptes |
 | collisions d'organisation (§ 12.4) | d'où vient le problème, et relancer peut-il y changer quelque chose ? | barres horizontales à deux segments | une ligne par organisation |
-| organisations à chaque table (§ 12.11) | où les mêmes cercles se retrouvent-ils à une même table ? | un sélecteur à trois positions, puis la grille tables × tours, chaque case le compte de la position, échelle d'une teinte | une ligne par table, et par tour les trois comptes et leurs pourcentages |
+| organisations à chaque table (§ 12.11) | où les mêmes cercles se retrouvent-ils à une même table ? | un sélecteur à trois positions, puis la grille tables × tours, chaque case le compte de la position, échelle d'une teinte | une ligne par table et par tour, les trois comptes et leurs pourcentages |
 | paires répétées (§ 12.5) | qui revoit trop souvent la même personne ? | tableau paginé ; matrice sous le seuil | le tableau est la vue ; la matrice a le sien |
-| objectifs des tables (§ 12.12) | qui n'est jamais assis à une table qui lui correspond, et à quel tour l'objectif perd-il ? | la soirée en texte, puis des barres horizontales par tour, à deux segments, chacune avec son pourcentage et ses assis sans table possible | une ligne par tour, et la liste des personnes jamais servies |
+| inclusions (§ 12.15) | quelles rencontres demandées par les inclusions ce placement ne fait-il pas ? | une phrase de synthèse, puis trois listes : les inclusions non satisfaites, les listes au-delà du plafond, les inclusions hors d'atteinte | les listes sont la vue |
+| objectifs des tables (§ 12.12) | qui n'est jamais assis à une table qui lui correspond, et à quel tour l'objectif perd-il ? | la soirée en texte, puis des barres horizontales par tour, à deux segments, chacune avec ses assis sans table possible ; dessous, chaque tour avec son pourcentage et ses deux comptes | une ligne par tour, et la liste des personnes jamais servies |
 | animateurs rencontrés (§ 12.13) | qui a rencontré le moins d'animateurs ? | escalier, une série, la borne des animateurs en repère | une ligne par personne concernée, et la répartition |
 | diversité par animateur (§ 12.13) | quel animateur voit le moins de diversité à sa table ? | deux colonnes de barres horizontales juxtaposées, organisations et étiquettes, chacune son axe, sur la soirée | une ligne par animateur sur la soirée, puis une par animateur et tour animé |
 | performance du calcul (§ 12.14) | relancer plus longtemps aurait-il donné mieux ? | petits multiples, un indicateur par graphique, points aux seuls points de relevé, abscisse logarithmique | une ligne par point de relevé, une colonne par indicateur |
 
-Une vue sans objet — aucune personne concernée par les objectifs, aucun
-animateur, aucune course connue — cède la place à sa phrase (§ 12.6), jamais à
-des axes vides. La vue de comparaison n'y fait pas exception : sans second
-placement — un seul placement mesurable —, elle garde son entrée dans la liste
-des vues et cède la place à sa phrase, « un seul placement mesurable : rien à
-comparer ».
+Une vue sans objet — aucune inclusion active, aucune personne concernée par les
+objectifs, aucun animateur, aucune course connue — cède la place à sa phrase
+(§ 12.6), jamais à des axes vides. La vue de comparaison n'y fait pas
+exception : sans second placement — un seul placement mesurable —, elle garde
+son entrée dans la liste des vues et cède la place à sa phrase, « un seul
+placement mesurable : rien à comparer ».
 
 **Un pourcentage de la page est toujours suivi, juste dessous, du pire cas en
 compte** : « 88 % », puis « minimum 24 sur 27 » ; « 77 % des tours possibles
@@ -6139,15 +7473,16 @@ l'ordre des colonnes, chacune avec sa population. Le minimum brut porte le
 (§ 12.3), qu'elle nomme ; ses deux lignes secondaires, les mobiles et les ancrés
 (§ 5.4), le suivent, chacune sa tuile. Le minimum se lit sur la population
 entière : la personne qui en a le moins est souvent une présence partielle, et
-l'infobulle de la tuile le dit alors — « Prénom Nom, au rang 1, est présente
-aux tours 1 et 2. ». Puis, quand le conflit d'organisation a un objet, les
-conflits d'organisation ; puis les collisions cumulées, les paires distinctes
-et l'excédent ; les rencontres répétées choisies, les imposées
-énoncées à part ; le plus grand nombre de rencontres d'une paire ; les retours
-choisis, les imposés à part ; le minimum de A(p), avec la borne de diversité de
-la personne au rang 1 du même tri sur A(p) (§ 5.5) — une phrase dit à sa place
-qu'aucune personne présente ne porte d'organisation — ; la somme de redondance ;
-le minimum du taux de diversité d(p), au centième, comme au tableau des
+l'infobulle de la tuile le dit alors — « Prénom Nom, au rang 1, est présente aux
+tours 1 et 2. ». Puis, quand le conflit d'organisation a un objet, les conflits
+d'organisation ; puis, quand une inclusion est active, les inclusions non
+satisfaites, sans plancher ; puis les collisions cumulées, les paires distinctes
+et l'excédent ; les rencontres répétées choisies, les imposées énoncées à part ;
+le plus grand nombre de rencontres d'une paire ; les retours choisis, les
+imposés à part ; le minimum de A(p), avec la borne de diversité de la personne
+au rang 1 du même tri sur A(p) (§ 5.5) — une phrase dit à sa place qu'aucune
+personne présente ne porte d'organisation — ; la somme de redondance ; le
+minimum du taux de diversité d(p), au centième, comme au tableau des
 propositions. Puis le manque maximal, avec l'effectif au manque maximal — les
 personnes dont le manque l'égale, que la tuile tait quand il vaut 0, personne
 n'y manquant de rien — et le **plafond réalisé de la personne au rang 1 du
@@ -6160,6 +7495,15 @@ les tours possibles de la personne à ce minimum ; quand une personne est
 concernée par les animateurs, le minimum de m(p) avec la borne des animateurs de
 la personne à ce minimum, et les animateurs non rencontrés. La mention « minimum
 atteint », ou « atteignabilité inconnue », suit les tuiles (§ 5.5).
+
+**Les lignes secondaires des autres agrégats ne font pas de tuile.** Le minimum
+brut a les siennes en tuiles parce que le tableau des propositions les porte en
+colonnes ; la tuile du minimum de A(p), celle du minimum de d(p), celles des
+trois chiffres du manque (§ 12.10.4) et celles des minimums de s(p) et de m(p)
+écrivent les leurs dans la tuile, sous les lignes de sa borne et avant son
+plancher, sur une ligne : « mobiles 3 · ancrés 2 » (§ 5.4). La règle d'une tuile
+par colonne tient donc partout. Le minimum de s(p) et celui de m(p) les écrivent
+ici bien que le tableau les taise (§ 5.7).
 
 **Une tuile écrit le plancher que le diagnostic écrit pour sa mesure** (§ 5.6),
 et là seulement, en dernière ligne, sous son chiffre : « plancher 4 », ou
@@ -6259,11 +7603,13 @@ faux : la page **refuse de dessiner** et le dit, plutôt que d'afficher un
 graphique impossible que personne ne regardera d'assez près.
 
 La page lui passe en complément les planchers des collisions cumulées par
-organisation, les planchers des objectifs par tour (§ 12.12), la validité de ces
-planchers pour le plan (§ 12.4) et les bornes de diversité : la garde éprouve
-alors aussi que le segment « reste » n'est jamais négatif, ni pour une
-organisation ni pour un tour, et que A(p) ne dépasse ni les rencontres de p,
-ni |F(p)|, ni sa borne de diversité, |F(p)| ne dépassant pas Φ_aff(p) (§ 5.5).
+organisation, les planchers des objectifs par tour (§ 12.12), les conflits
+imposés par les réservations (§ 5.6), la validité de ces planchers pour le plan
+(§ 12.4) et les bornes de diversité : la garde éprouve alors aussi que le
+segment « reste » n'est jamais négatif, ni pour une organisation ni pour un
+tour, que les conflits d'organisation du plan ne tombent pas sous les conflits
+imposés, et que A(p) ne dépasse ni les rencontres de p, ni |F(p)|, ni sa borne
+de diversité, |F(p)| ne dépassant pas Φ_aff(p) (§ 5.5).
 La propriété A(p) ≤ rencontres(p) fonde l'axe unique de cette vue ; elle n'est
 vraie que par construction tant qu'aucune garde ne l'éprouve. Le refus vaut pour
 la page entière, et nomme la mesure et les personnes en cause.
@@ -6407,13 +7753,14 @@ ne montre qu'un grain aléatoire où l'opérateur croira voir un motif.
 décroissant — les deux noms, leurs organisations, le nombre de fois, les tours.
 Une ligne n'est pas cliquable : **sa première commande mène au plan au premier
 tour où la paire se revoit**, la première des deux personnes mise en évidence,
-et chacun de ses tours est une commande sœur vers le plan à ce tour. Les
+et chacun de ses tours est une commande sœur vers le plan à ce tour ; chacune
+amène la chaise de la première personne au centre du plan (§ 7.1). Les
 **paires choisies** viennent d'abord, triées par nombre de fois décroissant,
 puis par les identifiants ; les **paires que les réservations imposent** —
 chacune de leurs rencontres a lieu à une table où les deux sont réservées ce
 tour-là — suivent sous leur intitulé, triées de même : le § 5.4 les énonce à
-part. Le tableau **se pagine comme celui des propositions**, par pages de cent
-(§ 5.7), l'étendue et le total écrits.
+part. Le tableau **se pagine comme celui des propositions**, par pages de
+cent (§ 5.7), l'étendue et le total écrits.
 
 **Deux exceptions** : la matrice se dessine sous un seuil de participants
 **mesuré sur le rendu réel**, `SEUIL_MATRICE_PARTICIPANTS` (§ 19.10), et la
@@ -6424,9 +7771,9 @@ plus revues d'abord, sous la ligne de source de la page de qualité ; quand la
 source ne se mesure pas ou que la personne est exclue, une phrase le dit ; sans
 placement, la rubrique est absente —, chemin garanti vers une personne quand la
 matrice n'est pas dessinée, et c'est pourquoi la fiche écran demeure alors que
-sa version imprimée est supprimée (§ 11.7). Juste avant elle, la rubrique
-« Conflits du placement » lit le même placement, sous la même ligne de source
-(§ 10.2).
+sa version imprimée est supprimée (§ 11.7). Juste avant elle, les rubriques
+« Conflits du placement » et « Inclusions du placement » lisent le même
+placement, sous la même ligne de source (§ 10.2).
 
 La matrice se dessine sous ce seuil **et** quand ses cases tiennent la cible de
 24 px dans la largeur réelle de la carte, que la géométrie éprouve ; sinon, la
@@ -6473,7 +7820,7 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | le second placement disparaît | la vue revient à son défaut et nomme les deux placements qu'elle compare ; sans candidat, elle écrit sa phrase |
 | la source est une proposition dérivée | la ligne de source porte « dérivée de n° X », et la performance dit que la course part du plan de son départ (§ 12.14) |
 | populations mesurées différentes entre deux placements | ne survient pas entre deux placements comparables d'un même état, qui mesurent la population de la configuration courante, la dérive les écartant avant toute mesure (§ 9) ; la garde reste : si elle tombe, ni courbe ni dominance, la page nomme les personnes mesurées d'un seul côté et dit **non comparable** |
-| le plafond réalisé d'une personne vaut 0 | son manque vaut 0 et n'enseigne rien : la page marque le point et renvoie à l'écart d'itinéraire. Un manque nul n'est jamais lu comme « bien servi » sans son plafond à côté |
+| le plafond réalisé d'une personne vaut 0 | son manque vaut 0 et n'enseigne rien : la page marque le point et renvoie à l'écart d'itinéraire, que la marque de sa ligne écrit, à l'infobulle et au jumeau — son plafond a priori, ou « inconnu ». Un manque nul n'est jamais lu comme « bien servi » sans son plafond à côté |
 | le plafond a priori n'a pas pu être maximisé | l'écart d'itinéraire s'écrit **« inconnu »**, jamais 0, et sans plancher (§ 12.2) ; le certificat reste hors d'atteinte (§ 5.5) et le départage du § 5.7 qui en dépend est sauté, la page nommant le palier suivant |
 | des propositions, aucune montrée | une phrase, et la commande qui montre la première proposition comparable du classement ; sans proposition comparable, la phrase seule |
 | la source est en dérive ou fautive | ses raisons, comme au tableau des propositions ; aucune vue |
@@ -6482,16 +7829,17 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | un plan qui laisse quelqu'un en réserve | collisions et objectifs sans segment « prouvé inévitable », et la phrase qui dit pourquoi (§ 12.4) ; aucune tuile n'écrit de plancher (§ 12.2) |
 | un pourcentage de dénominateur nul — plafond réalisé nul, tour sans couple possible, personne sans tour possible, table vide ou sans affilié | « — », jamais 0 % ni 100 % ; le compte reste écrit |
 | une table sans affilié à un tour | sa case écrit « — » sous les trois positions du sélecteur, sans couleur, et se range après les tables qui portent un compte |
+| aucune inclusion active | la vue des inclusions cède la place à sa phrase, suivie des inclusions hors d'atteinte quand les listes en portent, et le tableau des propositions n'a pas leur colonne |
 | aucune personne concernée par les objectifs | la vue des objectifs cède la place à sa phrase |
 | un tour sans couple possible | sa ligne écrit « — », sans barre ni pourcentage ; ses assis sans table possible restent écrits |
-| aucune personne concernée par les animateurs, ou aucun animateur | les deux vues des animateurs cèdent la place à leur phrase |
+| aucune personne concernée par les animateurs, ou aucun animateur | les deux vues des animateurs cèdent la place à leur phrase, la diversité par animateur même quand un animateur anime un tour où personne ne peut le rencontrer |
 | aucune étiquette portée | la diversité par animateur n'a que la colonne des organisations, et la phrase le dit |
 | aucune organisation, ou une seule, mais des étiquettes | la diversité par animateur n'a que la colonne des étiquettes, triée sur E_f |
 | ni étiquette, ni plus d'une organisation | la diversité par animateur cède la place à sa phrase ; son jumeau garde les tours animés et les personnes rencontrées en animant |
 | une grille tables × tours trop large pour ses cases | le jumeau seul, et la phrase qui le dit |
 | la matrice sous le seuil, mais trop étroite pour la largeur de la carte | la phrase de la matrice non dessinée, qui renvoie à la fiche |
 | le placement retenu | la performance dit qu'elle mesure une proposition ; un retenu non ajusté nomme la proposition d'où il vient et en montre la course tant qu'elle est dans la liste ; un retenu ajusté, aux participants ou à la main, ou dont la proposition a été effacée, n'en a aucune |
-| une proposition rouverte, dont le compagnon des courses garde la course | la performance la montre, ses valeurs mesurées sous les réglages courants ; la durée et la cadence s'écrivent « inconnues » (§ 5.10) |
+| une proposition rouverte, dont le compagnon des courses garde la course | la performance la montre, ses valeurs mesurées sous les réglages courants ; « durée inconnue », sans cadence (§ 5.10) |
 | une proposition dont la course n'est pas gardée — écrite avant le compagnon ou par une version antérieure, compagnon absent, illisible ou contradictoire, proposition effacée puis rendue après une réouverture (§ 8.6) | la performance cède la place à sa phrase : sa course n'est pas gardée |
 | une proposition dont la recherche a atteint un n-uplet nul | la performance l'écrit : « rien à reprendre après 3 412 mouvements sur 20 000 » ; à zéro mouvement, « le plan initial n'avait rien à reprendre » |
 | une génération de durée nulle ou inconnue | « durée inconnue », sans cadence |
@@ -6513,7 +7861,7 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
   d'unités différentes se dessinent en deux graphiques**, chacun son seul axe
   vertical, au même ordre quand ils portent les mêmes rangs : le profil en
   comptes, puis en pourcentages (§ 12.3).
-- **Les couleurs d'état sont réservées** : **les teintes de conflit** — trois,
+- **Les couleurs d'état sont réservées** : **les teintes de conflit** — quatre,
   une par règle que le plan localise (§ 7.5) — ne peignent que le plan de salle,
   et la page de qualité n'en emploie aucune ; chacune ne peint que les marques
   de sa règle. Elles se distinguent entre elles et des autres marques du plan
@@ -6553,13 +7901,16 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 - **Chaque graphique a son jumeau tabulaire** : un survol n'est jamais le seul
   chemin vers une valeur, et un tableau se parcourt au clavier et au lecteur
   d'écran. Il s'ouvre à la demande, par une commande sous le graphique. Chaque
-  graphique est une image nommée par la question de sa vue et décrite par une
-  phrase de synthèse — le pire cas et son effectif. **Un jumeau porte au moins
-  les valeurs de son graphique, et peut détailler au-delà** — les trois comptes
-  du mélange d'une table, quand la grille n'en dessine qu'un ; la diversité de
-  chaque animateur tour par tour, quand le graphique dessine la soirée —, jamais
-  en deçà. Celui de la vue de comparaison est **l'escalier du manque**
-  (§ 12.10.6), une colonne par placement comparé.
+  graphique est une image nommée par un titre qui dit ce qu'elle dessine et
+  décrite par une phrase de synthèse — le pire cas et son effectif. La
+  question de la vue est le sous-titre de sa carte : les graphiques d'une même
+  vue la partagent, comme les deux du profil, en comptes et en pourcentages.
+  **Un jumeau porte au moins les valeurs de son graphique, et peut détailler
+  au-delà** — les trois comptes du mélange d'une table, quand la grille n'en
+  dessine qu'un ; la diversité de chaque animateur tour par tour, quand le
+  graphique dessine la soirée —, jamais en deçà. Celui de la vue de
+  comparaison est **l'escalier du manque** (§ 12.10.6), une colonne par
+  placement comparé.
 - **Le pointage se fait au plus proche** : à 260 points, le pas est de quelques
   pixels, et sans cette couche la vue est inutilisable au pavé tactile.
 - **Les jetons de graphique forment une famille** (§ 13.3) : deux séries, le
@@ -6666,24 +8017,24 @@ en deux endroits, le graphique et le tableau finissent par se contredire devant
 l'opérateur.
 
 **Le détail d'un placement** — son profil trié, ses collisions jointes aux
-planchers, ses paires, sa matrice, ses mélanges, ses bornes de diversité — se
-calcule pour lui seul, à l'ouverture de la page, par les fonctions du moteur, en
-une lecture du plan ; jamais pour toutes les propositions, dont la table
-d'évaluation se recalcule à chaque écriture. Les points de relevé de la
-performance s'y ajoutent, leurs plans lus dans la course que le compagnon des
-courses garde pour la proposition (§ 8.6), chacun mesuré sous les réglages
-courants par la mesure qui fait foi ; les pourcentages aussi, par la seule
-fonction du moteur qui les calcule (§ 5.4). Le détail d'une charge se garde tant
-qu'elle ne change pas, et se refait sur la suivante : aucune valeur ne survit à
-un changement de réglage. Les tuiles lisent les mesures de la ligne de cette
-table. Le détail ne reçoit pas cette ligne, que la table calcule pour chaque
-proposition : il mesure son placement par le même chemin qu'elle — la mesure,
-les plafonds réalisés et les trois chiffres du § 12.10.4, pris d'une seule
-fonction de l'application —, et ses fonctions du moteur n'en recomptent rien.
-Elles rendent une fois les bornes et les planchers qui accompagnent les tuiles,
-et jugent un plancher atteint sur la valeur même que la ligne porte. Les tris,
-les échelles, les chemins des tracés et le pointage au plus proche sont des
-fonctions pures : un composant n'en fait aucun.
+planchers, ses paires, sa matrice, ses mélanges, ses bornes de diversité, ses
+inclusions et celles hors d'atteinte du diagnostic — se calcule pour lui seul, à
+l'ouverture de la page, par les fonctions du moteur, en une lecture du plan ;
+jamais pour toutes les propositions, dont la table d'évaluation se recalcule à
+chaque écriture. Les points de relevé de la performance s'y ajoutent, leurs
+plans lus dans la course que le compagnon des courses garde pour la proposition
+(§ 8.6), chacun mesuré sous les réglages courants par la mesure qui fait foi ;
+les pourcentages aussi, par la seule fonction du moteur qui les calcule (§ 5.4).
+Le détail d'une charge se garde tant qu'elle ne change pas, et se refait sur la
+suivante : aucune valeur ne survit à un changement de réglage. Les tuiles lisent
+les mesures de la ligne de cette table. Le détail ne reçoit pas cette ligne, que
+la table calcule pour chaque proposition : il mesure son placement par le même
+chemin qu'elle — la mesure, les plafonds réalisés et les trois chiffres du
+§ 12.10.4, pris d'une seule fonction de l'application —, et ses fonctions du
+moteur n'en recomptent rien. Elles rendent une fois les bornes et les planchers
+qui accompagnent les tuiles, et jugent un plancher atteint sur la valeur même
+que la ligne porte. Les tris, les échelles, les chemins des tracés et le
+pointage au plus proche sont des fonctions pures : un composant n'en fait aucun.
 
 Les vues se dessinent en **SVG**, avec **un module de géométrie frère** de celui
 du plan, dans la même couche (§ 13.4) — même principe, même discipline
@@ -6751,20 +8102,23 @@ sur le manque.
 | le manque absolu seul | une personne sur un itinéraire bas paraît bien servie alors qu'elle est proportionnellement la plus privée |
 
 Le second défaut se corrige sans inventer de grandeur : **le plafond réalisé
-accompagne le manque partout** — tuile, infobulle, tableau — comme le § 12.2
-l'exige déjà du chiffre de tête, et **à manque égal, le tri place d'abord le
-plafond le plus bas**. Entre deux manques égaux, la personne proportionnellement
-la plus privée est donc la première ; **entre deux manques différents, le tri ne
-prétend rien sur la proportion**, et c'est le choix assumé ci-dessus.
-L'infobulle d'un point porte la ligne entière, qui enseigne le vocabulaire :
+accompagne le manque partout** — tuile, colonne de la comparaison, infobulle,
+tableau des propositions, sous le chiffre du plus grand manque (§ 5.7) — comme
+le § 12.2 l'exige déjà du chiffre de tête, et **à manque égal, le tri place
+d'abord le plafond le plus bas**. Entre deux manques égaux, la personne
+proportionnellement la plus privée est donc la première ; **entre deux manques
+différents, le tri ne prétend rien sur la proportion**, et c'est le choix assumé
+ci-dessus. L'infobulle d'un point porte la ligne entière, qui enseigne le
+vocabulaire :
 
 > manque 3 · rencontres 24 · plafond réalisé 27 · plafond a priori 28 · 259 au total
 
 #### 12.10.4 Les trois chiffres, et aucun quatrième
 
 Chacun porte sa population mesurée et ses deux lignes secondaires — mobiles,
-ancrés — comme tout agrégat du § 5.4. Quand la population mesurée est vide, les
-trois s'écrivent « — ».
+ancrés — comme tout agrégat du § 5.4, sous son chiffre, au tableau des
+propositions (§ 5.7) comme sur sa tuile (§ 12.2). Quand la population mesurée
+est vide, les trois s'écrivent « — ».
 
 **1. Le manque maximal.** *De combien la personne la plus privée est-elle privée,
 compte tenu de là où ce placement l'a assise ?* Le plus grand manque sur la
@@ -6877,23 +8231,24 @@ placement, portent les mêmes chiffres dans le même ordre. En tête, ceux de la
 question de la vue : la place au classement — celle de sa proposition pour un
 retenu non ajusté, « — » pour un retenu ajusté, aux participants ou à la main,
 qui ne se classe pas, avec la mention « ajusté depuis sa proposition : ne se
-classe pas » —, le
-minimum brut, le plus grand manque avec le plafond réalisé de la personne au
-rang 1, l'effectif du manque et l'écart d'itinéraire maximal. Dessous, repliés
-sous « Tous les indicateurs », un repli que le clavier ouvre et ferme, les
-indicateurs des tuiles de l'en-tête chiffré (§ 12.2), par les groupes des
-colonnes du tableau des propositions (§ 5.7) — personnes rencontrées, collisions
-d'organisation, rencontres répétées et retours, diversité, objectifs des tables
-et animateurs ; une colonne que le tableau ne porte pas sous un critère décoché
-y reste, comme sa tuile, avec « ne classe pas » —, lus dans les deux lignes de
-la table d'évaluation, sans le détail de B. Chaque chiffre porte son plancher
-quand il est prouvé, comme sur les tuiles (§ 12.2) ; les planchers sont ceux du
-diagnostic, communs aux deux placements. Une colonne nomme la personne que la
-tuile nomme, sauf au minimum de A(p) et au minimum de m(p), dont la borne ne se
-lit que dans le détail : ces deux chiffres s'y écrivent sans personne ni borne ;
-quand aucune personne présente ne porte d'organisation, la cellule de la
-diversité écrit, comme sa tuile, la phrase qui le dit (§ 12.2). Une dérivée y
-porte « dérivée de n° X ».
+classe pas » —, le minimum brut, le plus grand manque avec le plafond réalisé de
+la personne au rang 1, l'effectif du manque et l'écart d'itinéraire maximal.
+Dessous, repliés sous « Tous les indicateurs », un repli que le clavier ouvre et
+ferme, les indicateurs des tuiles de l'en-tête chiffré (§ 12.2), par les groupes
+des colonnes du tableau des propositions (§ 5.7) — personnes rencontrées,
+collisions d'organisation, rencontres répétées et retours, diversité, manque et
+plafond a priori, objectifs des tables et animateurs ; les chiffres de la tête
+n'y reparaissent pas, si bien que le groupe du manque n'y garde que l'écart au
+plafond a priori ; une colonne que le tableau ne porte pas sous un critère
+décoché y reste, comme sa tuile, avec « ne classe pas » —, lus dans les deux
+lignes de la table d'évaluation, sans le détail de B. Chaque chiffre porte ses
+lignes secondaires, et son plancher quand il est prouvé, comme sur les tuiles
+(§ 12.2) ; les planchers sont ceux du diagnostic, communs aux deux placements.
+Une colonne nomme la personne que la tuile nomme, sauf au minimum de A(p) et au
+minimum de m(p), dont la borne ne se lit que dans le détail : ces deux chiffres
+s'y écrivent sans personne ni borne ; quand aucune personne présente ne porte
+d'organisation, la cellule de la diversité écrit, comme sa tuile, la phrase qui
+le dit (§ 12.2). Une dérivée y porte « dérivée de n° X ».
 
 **Les colonnes portent les pourcentages des tuiles**, et eux seuls
 (§ 12.2) : un chiffre dont la tuile porte un pourcentage le porte aussi dans
@@ -7083,7 +8438,9 @@ case écrit.
 le plus grand compte d'une case, puis la somme des comptes sur les tours, puis
 l'ordre des tables ; une table dont toutes les cases écrivent « — » vient en
 dernier. La pire case est donc dans la première ligne. Le moteur rend les trois
-ordres ; l'écran lit celui de la position.
+ordres ; l'écran lit celui de la position. La synthèse de la grille (§ 12.7)
+nomme la première table, sa case la plus haute, et le nombre de cases de la
+grille à ce compte : le pire cas et son effectif.
 
 La vue décrit **la sortie**, pas les entrées : elle ne dit jamais combien chaque
 organisation compte de membres (§ 12.8, le camembert). Elle complète la vue des
@@ -7091,17 +8448,18 @@ collisions (§ 12.4) : celle-ci dit quelle organisation se retrouve, la grille o
 et quand ; un doublon d'organisation non nul est exactement une table où la vue
 des collisions compte au moins une collision ce tour-là.
 
-**Le jumeau** porte une ligne par table dans l'ordre de la position, et par tour
-**les trois comptes et leurs trois pourcentages**, chaque pourcentage suivi du
-compte de sa ligne (§ 12), les occupants, les affiliés et la capacité : il
-détaille au-delà de la grille (§ 12.7). Une case tient son chiffre et 24 px de
-côté ; une grille dont les cases ne tiennent pas dans la largeur de la carte
-cède la place à son jumeau, avec la phrase qui le dit, et le sélecteur reste.
-Une case n'est pas une cible : le pointage au plus proche désigne la case sous
-le pointeur (§ 12.7), et le jumeau porte les mêmes valeurs. Sans collision, la
-grille cède la place à la phrase de la vue des collisions sous la position
-« doublons » seulement ; sans organisation, à celle du § 12.6 sous les trois ;
-avec une seule organisation, elle reste.
+**Le jumeau** porte une ligne par table et par tour, les tables dans l'ordre de
+la position et, sous chacune, ses tours dans l'ordre ; chaque ligne écrit **les
+trois comptes et leurs trois pourcentages**, chaque pourcentage suivi du compte
+de sa ligne (§ 12), les occupants, les affiliés et la capacité : il détaille
+au-delà de la grille (§ 12.7). Une case tient son chiffre et 24 px de côté ; une
+grille dont les cases ne tiennent pas dans la largeur de la carte cède la place
+à son jumeau, avec la phrase qui le dit, et le sélecteur reste. Une case n'est
+pas une cible : le pointage au plus proche désigne la case sous le pointeur
+(§ 12.7), et le jumeau porte les mêmes valeurs. Sans collision, la grille cède
+la place à la phrase de la vue des collisions sous la position « doublons »
+seulement ; sans organisation, à celle du § 12.6 sous les trois ; avec une seule
+organisation, elle reste.
 
 ### 12.12 Les objectifs des tables
 
@@ -7124,15 +8482,18 @@ du § 5.6, et **reste**. Un couple fixé possible étant servi, Π_r − S_r = P
 − S^nf_r, et une personne servie non fixée occupe un siège libre : S^nf_r ≤ L_r,
 donc le plancher du tour borne la barre. **La première barre est celle du tour
 au plus grand reste**, à place fixe ; les autres tours suivent dans leur ordre ;
-aucune couleur ne désigne un tour. En encre secondaire, chaque ligne porte le
-pourcentage des tours possibles servis à ce tour, ses deux comptes dessous —
-« 80 % », « 24 servis sur 30 possibles » —, puis **ses assis sans table
-possible** σ_r (§ 5.4) : « 10 assis sans table possible ». Ce compte lit tous
-les assis du tour, concernés ou non : il dit combien de personnes aucune table
-ne pouvait servir, sans entrer dans le dénominateur, que le plancher borne. Un
-tour sans couple possible écrit « — », sans barre ni pourcentage, et garde ses
-assis sans table possible. Les mots, la forme des segments et le domaine des
-planchers sont ceux du § 12.4.
+aucune couleur ne désigne un tour. En encre secondaire, chaque ligne porte
+**ses assis sans table possible** σ_r (§ 5.4) : « 10 assis sans table
+possible ». Ce compte lit tous les assis du tour, concernés ou non : il dit
+combien de personnes aucune table ne pouvait servir, sans entrer dans le
+dénominateur, que le plancher borne. Un tour sans couple possible n'a pas de
+barre : sa ligne écrit « — » et garde ses assis sans table possible — « —, 10
+assis sans table possible ». Sous le graphique, une liste reprend les tours dans
+l'ordre des barres, chacun avec le pourcentage des tours possibles servis à ce
+tour et ses deux comptes dessous — « 80 % », « 24 servis sur 30 possibles » ; un
+tour sans couple possible y écrit « aucun couple possible à ce tour », sans
+pourcentage. Les mots, la forme des segments et le domaine des planchers sont
+ceux du § 12.4.
 
 **Le diagnostic calcule le plancher de chaque tour**, que le critère classe ou
 non, et en rend les termes et la somme ; le détail les lit et ne les recompte
@@ -7242,6 +8603,53 @@ réouverture — n'a pas ces données : la vue dit que sa course n'est pas gard�
 La page ne lit l'horloge que par l'application ; le moteur ne la lit jamais
 (§ 14.7).
 
+### 12.15 Les inclusions
+
+**Question : quelles rencontres demandées par les inclusions ce placement ne
+fait-il pas ?**
+
+La vue lit les inclusions du détail du placement (§ 12.9) : celles de sa ligne
+d'évaluation, chaque personne par son identifiant, et les inclusions hors
+d'atteinte du diagnostic. Elle n'en mesure aucune : une seule fonction décide
+qu'une inclusion est satisfaite (§ 13.2).
+
+Une phrase de synthèse l'ouvre : « 2 inclusions non satisfaites sur 5 rencontres
+demandées. », ou « Chacune des 5 rencontres demandées se fait. », « La rencontre
+demandée se fait. » pour une seule ; quand chaque liste active dépasse ce que sa
+personne peut rencontrer, « Aucune rencontre demandée ne fait d'avis : chaque
+liste dépasse ce que sa personne peut rencontrer. ». Puis **les inclusions non
+satisfaites, à place fixe en tête** (§ 12.1) : une phrase par rencontre demandée
+que le placement ne fait pas, dans l'ordre de la mesure, par la personne qui la
+porte puis par sa liste — « Iris Ombrelle n'a pas rencontré Théo Pervenche »,
+« Iris Ombrelle n'a rencontré personne de Club des Merles ». Une rencontre que
+les deux personnes demandent ne compte qu'une fois (§ 5.4) : sa phrase la nomme
+une fois, chez la première des deux, et le dit, « …, une rencontre demandée des
+deux côtés ». Sans avis, « Aucune. ».
+
+Puis deux informations, jamais des avis, chacune sous la phrase qui le dit et
+seulement quand elle a des lignes :
+
+- **les listes au-delà du plafond** : chaque personne dont la liste demande
+  plus de personnes qu'elle n'en peut rencontrer (§ 5.4), par identifiant, ses
+  inclusions satisfaites sur ses inclusions actives, ses inclusions
+  atteignables et celles qui restent possibles sans que le placement les
+  atteigne — « Ondine Lacasse : 5 inclusions satisfaites sur 9, au plus 7
+  possibles ; 2 inclusions encore possibles non atteintes », ou « toutes ses
+  inclusions encore possibles sont atteintes » ;
+- **les inclusions hors d'atteinte** (§ 4, § 5.6), dans l'ordre du diagnostic,
+  chacune par sa personne, sa cible et sa raison — « Théo Pervenche → Capucine
+  Sarcelle : la personne incluse est exclue ».
+
+Chaque nom et chaque organisation est une donnée, dans son propre nœud. Les
+phrases des avis sont celles de la liste de travail du plan (§ 5.8) et de la
+rubrique « Inclusions du placement » de la fiche (§ 10.2) ; la colonne du
+tableau des propositions, sa phrase sous le numéro (§ 5.7) et la tuile de
+l'en-tête (§ 12.2) en écrivent le compte. Sans inclusion active, la vue cède la
+place à sa phrase (§ 12.6) ; quand les listes portent des inclusions toutes hors
+d'atteinte, la phrase le dit, « Aucune inclusion n'est active : celles que les
+listes portent sont toutes hors d'atteinte. », et la liste des inclusions hors
+d'atteinte la suit.
+
 ---
 
 ## 13. Architecture
@@ -7283,13 +8691,16 @@ complet au disque.
 Le code que Vite compile vit sous **`src/`**, en modules nommés d'après les
 couches du § 13.4 : `src/moteur`, `src/geometrie`, `src/stockage`, `src/csv`,
 `src/pdf`, `src/impression`, `src/polices`, `src/demo`, `src/application`,
-`src/interface`. À la racine du
-projet, **`version.json`** est l'unique source de la version (§ 18.3) et
-**`src/version.genere.js`** le module qu'elle engendre — **versionné dans le
-dépôt**, parce qu'une séance de développement lancée sans l'étape de construction
-doit afficher une version et non une importation manquante, et **contrôlé par
-rejeu du script**, parce qu'un fichier engendré et oublié affiche une version
-périmée avec l'assurance d'une constante.
+`src/interface`, et `src/actifs`, qui porte le logo de l'éditeur tel qu'il le
+fournit, que le panneau « À propos » montre et que la séance passe à la planche
+de badges (§ 11.4), et les modules qui chargent à la demande ce logo, les textes
+des licences de `public/licences` et les avis des tiers, que ce panneau donne à
+lire. À la racine du projet, **`version.json`** est l'unique source de la
+version (§ 18.3) et **`src/version.genere.js`** le module qu'elle engendre —
+**versionné dans le dépôt**, parce qu'une séance de développement lancée sans
+l'étape de construction doit afficher une version et non une importation
+manquante, et **contrôlé par rejeu du script**, parce qu'un fichier engendré et
+oublié affiche une version périmée avec l'assurance d'une constante.
 
 **Ce qui n'est pas un composant s'éprouve sous `node`** : `src/application` et
 les modules purs de `src/interface` — tri, filtre, mise en forme, modèle de
@@ -7305,10 +8716,15 @@ Aucune partie du calcul n'est dupliquée dans un second langage.
 Cette propriété doit être **préservée délibérément**, et une garde de
 l'arborescence la tient : sous `src/`, `electron/` et `scripts/`, rien d'autre
 que du JavaScript, des composants Svelte, des feuilles de style, des données
-JSON et les scripts d'installation nommés. Dès que la même arithmétique existe
-en deux endroits, une suite de tests peut prouver qu'ils s'accordent **sans
-jamais prouver qu'ils ont raison** : les deux dérivent ensemble et les tests
-restent verts. Une seule implémentation rend ce mode de défaillance impossible.
+JSON, les scripts nommés — d'installation, d'environnement et de lancement sous
+Linux et sous Windows, de construction de l'exécutable Windows, d'épreuve de
+l'installation sur chaque système, et de l'oracle du générateur pseudo-aléatoire
+(§ 14.11) — et les données nommées, qui ne calculent rien : les deux fichiers de
+la police embarquée et leur provenance, les deux fichiers du logo de l'éditeur.
+Dès que la même arithmétique existe en deux endroits, une suite de tests peut
+prouver qu'ils s'accordent **sans jamais prouver qu'ils ont raison** : les deux
+dérivent ensemble et les tests restent verts. Une seule implémentation rend ce
+mode de défaillance impossible.
 
 **Deux exceptions, nommées, et elles seules.** La première est le calcul
 incrémental des indicateurs du § 5.10. Elle tient à une condition écrite — **le
@@ -7326,6 +8742,11 @@ arithmétique du logiciel n'est réécrite dans un second langage. Une épreuve
 recoupe les deux bornes sur des charges tirées — le plancher des étoiles ne
 dépasse jamais la somme exacte — et confronte chaque minimum exact à une
 recherche exhaustive.
+
+**Une seule fonction décide qu'une inclusion est satisfaite**, dans la mesure
+du moteur : la personne et sa cible partagent une table à un tour au moins, ou
+la personne a rencontré un membre de l'organisation incluse. Le compte de
+chacun, les inclusions non satisfaites et leur garde (§ 12.3) la lisent toutes.
 
 **La présence a une règle de lecture et une grammaire, chacune en un seul
 lieu.** Une seule fonction décide qu'une personne est présente à un tour — une
@@ -7382,10 +8803,21 @@ message d'erreur**.
       │
   application        les états, les commandes, l'historique
       │
-  moteur             le placement : pur, sans DOM, sans API de plateforme
+  csv                l'import et l'export des listes, sur le modèle du stockage
       │
   stockage           lecture et écriture de fichiers
+      │
+  moteur             le placement : pur, sans DOM, sans API de plateforme
 ```
+
+Une couche n'importe que des couches placées plus bas, hors du générateur
+pseudo-aléatoire `src/demo/prng.js`, que le moteur partage avec le générateur de
+démonstrations ; l'interface n'atteint le CSV, le stockage et le moteur que par
+l'application. Deux modules hors des couches lui sont admis : `src/actifs`,
+qu'aucune autre couche n'importe, et qui n'importe que ses propres fichiers et
+les textes des licences de `public/`, sans toucher le navigateur ; et
+`src/version.genere.js`, que ni le moteur, ni la géométrie, ni le générateur de
+démonstrations ne lisent (§ 14.7).
 
 **Le moteur ne connaît ni le DOM, ni Capacitor, ni Electron.** Il reçoit des
 nombres et des listes, il rend des placements. C'est ce qui le rend testable sous
@@ -7475,30 +8907,34 @@ solveur. Le point d'entrée de son travailleur
 l'application ; l'exécuteur qui lui parle et le suivi que le Diagnostic lit
 (`executeur_solveur.js`, `suivi_solveur.js`) n'importent pas `highs`. Seul le
 point d'entrée de la page importe ce travailleur, par un import différé : il
-forme un morceau que la page ne charge qu'au premier calcul. Il désigne aussi
-le module WebAssembly du solveur, par `highs/runtime?url` et par ce seul
-spécificateur — la garde relève tout autre import de `highs` qu'il ferait —,
-et App reçoit la fabrique du travailleur et cette adresse, comme les autres
-plateformes, par ses propriétés ; une épreuve monte App sans elles, sur les
-planchers instantanés seuls.
+forme un morceau que la page ne charge qu'au premier calcul. Il désigne aussi le
+module WebAssembly du solveur, par `highs/runtime?url` et par ce seul
+spécificateur — la garde relève tout autre import de `highs` qu'il ferait. App
+reçoit, comme les autres plateformes, une seule propriété, `chargerSolveur` :
+une fonction asynchrone qui fait l'import différé et rend `{fabrique, urlWasm}`,
+la fabrique du travailleur et l'adresse du module, dont App fait l'exécuteur du
+solveur au premier calcul. Une épreuve monte App sans elle, sur les planchers
+instantanés seuls.
 
 **La frontière des couches est gardée mécaniquement**, et pas seulement par
 discipline : un test du **graphe d'imports** refuse qu'un module de `src/moteur`
 ou de `src/geometrie` importe de `src/interface`, de `src/application`, de
-`src/stockage` ou d'une interface de plateforme. Il refuse de même que
-`src/stockage` importe de `src/csv`, de `src/application`, de `src/interface` ou
-d'une plateforme, ou touche le navigateur hors de ses deux implémentations du
-système de fichiers, qu'aucun autre de ses modules n'importe ; que `src/csv`,
-qui lit le modèle du stockage, importe de `src/application`, de `src/interface`
-ou d'une plateforme ; que `src/geometrie` importe en outre du moteur, de
-`src/csv` ou de `src/demo` ; que `src/application` importe de `src/interface` ou
-de Svelte ; et que `src/interface` importe autre chose que Svelte, ses propres
-modules, `src/application` et `src/geometrie` — elle atteint le CSV et le moteur
-par l'application, jamais en direct. Un type que la documentation d'un module
-importe compte comme un import. Le projet `node` ne chargeant pas le greffon
-Svelte (§ 14.8), un test de moteur qui importerait un composant échoue au
-chargement — mais cette garde-là ne couvre que les composants, et un module qui
-touche `document` ne tomberait qu'à l'exécution de la branche fautive.
+`src/stockage`, de `src/csv` ou d'une interface de plateforme. Il refuse de même
+que `src/stockage` importe de `src/csv`, de `src/application`, de
+`src/interface` ou d'une plateforme, ou touche le navigateur hors de ses deux
+implémentations du système de fichiers, qu'aucun autre de ses modules
+n'importe ; que `src/csv`, qui lit le modèle du stockage, importe de
+`src/application`, de `src/interface` ou d'une plateforme ; que `src/geometrie`
+importe en outre du moteur ou de `src/demo` ; que `src/application` importe de
+`src/interface` ou de Svelte ; que `src/interface` importe autre chose que
+Svelte, ses propres modules, `src/application`, `src/geometrie`, `src/actifs` et
+`src/version.genere.js` — une liste fermée : elle atteint le CSV et le moteur
+par l'application, jamais en direct, et tout autre fichier du projet se refuse ;
+et qu'une autre couche importe `src/actifs`. Un type que la documentation d'un
+module importe compte comme un import. Le projet `node` ne chargeant pas le
+greffon Svelte (§ 14.8), un test de moteur qui importerait un composant échoue
+au chargement — mais cette garde-là ne couvre que les composants, et un module
+qui touche `document` ne tomberait qu'à l'exécution de la branche fautive.
 
 ### 13.5 Ce que le SVG donne et que le canvas ferait payer
 
@@ -7539,8 +8975,8 @@ l'alphabet visé, pas sur une moyenne. Un seuil moyen laisse déborder les noms
 Chaque constante du registre porte, à son entrée, **ce qu'elle mesure,
 pourquoi, et sur quelle configuration elle a été relevée** — ses champs `mesure`,
 `raison` et `configuration` —, afin que personne ne la « corrige » plus tard par
-le calcul. Un seuil propre à une épreuve, comme le coût d'un enregistrement
-(§ 8.2), porte les trois en commentaire à côté de sa valeur.
+le calcul. Un seuil mesuré propre à une épreuve, comme le coût d'un
+enregistrement (§ 8.2), porte les trois en commentaire à côté de sa valeur.
 
 **Chaque seuil dit « mesuré » a un propriétaire nommé** — le banc de mesure du
 § 19.10, le niveau `node`, le **niveau manuel**, ou l'**exécution**, qui le relève
@@ -7735,9 +9171,9 @@ outils.
 
 | projet | environnement | ce qu'il inclut | greffon Svelte |
 |---|---|---|---|
-| `node` | `node`, aucun DOM | `src/moteur`, `src/geometrie`, `src/stockage`, `src/csv`, `src/demo`, `src/pdf`, `src/application`, et les modules purs de `src/interface` | **absent** |
-| `node-long` | `node`, aucun DOM | les épreuves lourdes du niveau `node:long` (§ 14.4), suffixe `.long.test.js`, hors de la série surveillée | **absent** |
-| `navigateur` | un vrai moteur de rendu, piloté par le mode navigateur de Vitest | les composants de `src/interface`, les épreuves de coordonnées et de style calculé, le parcours photographié (§ 19.3) | présent |
+| `node` | `node`, aucun DOM | les fichiers `.test.js` de `src/`, de `scripts/` et de `test/` : le moteur, la géométrie, le stockage, le CSV, les démonstrations, le PDF, l'application, les modules purs de `src/interface`, l'outillage et les gardes du dépôt — hors des suffixes `.long.test.js` et `.navigateur.test.js`, et hors des épreuves lourdes qu'une petite machine passe à `node-long` (§ 14.14) | **absent** |
+| `node-long` | `node`, aucun DOM | les épreuves lourdes du niveau `node:long` (§ 14.4), suffixe `.long.test.js`, de `src/` et de `test/`, hors de la série surveillée, et sur une petite machine les épreuves lourdes qui quittent la série `node` (§ 14.14) | **absent** |
+| `navigateur` | un vrai moteur de rendu, piloté par le mode navigateur de Vitest | les fichiers `.navigateur.test.js` de `src/` et de `test/` : les composants de `src/interface`, les épreuves de coordonnées et de style calculé, le système de fichiers de la page sur l'OPFS, le chargement des polices et des actifs, le travailleur du solveur, le parcours photographié (§ 19.3) | présent |
 
 Un quatrième projet, **le banc de mesure**, vit hors de ces trois : sa
 configuration est un fichier à part, aucun lancement des trois séries ne le
@@ -7801,14 +9237,15 @@ le test qui n'est pas sous les yeux n'est pas étendu. Les tests du niveau
 navigateur portent le suffixe `.navigateur.test.js`, qui est aussi ce qui les
 range dans leur projet.
 
-Les données d'épreuve vivent dans `test/fixtures/`, les fichiers d'exemple livrés
-restant ceux du § 10.3 — une donnée d'épreuve qui double un fichier livré dérive
-de lui. **Les noms inventés d'une donnée d'épreuve sont disjoints du réservoir du
-générateur** : le balayage du § 15.6 refuse qu'un fragment forgé apparaisse hors
-des listes du générateur, des fichiers de démonstration et des CSV d'exemple, et
-une donnée d'épreuve qui emprunte une racine d'organisation plausible le fait
-échouer. Un test vérifie cette disjonction, faute de quoi la garde du § 15.6
-tombe au premier exemple écrit de bonne foi.
+Les données d'épreuve vivent dans `test/fixtures/`, les fichiers d'exemple
+livrés restant ceux du § 10.3 — une donnée d'épreuve qui double un fichier livré
+dérive de lui. **Les noms inventés d'une donnée d'épreuve sont disjoints du
+réservoir du générateur** : le balayage du § 15.6 refuse qu'un fragment forgé
+apparaisse hors des listes du générateur, des fichiers de démonstration, des CSV
+d'exemple et du manifeste des captures, et une donnée d'épreuve qui emprunte une
+racine d'organisation plausible le fait échouer. Un test vérifie cette
+disjonction, faute de quoi la garde du § 15.6 tombe au premier exemple écrit de
+bonne foi.
 
 **La co-localisation se garde.** Un test de la construction affirme que le
 paquet livré ne contient **aucun fichier de test ni aucun import du lanceur**.
@@ -7824,7 +9261,7 @@ n'égale, octet pour octet, un fichier livré.
 
 | module (§ 13.4) | niveau | ce qui s'y éprouve |
 |---|---|---|
-| moteur | `node` | indicateurs, plafonds et borne, diagnostic, invariants d'un plan, accord de l'incrémental et du recalcul, registre et compilation de l'ordre des priorités, correspondance des objectifs, empreintes de référence de l'ordre par défaut, détail d'un placement pour la page de qualité, borne de diversité, points de relevé de la recherche |
+| moteur | `node` | indicateurs, plafonds et borne, inclusions atteignables, diagnostic, invariants d'un plan, accord de l'incrémental et du recalcul, registre et compilation de l'ordre des priorités, correspondance des objectifs, empreintes de référence de l'ordre par défaut, détail d'un placement pour la page de qualité, borne de diversité, points de relevé de la recherche |
 | géométrie | `node` + navigateur | conversions, ajustement, bornes de zoom, désignation d'un siège ; l'oracle du moteur de rendu au niveau 2 ; la découpe du plan en pages (§ 11.7) ; les échelles, tracés et pointage des graphiques (§ 12.9) |
 | stockage | `node` | sérialisation canonique, équivalence geste/entrée/état, reprise après panne, dérivation des noms de fichiers, forme positionnelle et champs facultatifs (§ 8.9), refus des formats plus anciens, état, journal et secours compris, compagnon des courses (§ 8.6), accord de la restitution incrémentale avec la chaîne des correctifs, de l'élagage en mémoire avec le texte relu, de SANS_EFFET par la différence avec le texte, des mémoires par identité avec le recalcul |
 | analyseur CSV | `node` | encodage, séparateur, association des colonnes, réconciliation des organisations et des étiquettes, lignes refusées, aller-retour, CSV des objectifs de table |
@@ -7891,6 +9328,65 @@ d'organisation, en tête de l'ordre par défaut, est sans objet sans liste : les
 empreintes de référence se relèvent identiques, plans, combinaisons, bascule
 et classements, octet pour octet ; seul le nom du critère s'ajoute à la liste
 écrite de l'ordre du registre que la section de la bascule porte.
+
+**Les inclusions atteignables sont un maximum, et la mesure une lecture du
+plan.** Sur cent configurations tirées, I(p) égale le plus d'inclusions que
+satisfait un ensemble de K(p) personnes au plus, chaque ensemble énuméré, et
+vaut k°(p) exactement quand b(p) ≤ K(p) ; sur cent plans tirés, les inclusions
+satisfaites de chacun et les inclusions non satisfaites égalent celles d'une
+lecture naïve des tables de chaque tour. Deux cas écrits refusent les formules
+qui comptent d(p) sans le borner par K(p), ou qui ne lui accordent rien : trois
+personnes incluses de trois organisations, et les trois organisations, sous
+K = 2, donnent I = 4 ; une personne et son organisation sous K = 1 donnent
+I = 2. Chaque raison d'une inclusion hors d'atteinte a son cas ; deux personnes
+qui s'incluent l'une l'autre ne font qu'une unité, comme une personne et
+l'organisation dont elle est le seul membre rencontrable, et une organisation
+que deux membres satisfont en fait une à elle seule.
+
+**Sans inclusion active, le critère ne change aucun plan ; avec elles, la
+recherche tient les mêmes avis que la mesure.** Les empreintes de référence se
+relèvent identiques, seul le nom du critère s'ajoutant à la liste de l'ordre
+du registre ; une salle dont les seules inclusions sont hors d'atteinte rend
+les plans de la même salle sans liste, et l'état n'en tient rien. Avec des
+inclusions — paires demandées des deux côtés, organisations incluses,
+inclusions contredites —, sous objectifs, animateurs, chaque mode et un ordre
+déplacé, l'état tenu à jour égale, après chaque mouvement et chaque mouvement
+défait, les avis que la mesure recompte, et le n-uplet celui de l'oracle ;
+sous un départ à tour figé et réserves imposées aussi, où une personne
+rencontre au siège d'une réserve un membre qu'aucun plan honorant les
+réservations ne lui fait rencontrer. Une génération répartie sur plusieurs
+fils égale celle d'un seul, et une dérivée n'en laisse jamais plus que son
+départ. La grande démonstration portant les listes d'une fixture de graine
+fixe (`test/fixtures/moteur/inclusions_grande.json`) a sa section des
+empreintes de référence, ses inclusions non satisfaites comprises.
+
+**Le mouvement dirigé se lit tirage par tirage.** Sous des tirages imposés,
+il rend l'échange que décrit le § 5.10, chaque borne demandée dans l'ordre :
+la rencontre, le partenaire, l'option, puis le siège, celui de la personne qui
+reste sauté. Une personne fixée ne se déplace pas, un tour où l'une manque
+n'offre rien, une table sans siège mobile ne reçoit personne, et sans option
+rien ne change. Coup par coup, sous un départ à tour figé et réserves
+imposées, aucun tour figé ni siège fixé ne bouge ; sur la fixture, l'ensemble
+des rencontres qui manquent égale le recompte après chaque mouvement et chaque
+retour, et l'état défait revient à ses compteurs. La recherche et la dérivée
+rendent les plans de leur réplique, qui dirige un mouvement sur deux ; quand
+un tour figé fait toutes les rencontres demandées, la dérivée tire comme sans
+mouvement dirigé. Cinq propositions de 50 000 mouvements font toutes les
+rencontres demandées de la fixture.
+
+**Ce que l'écran dit des inclusions se lit dans la ligne d'évaluation.** Une
+rencontre demandée des deux côtés fait une phrase et un avis, au tableau des
+propositions, à la liste de travail du plan, à la page de qualité, à la fiche et
+à la grille, qui la nomment chez les deux personnes ; une liste au-delà de son
+plafond n'y fait aucun avis, et ses inclusions encore possibles se comptent à la
+page de qualité, à la fiche et à la carte de la proposition choisie ; une
+inclusion hors d'atteinte se nomme avec sa raison au diagnostic, à la page de
+qualité et sous la liste de sa fiche. Un conflit posé, ou une inclusion posée
+contre un conflit, avertit une fois, et une contradiction qui reste ne se redit
+pas, même sous une organisation renommée. Sans inclusion active, ni phrase, ni
+liste, ni rubrique : la vue cède la place à sa phrase, et les inclusions hors
+d'atteinte se disent seules, au diagnostic, à la vue et sous les listes de la
+fiche.
 
 **L'ordre par défaut rend les plans de l'ordre fixe de référence.** Des
 **empreintes de référence**, fichier d'épreuve versionné
@@ -8136,12 +9632,15 @@ la fluidité » : le plan répondrait faux partout, et la cause serait cherchée
 dans le module de géométrie.
 
 **Le module des graphiques est frère de celui du plan, et n'en importe rien.**
-Ses échelles rendent un pixel d'écran depuis un rang ou un nombre ; ses
-graduations sont des entiers ronds pour des comptes ; son escalier ne trace que
-des segments horizontaux et verticaux, un pas par rang ; le rang au plus proche
-d'une abscisse est borné aux rangs existants, y compris hors du tracé. L'épreuve
-refuse une graduation non entière sur un axe de comptes, et un escalier qui
-relierait deux rangs en diagonale.
+Les deux ne partagent que le seuil des cibles d'écran de 24 px (§ 7.3), dans un
+module à part qui n'importe rien ; une garde de l'arborescence refuse tout autre
+import entre eux, dans un sens comme dans l'autre. Ses échelles rendent un pixel
+d'écran depuis un rang ou un nombre ; ses graduations sont des entiers ronds
+pour des comptes ; son escalier ne trace que des segments horizontaux et
+verticaux, un pas par rang ; le rang au plus proche d'une abscisse est borné aux
+rangs existants, y compris hors du tracé. L'épreuve refuse une graduation non
+entière sur un axe de comptes, et un escalier qui relierait deux rangs en
+diagonale.
 
 #### Le stockage
 
@@ -8275,6 +9774,14 @@ partie non vide des tours de 1 à 6, et un réimport compte zéro personne
 modifiée. **Le modèle s'importe sans refus sous tout nombre de tours.** En mise
 à jour, une cellule vide garde la présence et une cellule « tous » la retire ;
 un aperçu calculé sous un autre nombre de tours ne s'applique pas.
+
+**Une inclusion fautive refuse le fichier entier, et la cause nomme sa ligne,
+sa cellule et le nom tel qu'écrit.** Une personne se lit sous le nom que
+l'import lui laisse, une personne mise à jour comptée une fois ; un nom que
+deux personnes portent ne se départage jamais. **Les inclusions font
+l'aller-retour** sous chaque mode, hors d'une inclusion vers un homonyme non
+numéroté, que l'export compte, et un réimport en mise à jour compte zéro
+personne modifiée.
 
 **Un objectif sur un numéro de table inconnu refuse la ligne, jamais le
 fichier.**
@@ -8444,19 +9951,23 @@ d'être appelé** ; appelé par les commandes, il refuse au moment du geste, là
 `verifier_indicateurs(mesures, plafonds_a_priori, plafonds_realises,
 complements)` éprouve les **trois** inégalités de la ligne de décomposition du
 § 12.10.5. Avec ses compléments, que seule la page de qualité lui passe, elle
-éprouve aussi le segment « reste » de chaque organisation et de chaque tour sur
-le domaine des planchers (§ 12.4, § 12.12) et la diversité de chacun contre ses
-rencontres et sa borne (§ 5.5) ; la table d'évaluation l'appelle sans eux. Quand
-les mesures portent les objectifs des tables ou les animateurs (§ 5.4), elle
-éprouve aussi, pour chacun, s(p) ≤ P(p), s(p) ≤ ses tours assis et m(p) ≤ B(p),
-puis, sur les totaux, les personnes jamais servies contre les concernées et le
-plus de tours hors objectif d'une personne contre le plus de tours possibles.
-P(p) ne se compare pas aux tours assis : un plan qui laisse une personne en
-réserve à un tour possible le tient au-delà. Elle ne prend pas un plan mais des
-mesures, et ce qu'elle refuse n'est pas un geste mais un **dessin**. Les deux
-fonctions vivent dans le moteur, sous la même discipline ; les confondre
-obligerait le vérificateur de plan à recevoir des indicateurs qu'il n'a aucune
-raison de connaître.
+éprouve aussi, sur le domaine des planchers (§ 12.4, § 12.12), le segment
+« reste » de chaque organisation et de chaque tour et les conflits
+d'organisation du plan contre les conflits imposés (§ 5.6), puis la diversité de
+chacun contre ses rencontres et sa borne (§ 5.5) ; la table d'évaluation
+l'appelle sans eux. Quand les mesures portent les objectifs des tables ou les
+animateurs (§ 5.4), elle éprouve aussi, pour chacun, s(p) ≤ P(p), s(p) ≤ ses
+tours assis et m(p) ≤ B(p), puis, sur les totaux, les personnes jamais servies
+contre les concernées et le plus de tours hors objectif d'une personne contre le
+plus de tours possibles. P(p) ne se compare pas aux tours assis : un plan qui
+laisse une personne en réserve à un tour possible le tient au-delà. Quand les
+mesures portent les inclusions, elle éprouve sat(p) ≤ I(p) pour chacun, plafond
+a priori connu, puis que les inclusions non satisfaites valent les unités
+demandées moins les satisfaites, une par unité nommée. Elle ne prend pas un plan
+mais des mesures, et ce qu'elle refuse n'est pas un geste mais un **dessin**.
+Les deux fonctions vivent dans le moteur, sous la même discipline ; les
+confondre obligerait le vérificateur de plan à recevoir des indicateurs qu'il
+n'a aucune raison de connaître.
 
 **Le vérificateur est lui-même éprouvé par mutation.** Le test prend un plan
 valide, déplace une personne pour qu'elle occupe deux tables au tour 2, et affirme
@@ -8496,8 +10007,18 @@ contiguës à l'égalité exacte, bord droit contre bord gauche, tiennent dans l
 surface utile, couvrent le plan et portent des cartouches cohérents. L'oracle est
 la construction : chaque bord se compare à celui de sa voisine. Le
 rétrécissement rend un plan de quelques centimètres là où l'échec portait sur
-des centaines de mètres. La liste est fermée : une garde de l'arborescence
-refuse la bibliothèque hors de ces cinq familles.
+des centaines de mètres.
+
+**Le plancher exact l'emploie pour une sixième, nommée** (§ 5.6). Sur des
+charges tirées — deux à cinq organisations, deux à cinq tables de deux à six
+places, des conflits, une réservation, une absence —, le minimum que HiGHS rend
+pour chaque tour égale celui d'une recherche exhaustive sur les tables, et le
+plancher des étoiles, ajouté à la somme par groupe, ne dépasse jamais la somme
+des minimums des tours. L'oracle est l'énumération, comme au plafond ;
+l'épreuve vit dans la série longue parce que chaque charge passe par le
+solveur, et le rétrécissement rend un contre-exemple de quelques personnes. La
+liste est fermée : une garde de l'arborescence refuse la bibliothèque hors de
+ces six familles.
 
 **La bibliothèque tourne sur une graine fixée.** Une bibliothèque de propriétés
 retire par défaut une graine neuve à chaque exécution : le même code échoue une
@@ -8516,31 +10037,40 @@ modules faciles pendant que les branches qui comptent restent nues : le plafond
 d'un participant partiellement fixé, la frontière d'instantané, le renommage qui
 échoue. Le chiffre monte, et c'est le chiffre qui cache.
 
-**La couverture se mesure et se publie par module**, jamais agrégée. Sa valeur est
-de **désigner ce qui n'est jamais exécuté** ; c'est une liste à lire, pas une note.
+**La couverture se mesure et se publie par module.** Les lignes d'ensemble et
+de dossier que le tableau imprime aussi ne décident de rien : aucun seuil ne
+les lit. La couverture vaut parce qu'elle **désigne ce qui n'est jamais
+exécuté** ; c'est une liste à lire, pas une note.
 
-**Des seuils durs, en branches, sur dix modules.** Le module des indicateurs
-et du plafond, les chemins de reprise du stockage, le registre des critères
-avec la règle de correspondance des objectifs, et les quatre modules qui
-calculent la page de qualité — le détail d'un placement, les paires répétées,
-la diversité par animateur et la géométrie des graphiques — tiennent **100 %
-de branches**. Ils sont petits, purs — les chemins de reprise à la condition
-d'injection du § 13.4 — et chaque branche non couverte y est un cas que
-l'opérateur rencontre au pire moment. Ceux de la page de qualité rendent
+**Des seuils durs, en branches, sur quinze modules.** Le module des indicateurs
+et du plafond, les chemins de reprise du stockage, le registre des critères avec
+la règle de correspondance des objectifs, les quatre modules qui calculent la
+page de qualité — le détail d'un placement, les paires répétées, la diversité
+par animateur et la géométrie des graphiques —, les deux modèles purs qui
+mettent en forme sa vue de comparaison — la vue et ses colonnes côte à côte —,
+le geste « Comparer » du tableau des propositions, et le départ d'une génération
+dérivée, dans l'application comme dans la section de la génération (§ 5.7),
+tiennent **100 % de branches**. Ils sont petits, purs — les chemins de reprise à
+la condition d'injection du § 13.4 — et chaque branche non couverte y est un cas
+que l'opérateur rencontre au pire moment. Ceux de la page de qualité rendent
 chaque nombre qu'elle écrit, l'écran ne faisant que les mettre en forme
-(§ 12.9) : une branche nue y est un chiffre affiché que rien n'éprouve. Une
-branche qu'on ne sait pas couvrir est soit du code mort — on le retire — soit
-un cas que la spécification n'a pas prévu — on l'écrit.
+(§ 12.9) : une branche nue y est un chiffre affiché que rien n'éprouve. Ceux du
+départ décident ce qu'une dérivée garde de sa proposition de départ et ce que le
+lancement refuse : une branche nue y est un refus ou un tour recopié que rien
+n'éprouve. Une branche qu'on ne sait pas couvrir est soit du code mort — on le
+retire — soit un cas que la spécification n'a pas prévu — on l'écrit.
 
 **La mesure est sa propre commande**, `make couverture` : la série `node` sous
 instrumentation, hors des budgets du § 14.14. Elle publie un tableau par couche
 et par module, et un rapport à parcourir qui montre, ligne à ligne, ce qui n'est
-jamais exécuté. Les seuils portent sur dix fichiers —
+jamais exécuté. Les seuils portent sur quinze fichiers —
 `src/moteur/indicateurs.js` et `src/moteur/plafond.js`, `src/stockage/depot.js`
 et `src/stockage/journal.js`, `src/moteur/criteres.js` et
-`src/moteur/correspondance.js`, `src/moteur/qualite.js`,
-`src/moteur/paires.js`, `src/moteur/diversite.js` et
-`src/geometrie/graphique.js` — et la commande échoue en deçà. Un test de
+`src/moteur/correspondance.js`, `src/moteur/qualite.js`, `src/moteur/paires.js`,
+`src/moteur/diversite.js`, `src/geometrie/graphique.js`,
+`src/interface/qualite/comparaison.js` et `src/interface/qualite/colonnes.js`,
+`src/interface/propositions/comparer.js`, `src/application/depart.js` et
+`src/interface/generation/depart.js` — et la commande échoue en deçà. Un test de
 l'arborescence refuse un seuil abaissé, un seuil global, et un seuil posé sur un
 fichier absent ou hors de la mesure : l'outil tiendrait ce dernier pour atteint,
 faute de branche à compter. Il refuse de même une commande qui ne mesure pas —
@@ -8567,7 +10097,10 @@ couverture :
    Un mutant déclaré équivalent que le délai arrête se rejoue seul, sans
    autre mutant à côté, avant d'être compté : l'audit joue ses mutants
    plusieurs à la fois, et cette charge ne fait pas passer un équivalent lent
-   pour une boucle sans fin.
+   pour une boucle sans fin. De même, un mutant déclaré équivalent que les
+   épreuves longues tuent s'y rejoue seul avant d'être compté : leurs
+   épreuves de durée tiennent leur seuil seules, pas sous la charge des
+   rejeux parallèles.
    Le résultat s'écrit sous **`audit/`**, versionné : `mutation-moteur.md`, le
    rapport à lire, et `mutation-moteur.json`, le même à comparer d'un audit à
    l'autre ; `mutants-equivalents.json` y déclare, un par un et avec sa raison,
@@ -8877,7 +10410,7 @@ un fichier vide passe tous les tests sans rien démontrer.
 5. **Le fichier livré est la source de vérité.** Un test rejoue le script
    générateur et compare l'empreinte au fichier livré. **L'empreinte porte sur la
    charge utile, l'en-tête exclu** (§ 8.8) : sans cette restriction,
-   `produit_version` la fait échouer à chaque livraison, et le geste conscient
+   `produitVersion` la fait échouer à chaque livraison, et le geste conscient
    qu'elle réclame devient mécanique, donc aveugle. **La régénération devient un
    geste conscient**, et non une dérive qui change les démonstrations sous les
    pieds de l'opérateur. L'échec nomme ce qui a changé.
@@ -8913,14 +10446,16 @@ combinaisons. Le générateur **refuse** de produire une démonstration dont le
 compte de groupes dépasse son réservoir.
 
 Un test vérifie l'unicité et qu'aucun fragment forgé n'apparaît dans le dépôt
-**hors des listes du générateur, des fichiers de démonstration et des CSV
-d'exemple**. Le balayage s'étend aux **données d'épreuve** (§ 14.9), dont les noms
-inventés sont disjoints de ce réservoir : une donnée d'épreuve qui emprunte une
-racine d'organisation plausible fait échouer la garde, et c'est ce qui l'empêche
-de tomber au premier exemple écrit de bonne foi. Il refuse de passer sur un
-balayage vide. **Ce test n'établit rien sur le monde réel** : aucune
-vérification locale ne peut prouver qu'un nom forgé ne désigne nulle part une
-organisation existante.
+**hors des listes du générateur, des fichiers de démonstration, des CSV
+d'exemple et du manifeste des captures** (`doc/captures/manifeste.json`,
+§ 19.7), qui relève les textes visibles du parcours photographié et porte donc
+les noms des démonstrations qu'il joue. Le balayage s'étend aux **données
+d'épreuve** (§ 14.9), dont les noms inventés sont disjoints de ce réservoir :
+une donnée d'épreuve qui emprunte une racine d'organisation plausible fait
+échouer la garde, et c'est ce qui l'empêche de tomber au premier exemple écrit
+de bonne foi. Il refuse de passer sur un balayage vide. **Ce test n'établit rien
+sur le monde réel** : aucune vérification locale ne peut prouver qu'un nom forgé
+ne désigne nulle part une organisation existante.
 
 ---
 
@@ -8932,10 +10467,15 @@ plateformes de Capacitor (§ 13.1). La construction s'exécute dans un conteneur
 sous une image épinglée par empreinte, de sorte que la machine de développement
 n'a rien à installer en dehors du projet. La cible portable n'exige pas Wine :
 `electron-builder` édite lui-même les ressources de l'exécutable. L'image n'en
-porte donc pas, et une cible qui l'exigerait — un installateur — y échoue au lieu
-de produire le livrable que ce paragraphe exclut. Le conteneur ne reçoit aucune
-variable de l'hôte : un numéro de construction d'intégration continue y
-remplacerait le quatrième champ de la version Windows (§ 18.1).
+porte donc pas, et une cible qui l'exigerait — un installateur — y échoue au
+lieu de produire le livrable que ce paragraphe exclut. Le conteneur ne reçoit
+aucune variable de l'hôte, hors des variables de mandataire : un numéro de
+construction d'intégration continue y remplacerait le quatrième champ de la
+version Windows (§ 18.1). Les variables de mandataire (`http_proxy`,
+`https_proxy`, `ftp_proxy`, `no_proxy`, en minuscules comme en majuscules), que
+le moteur de conteneurs relaie de lui-même, ne touchent pas à la version, et
+derrière un mandataire le téléchargement des dépendances et d'Electron en a
+besoin.
 
 **Cette capacité est à vérifier dès la première semaine**, sur un squelette vide,
 au même titre que la publication du dossier d'origine par le lanceur portable
@@ -9050,8 +10590,11 @@ sa valeur soit encore relevée ; un seul reste entièrement ouvert.
    version exacte : Vite incorpore au paquet ce que la page importe, et rien
    d'autre. Leurs avis, et ceux des œuvres que leur construction publiée
    incorpore, vont dans `public/licences/TIERS.txt`, qui voyage avec la page.
-3. **TRANCHÉ — la désignation des animateurs est manuelle.** Il n'existe aucune
-   commande qui les répartit : § 5.8 et § 2.1, étape 6.
+3. **TRANCHÉ — la désignation des animateurs est manuelle, hors de la création
+   des tables.** Seule « Créer les tables… » répartit des animateurs, sur les
+   tables qu'elle crée, pour les personnes que la marque de l'animation
+   réservée dit à désigner. Une table existante, l'opérateur la pourvoit
+   lui-même : § 5.8 et § 2.1, étape 6.
 4. **TRANCHÉ — mesuré : le coût de la maximisation du plafond a priori** sur
    les itinéraires admissibles. Sous `node`, sur la grande démonstration et sa
    variante, le plafond a priori coûte de l'ordre d'un dixième de milliseconde,
@@ -9193,11 +10736,15 @@ cette copie-là.
 La construction **refuse d'écraser un exécutable portant le même nom** dans le
 dossier de sortie. Ce refus est un garde-fou local — le § 18.5 énonce ce qu'il ne
 couvre pas — et une option explicite le lève pour reconstruire un numéro qui n'a
-pas été livré.
+pas été livré. `./create_exe.sh` remplace ce refus par une **question posée au
+terminal** : « oui » passe l'option, toute autre réponse laisse l'exécutable en
+place. Sans terminal, la réponse est non, et `GTT_OUI=1`, qui répond oui d'avance
+aux questions de l'installation, **ne répond pas à celle-ci** : écraser un numéro
+qui a peut-être quitté la machine se décide à la main, ou par l'option.
 
 **Le guide ne cite jamais un nom complet, il cite le gabarit** (§ 16.1).
 
-### 18.3 Une seule source, quatre destinations
+### 18.3 Une seule source, cinq destinations
 
 La version est écrite **à un seul endroit**, un fichier `version.json` à la racine
 du projet :
@@ -9211,6 +10758,7 @@ Tout le reste en dérive, par un script de construction :
 | destination | forme | usage |
 |---|---|---|
 | `package.json` | technique | ce qu'exigent npm et `electron-builder`, qui en tire la ressource de version Windows |
+| `package-lock.json`, champ `version` et celui du paquet racine, `packages[""].version` | technique | ce que npm recopie de `package.json` dans son verrou ; le point 1 du § 18.5 le contrôle comme `package.json` |
 | nom de l'exécutable, posé dans la configuration d'`electron-builder` | soulignés | ce que l'opérateur voit dans son dossier |
 | `src/version.genere.js` | affichée **et** technique | ce que l'application affiche |
 | titre de la section de tête du `CHANGELOG.md` | affichée | ce que l'opérateur lit avant de remplacer |
@@ -9292,9 +10840,10 @@ est une livraison dont l'opérateur ne peut pas décider.
 Chaque endroit où un chiffre se recopie est une occasion de diverger. Un contrôle
 de la série `node` surveillée (§ 14.4) **échoue** quand :
 
-1. la version technique de `package.json` n'est pas celle que la
-   dérivation du § 18.1 produit depuis `version.json`, ou ne se redécompose pas en
-   la version affichée ;
+1. la version technique de `package.json`, ou l'un des deux champs de version
+   de `package-lock.json`, n'est pas celle que la dérivation du § 18.1 produit
+   depuis `version.json`, ou ne se redécompose pas en la version affichée, ou
+   le verrou manque ;
 2. le module engendré ne reproduit pas, caractère pour caractère, ce que le script
    réengendre ;
 3. le titre de la première section du `CHANGELOG.md` n'est pas la version
@@ -9307,7 +10856,10 @@ de la série `node` surveillée (§ 14.4) **échoue** quand :
    contrôle attrape est une année ou un mois tapé de travers, pas une minute ;
 6. une chaîne **de la forme affichée** apparaît ailleurs que dans `version.json`,
    le module engendré et le changelog, ou une chaîne **de la forme technique**
-   ailleurs que dans `package.json` et le module engendré ;
+   ailleurs que dans `package.json`, `package-lock.json` et le module engendré.
+   Le verrou est hors du balayage, comme `version.json`, le module et le
+   changelog, que les points 1 à 3 contrôlent : la version s'y recopie par
+   construction ;
 7. un document construit porte le littéral `#_#`, ou cite un nom d'exécutable qui
    **ne se conforme pas au gabarit** du § 18.2. Un gabarit non substitué se lit
    comme un nom de fichier et envoie l'opérateur chercher un fichier qui n'existe
@@ -9319,7 +10871,7 @@ de la série `node` surveillée (§ 14.4) **échoue** quand :
 **Le périmètre du balayage du point 6 se pose à l'écriture du contrôle, pas
 après.** Il porte sur **l'arbre des sources, les fichiers de configuration et les
 scripts de construction**, à l'exclusion des **données engendrées** — fichiers de
-démonstration qui portent `produit_version`, manifeste des captures d'écran,
+démonstration qui portent `produitVersion`, manifeste des captures d'écran,
 données d'épreuve —, des guides, des épreuves de la dérivation elle-même qui citent
 des exemples par nécessité, des dépendances et des sorties de construction. Sans
 cette exclusion le contrôle échoue au premier jour, et un contrôle qui échoue en
@@ -9358,7 +10910,7 @@ question. Le logiciel fait donc en sorte qu'on n'ait pas à la chercher.
 | **titre de la fenêtre** | `Gestion table tournante Libre — 2026.10.05.01` |
 | **panneau « À propos »** | un bloc d'une ligne que l'opérateur **copie**, sous l'éditeur et l'auteur |
 | **pied de chaque page imprimée** (§ 11.7) | la version, à côté de l'horodatage du placement |
-| **en-tête du fichier d'état** (§ 8.8) | champ `produit_version` |
+| **en-tête du fichier d'état** (§ 8.8) | champ `produitVersion` |
 
 **Le bandeau d'application est le porteur principal, et le titre de fenêtre son
 complément.** Un signalement arrive le plus souvent sous forme d'image, et une
@@ -9377,12 +10929,13 @@ dit, et le bandeau n'a rien à annoncer. Le changelog annonce le changement de
 format à la livraison ; le bandeau l'annonce au moment où l'opérateur ouvre le
 fichier.
 
-**Le bloc copiable** du panneau « À propos » tient en une ligne — version affichée,
-plateforme, provenance de la construction, version de format des fichiers — et se
-colle dans un courriel. Un chiffre recopié à la main se recopie faux. Il ne porte
-que la version affichée, `2026.10.05.01`, celle du changelog et du nom du
-livrable : la forme Windows, `2026.1005.1.0`, reste dans la fiche de propriétés du
-fichier, et le guide Windows renvoie au nom de l'exécutable pour la version.
+**Le bloc copiable** du panneau « À propos » tient en une ligne — nom du
+produit, version affichée, plateforme, provenance de la construction, version de
+format des fichiers, séparés par « · » — et se colle dans un courriel. Un
+chiffre recopié à la main se recopie faux. Il ne porte que la version affichée,
+`2026.10.05.01`, celle du changelog et du nom du livrable : la forme Windows,
+`2026.1005.1.0`, reste dans la fiche de propriétés du fichier, et le guide
+Windows renvoie au nom de l'exécutable pour la version.
 Au-dessus du bloc, le panneau nomme l'éditeur, **TechnoLibre Inc.**, et l'auteur,
 **Mathieu Benoit**, développeur, concepteur et mainteneur du logiciel ; « Copier »
 ne les emporte pas.
@@ -9427,7 +10980,13 @@ dans une nouvelle fenêtre, sans ouvreur ni référent : un nouvel onglet sur
 `web` ; sous `electron`, la coquille refuse toute fenêtre et toute navigation,
 et passe au navigateur du système l'adresse cliquée quand elle est exactement
 l'une des quatre adresses https du panneau (§ 2). Une autre adresse n'ouvre
-rien.
+rien. Hors de Windows et de macOS, l'adresse passe par l'ouvreur du bureau,
+celui qui montre un dossier (§ 8.6), dont la coquille attend l'issue ; ailleurs,
+par le navigateur que désigne le système. Dans les deux cas, l'issue revient à
+la page : une ouverture qui échoue se dit dans le panneau, sous les liens de la
+carte qui porte le lien, par le texte de l'explorateur qui ne s'ouvre pas —
+l'ouverture a échoué, avec sa raison —, et le même lien ouvert ensuite le
+retire.
 
 **Le panneau « Paramètres »** s'ouvre du bandeau, par la commande placée juste à
 gauche de « À propos », et remplace l'écran comme lui ; les deux ne sont jamais
@@ -9586,6 +11145,14 @@ d'écran déclare l'étape à laquelle elle appartient, et un contrôle du nivea
 échoue si une étape n'a **aucune** capture, ou si l'ordre des captures contredit
 l'ordre des étapes.
 
+**Seule une capture photographiée, présente au manifeste, couvre une étape** :
+aucune liste ne déclare un écran sans image qui en tiendrait lieu, et la liste
+`reportees` du format du manifeste est toujours vide — chacune de ses entrées est
+une faute. La publication du § 19.5 passe le même contrôle ; celle d'une
+sélection de captures, que font les épreuves de la publication, n'exige que les
+étapes de sa sélection, et le contrôle du niveau `node` refuse le manifeste
+qu'elle laisserait.
+
 Chaque étape **affirme une condition visible avant de prendre sa capture
 d'écran** — l'élément nommé est présent et porte le libellé attendu — et
 l'exécution s'arrête sur la première condition fausse et sur la première entrée du
@@ -9608,15 +11175,15 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `02-import-apercu.png` | `participants_cas_limites.csv` | le haut de l'aperçu obligatoire (§ 10.1) : la nature du fichier choisie, « Participants » (§ 10.4), le mode de l'import, le nom du fichier, l'encodage et le séparateur détectés et **nommés** ; le tableau des colonnes, qui porte l'association par en-tête, s'ouvre au bord inférieur et se poursuit sous l'image | l'encodage et le séparateur affichés sont ceux que le module d'import a retenus ; l'aperçu n'est pas contournable ; au moins un groupe d'orthographes fondu et au moins une ligne refusée sont affirmés sur l'écran, sous l'image |
 | `02b-import-cp1252.png` | `participants_cas_limites_cp1252.csv` | le haut de l'aperçu du même contenu en windows-1252 (§ 10.1) : la nature du fichier choisie, le nom du fichier, l'encodage détecté et **nommé**, le séparateur, « virgule » ; les cellules accentuées sont sous l'image | l'encodage affiché est celui que le module d'import a retenu ; les cellules accentuées de l'aperçu sont celles que rend le décodage du fichier, sans caractère parasite, et sont affirmées sur l'écran, sous l'image : l'épreuve lit le texte de l'aperçu, non ce que la fenêtre laisse voir |
 | `02c-import-presence.png` | **petite démonstration**, générée, n° 1 retenue (« la présence par tour », plus bas) | l'aperçu, en mise à jour, du modèle de participants téléchargé sous quatre tours, plus une ligne qui désigne une personne inscrite par son nom et son prénom, sa présence vide : la colonne « présence » et ses cellules lues en tours ; « présence inchangée » sur la seule ligne de la personne inscrite (§ 10.1) | la cellule « 1-3 » se lit « tours 1 à 3 » et la cellule « 2, 3 » « tours 2 et 3 », par la grammaire du CSV ; les cellules vides des personnes du modèle, que l'import crée, ne disent rien ; aucune ligne refusée, aucun doublon ; « Fermer l'aperçu » n'écrit rien |
-| `03-import-rapport.png` | idem | le haut du rapport : les comptes de l'import — personnes ajoutées, mises à jour, inchangées, retirées, réservations retirées —, le nom du fichier, l'encodage et le séparateur | le compte des personnes ajoutées égale le nombre de participants de l'événement, et l'import fait une seule entrée d'historique ; au moins un groupe d'orthographes fondu et au moins une ligne refusée sont affirmés sur l'écran, sous l'image |
+| `03-import-rapport.png` | `participants_cas_limites.csv`, comme `02` | le haut du rapport : les comptes de l'import — personnes ajoutées, mises à jour, inchangées, retirées, réservations retirées —, le nom du fichier, l'encodage et le séparateur | le compte des personnes ajoutées égale le nombre de participants de l'événement, et l'import fait une seule entrée d'historique ; au moins un groupe d'orthographes fondu et au moins une ligne refusée sont affirmés sur l'écran, sous l'image |
 | `04-grille-participants.png` | l'événement en construction | la grille éditable, le tri, le filtre, une personne exclue, la légende des étiquettes, chacune chiffrée (§ 10.2) | le compte affiché égale le compte importé |
 | `04a-etiquettes.png` | l'événement en construction | la fiche d'une personne, sa rubrique « Logo » sans logo — « Aucun logo. » et la commande « Logo » —, puis ses étiquettes en pastilles neutres, le champ d'ajout, et le signal de l'orthographe retenue sous le champ ; la légende des étiquettes, chiffrée, est celle de `04` (§ 10.2) | les étiquettes affichées sont celles de la personne ; une saisie d'une orthographe voisine reçoit l'orthographe existante, et le signal est visible ; la légende compte les porteurs de chaque étiquette, exclues comprises |
-| `04b-presence-grille.png` | idem, l'arrivée ajoutée et dite présente aux tours 3 et 4 par sa fiche | la grille triée par nom, les cases de présence de la partante ouvertes au clavier, tours 1 et 2 cochés, et la ligne de l'arrivée, « tours 3 et 4 » en pastille (§ 10.2) | les cases ouvertes et cochées n'écrivent rien ; Entrée, après l'image, écrit une entrée, et le retenu laisse la chaise de la partante libre aux tours 3 et 4, sans dériver |
+| `04b-presence-grille.png` | idem que `02c`, l'arrivée ajoutée et dite présente aux tours 3 et 4 par sa fiche | la grille triée par nom, les cases de présence de la partante ouvertes au clavier, tours 1 et 2 cochés, et la ligne de l'arrivée, « tours 3 et 4 » en pastille (§ 10.2) | les cases ouvertes et cochées n'écrivent rien ; Entrée, après l'image, écrit une entrée, et le retenu laisse la chaise de la partante libre aux tours 3 et 4, sans dériver |
 | `04c-presence-fiche.png` | idem | la rubrique « Présence » de la fiche de l'arrivée : son résumé, ses cases 3 et 4 cochées, et l'itinéraire du retenu, « absente, absente, en réserve, en réserve » ; la rubrique « Logo », plus haut dans la fiche, hors de l'image (§ 10.2) | le résumé, les cases et l'itinéraire égalent la présence et le retenu de la charge |
-| `05-tables-etat.png` | idem, deux tables posées par le scénario | deux tables à 8 places dont l'une **suit le défaut** et l'autre porte une **surcharge de même valeur** (§ 6.1) | les deux états s'affichent différemment **à valeur égale** |
+| `05-tables-etat.png` | l'événement en construction, deux tables posées par le scénario | deux tables à 8 places dont l'une **suit le défaut** et l'autre porte une **surcharge de même valeur** (§ 6.1) | les deux états s'affichent différemment **à valeur égale** |
 | `05a-objectifs-tables.png` | idem | une table à objectif de soirée qui suit la règle par défaut, que son choix de règle nomme en mots (« selon le réglage général (…) »), une table à objectif de tour à règle propre (§ 4.5) | les deux états de règle s'affichent différemment ; l'objectif auquel personne ne correspond porte son signal ; la règle par défaut, changée puis rendue, n'est pas écrite |
 | `05b-import-objectifs.png` | `objectifs_cas_limites.csv` | l'aperçu des objectifs : lignes refusées avec leur motif, orthographes fondues (§ 10.4) | au moins une ligne refusée et un groupe fondu sont visibles ; la nature du fichier, cochée et nommée, et le séparateur nommé sont affirmés sur l'écran, au-dessus de l'image |
-| `06-defaut-consequence.png` | idem | l'énoncé chiffré avant application — tables suivant le défaut, surchargées épargnées, total des sièges contre nombre de participants | le total annoncé égale celui que recalcule le moteur |
+| `06-defaut-consequence.png` | l'événement en construction | l'énoncé chiffré avant application — tables suivant le défaut, surchargées épargnées, total des sièges contre nombre de participants | le total annoncé égale celui que recalcule le moteur |
 | `07-plan-tables.png` | idem | le plan, ses tables à l'échelle, l'échelle graphique, la mention « disposition relative » (§ 7.7) | la mention est présente tant qu'aucune dimension de salle n'est saisie |
 | `07a-cibles-sieges.png` | **grande démonstration** (celle de la capture `10`) | zoomée jusqu'au régime des sièges : les chaises dessinées une à une, chacune une cible (§ 7.3) | le centre d'une chaise désigne cette chaise |
 | `07a-cibles-tables.png` | idem | au zoom ajusté, sous le seuil de 24 px : la table est la cible, et ses chaises ne se dessinent plus une à une | le même point désigne la table, et aucune chaise |
@@ -9637,22 +11204,22 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `12e-qualite-sans-collision.png` | **9 personnes de neuf organisations distinctes, 3 tables de 3, 2 tours**, construite, sa génération faite | la phrase de la vue des collisions ; la grille sous la position « par siège », qui reste (§ 12.6, § 12.11) | aucune barre de collision n'est dessinée ; le sélecteur est sur « par siège » et chaque case écrit 0 |
 | `12f-qualite-reserve.png` | **petite démonstration, variante « conflit inévitable »**, sa première proposition retenue puis ajustée au plan : une personne mobile — ni ancrée ni partiellement fixée — mise en réserve au tour 2 | le premier graphique du profil, le point de la personne marqué « en réserve » ; les collisions à un seul segment et la phrase qui dit pourquoi le plancher ne s'applique pas, plus bas, sont affirmées sans l'image (§ 12.4, § 12.6) | aucun segment « prouvé inévitable » n'est dessiné ; le point de la personne porte la marque de la réserve |
 | `12g-qualite-plafond-nul.png` | **5 personnes, une table de 4 et une table de 2, 2 tours**, construite : quatre réservées à la table de 4 aux deux tours, la cinquième sans réservation, que sa génération assoit seule à la table de 2 aux deux tours | le point marqué d'un plafond réalisé nul au rang 1 du profil, son infobulle ouverte ; au second graphique, ce rang sans point (§ 12.3, § 12.6) | la cinquième, ni ancrée, ni partiellement fixée, ni en réserve, porte la marque du plafond réalisé nul ; l'infobulle écrit le plafond réalisé 0 et le pourcentage « — » ; le second graphique n'a pas de point à ce rang |
-| `12h-qualite-absence.png` | idem, la meilleure dérivée montrée | le bas de l'en-tête chiffré : la tuile de l'écart d'itinéraire maximal, « Plancher non prouvé : une personne au moins est absente à un tour. », et ses voisines (§ 12.2) | seule cette tuile le dit ; hors de l'image, les collisions gardent leur segment « prouvé inévitable », égal au plancher du diagnostic — une collision à chacun des tours de l'arrivée, son groupe y comptant une personne de plus que les tables —, et le profil marque d'un losange la partante et l'arrivée, « absente à un tour au moins » |
+| `12h-qualite-absence.png` | idem que `02c`, la meilleure dérivée montrée | le bas de l'en-tête chiffré : la tuile de l'écart d'itinéraire maximal, « Plancher non prouvé : une personne au moins est absente à un tour. », et ses voisines (§ 12.2) | seule cette tuile le dit ; hors de l'image, les collisions gardent leur segment « prouvé inévitable », égal au plancher du diagnostic — une collision à chacun des tours de l'arrivée, son groupe y comptant une personne de plus que les tables —, et le profil marque d'un losange la partante et l'arrivée, « absente à un tour au moins » |
 | `13-qualite-collisions.png` | **petite démonstration, variante « conflit inévitable »** | les barres horizontales à deux segments, « prouvé inévitable » et « reste », en **collisions cumulées**, avec l'effectif, les paires distinctes et l'**excédent** en encre secondaire | le segment prouvé vaut **4 collisions cumulées** et égale le plancher du diagnostic, au chiffre près ; les lignes sont triées sur l'excédent (§ 12.4) |
 | `13a-qualite-tables.png` | **petite démonstration, variante « conflit inévitable »** | le sélecteur à trois positions sur « par siège », la grille tables × tours, chaque case ses sièges sans organisation nouvelle, de 0 ou 1, en deux teintes, la pire table en première ligne, que la phrase sous la grille nomme (§ 12.11) | la première ligne porte le plus grand compte de la position « par siège » ; chaque case écrit le nombre que son niveau colore ; une case sans affilié écrit « — » sans teinte |
 | `14-qualite-paires.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | le tableau des paires répétées trié, pas la matrice (§ 12.5) | le tableau n'est pas vide, et la première commande de chaque ligne mène au premier tour où la paire se revoit |
 | `14a-fiche-rencontres.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | la rubrique « Rencontres » de la fiche d'une personne, ses premières lignes, les plus revues d'abord ; le haut de la fiche, son nom et sa rubrique « Logo » compris, hors de l'image (§ 12.5, § 10.2) | la ligne de la fiche égale la ligne de la personne dans le tableau des paires |
 | `15-pas-de-matrice.png` | **grande démonstration** | à 260 participants, le tableau et non la matrice, avec la phrase qui le dit | aucune matrice n'est dessinée |
-| `15a-qualite-objectifs.png` | l'événement en construction, la première proposition du classement montrée | les personnes jamais servies en tête, la soirée en texte, son pourcentage et le compte des jamais servies dessous, puis les barres des tours hors objectif, « prouvé inévitable » et « reste », chacune avec son pourcentage, ses deux comptes et ses assis sans table possible (§ 12.12) | la somme des planchers des tours égale le plancher du diagnostic ; possibles − servis de la soirée égale la colonne des tours hors objectif du tableau des propositions ; chaque ligne de tour écrit ses assis sans table possible |
+| `15a-qualite-objectifs.png` | l'événement en construction, la première proposition du classement montrée | les personnes jamais servies en tête, la soirée en texte, son pourcentage et le compte des jamais servies dessous, puis les barres des tours hors objectif, « prouvé inévitable » et « reste », chacune avec ses assis sans table possible, puis chaque tour avec son pourcentage et ses deux comptes (§ 12.12) | la somme des planchers des tours égale le plancher du diagnostic ; possibles − servis de la soirée égale la colonne des tours hors objectif du tableau des propositions ; chaque ligne de tour écrit ses assis sans table possible |
 | `15b-qualite-animateurs.png` | **grande démonstration** | le profil des animateurs rencontrés avec la borne des animateurs en repère pointillé, puis le début de la diversité par animateur sur la soirée, le moins varié en tête ; ses colonnes et leurs trois nombres, plus bas, sont affirmés sans l'image (§ 12.13) | le mot « plafond » n'est pas écrit dans la vue ; la première barre porte le minimum annoncé |
 | `15c-qualite-performance.png` | **grande démonstration**, une proposition montrée, dans la séance qui l'a engendrée | la ligne de tête — mouvements évalués, durée et cadence de la génération — et les deux premiers rangs des petits multiples sur l'abscisse logarithmique ; les autres multiples et la phrase du dernier changement, plus bas, sont affirmés sans l'image (§ 12.14) | le dernier point de relevé est le plan de la proposition ; ses valeurs égalent la ligne du tableau des propositions ; la durée écrite est celle dont le parcours a avancé l'horloge |
 | `16-minimum-atteint.png` | **petite démonstration** | le bas de l'en-tête chiffré : la diversité d'organisation, le manque à zéro et **« minimum atteint »** ; les compteurs de collision et de répétition **mesurés** à zéro et la ligne secondaire « ancrés » à **« — »**, plus haut, sont affirmés sans l'image (§ 15.3) | la mention est présente, les compteurs mesurés sont nuls, et la population vide affiche un tiret, **jamais zéro** |
-| `17-comparaison-manque.png` | **variante sans exception** (§ 15.1), une paire de placements écrite dans le scénario | la vue de comparaison : « Tous les indicateurs » replié, les deux profils de manque superposés qui se croisent, l'axe commun, le zéro libellé, la synthèse du tracé, les trois effectifs de rangs (§ 12.10.6) ; la question, la ligne qui nomme les deux placements et leurs colonnes, plus haut, sont affirmées sans l'image, et `17a` les montre | la page écrit sa question en toutes lettres et les trois effectifs ; aucune échelle propre à une courbe ; chaque pourcentage d'une colonne est suivi de son compte du pire ; aucun pourcentage hors des colonnes — ni au tracé, ni à sa synthèse, ni dans les phrases ; le signe change au moins une fois |
-| `17a-comparaison-colonnes.png` | idem, la même paire | la même vue, cadrée sur ses colonnes : la ligne qui nomme les deux placements, leurs chiffres en deux colonnes côte à côte — le minimum brut de chacune en pourcentage, le compte du pire dessous —, « Tous les indicateurs » replié | chaque colonne porte un pourcentage par indicateur visible qui en a un, le pire cas de son placement, chacun suivi de son compte du pire |
+| `17-comparaison-manque.png` | **variante sans exception** (§ 15.1), une paire de placements écrite dans le scénario | la vue de comparaison : « Tous les indicateurs » replié, les deux profils de manque superposés qui se croisent, l'axe commun, le zéro libellé, la synthèse du tracé, les trois effectifs de rangs (§ 12.10.6) ; les colonnes, plus haut, sont affirmées sans l'image, et `17a` les montre, leurs en-têtes nommant les deux placements ; la question et la ligne qui nomme les deux placements, au-dessus d'elles, ne sont dans aucune des deux images et s'affirment par l'épreuve | la page écrit sa question en toutes lettres et les trois effectifs ; aucune échelle propre à une courbe ; chaque pourcentage d'une colonne est suivi de son compte du pire ; aucun pourcentage hors des colonnes — ni au tracé, ni à sa synthèse, ni dans les phrases ; le signe change au moins une fois |
+| `17a-comparaison-colonnes.png` | idem, la même paire | la même vue, cadrée sur ses colonnes : leurs en-têtes, qui nomment les deux placements, leurs chiffres en deux colonnes côte à côte — le minimum brut de chacune en pourcentage, le compte du pire dessous, les lignes secondaires des trois chiffres du manque —, « Tous les indicateurs » replié | chaque colonne porte un pourcentage par indicateur visible qui en a un, le pire cas de son placement, chacun suivi de son compte du pire |
 | `18-comparaison-escalier.png` | idem | l'escalier du manque ouvert, jumeau tabulaire de la vue précédente, une colonne d'effectif et une d'effectif cumulé par placement | les effectifs cumulés du tableau reproduisent la courbe ; l'escalier n'écrit aucun pourcentage |
 | `19-ajustement.png` | l'événement retenu | le déplacement d'une personne après la retenue, l'interface disant **lequel des deux gestes** est en cours (§ 5.8) | le libellé de l'état des données est visible |
 | `19a-presence-plan.png` | idem que `02c` | le retenu au tour 3 : la chaise libre de la partante, l'arrivée dans la réserve, la carte « Absentes » qui nomme la partante, et la liste « En réserve dans le placement retenu » (§ 5.8, § 7.1) | une entrée par geste depuis l'ajout, trois en tout ; le retenu ne dérive pas ; la réserve, les absentes et la liste nomment chacune la seule personne attendue |
-| `20-mode-lecture.png` | idem | la bande de mode, le libellé de mode à côté de la place fixe, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
+| `20-mode-lecture.png` | l'événement retenu | la bande de mode, le libellé de mode à côté de la place fixe, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
 | `21-historique.png` | idem | le panneau d'historique ouvert à côté du plan : la liste, la plus récente en haut, chaque ligne sa date et son heure ; un geste défait au clavier, sa ligne « Défait (Ctrl+Z) : … », qui n'est pas abandonnée, et sous elle le geste défait, sur un fil abandonné, en encre secondaire et marqué ; en tête, l'instant courant, nommé « Avant l'accueil » par le champ du panneau (§ 8.2, § 8.3) | au moins un fil abandonné est présent et marqué comme tel ; le libellé du retour nomme la touche ; le jalon est sur l'instant courant, et le nommer ne change pas la révision |
 | `22-plan-brouillon.png` / `23-plan-retenu.png` | idem | l'**aperçu d'impression** du plan (§ 11.7) avec son cartouche, son échelle graphique et son horodatage, **avec** puis **sans** le filigrane BROUILLON | **deux images, parce qu'une absence ne se photographie pas** : le filigrane présent sur l'un, absent sur l'autre, et la paire est le seul exposé lisible de la règle |
 | `24-badges-controle.png` / `25-badges-planche.png` | idem, sur une machine qui n'a pas choisi de modèle de badge : Avery 5392 | la **feuille de contrôle à part**, avec son échelle de 100 mm, le contour des six cartes et ses comptes, puis la première **feuille de cartes**, six cartes Avery 5392 sans filet, les six premiers noms de l'ordre alphabétique ; une personne assise à la même table à chaque tour lit une seule ligne, « Toute la soirée — table 1 (Table d’honneur) », le libellé de la table après son numéro (§ 11.4) ; sous le pied de chaque carte, le pied TechnoLibre, son texte puis le logo en couleurs, la case de la machine étant cochée par défaut — la feuille de contrôle ne le porte pas | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle et pose sur une feuille de cartes avant d'engager les cartes, et une feuille de cartes seule ne le montre pas ; produire n'écrit que les deux PDF |
@@ -9733,10 +11300,11 @@ les autres captures et les familles reçoivent ; chacune se range à son étape
 par son nom. Le guide les cite aux étapes 2, 3, 9, 10, 11 et 12 ; l'appariement
 les garde (§ 19.7).
 
-**L'aperçu d'impression est plus haut que la fenêtre.** `22` et `23` le
-photographient au défilement où le filigrane et le pied de la première page
-partagent la fenêtre, la barre de l'aperçu hors de l'image ; `23` reprend le
-cadrage de `22` sur le placement retenu.
+**L'aperçu d'impression est plus haut que la surface de l'événement.** `22` et
+`23` le photographient, dans la section « Impression », au défilement de la
+surface où le filigrane et le pied de la première page la partagent, la barre de
+l'aperçu au-dessus d'elle ; `23` reprend le cadrage de `22` sur le placement
+retenu.
 
 **Trois pièges de dénombrement que cette table évite, et qui sont la raison de sa
 forme.**
@@ -9793,10 +11361,10 @@ neutralise chaque source de variation nommément.
 | **la taille du cadre d'affichage** | **une taille demandée n'est pas une taille obtenue** : ce que l'interface du navigateur prend autour du cadre diffère d'une version à l'autre, et un cadre laissé libre gouverne `k_ajusté` (§ 7.2) et donc le seuil de 24 px au-delà duquel les sièges cessent d'être des cibles (§ 7.3). Le scénario pose le cadre, **relit `innerWidth` et `innerHeight`, corrige de l'écart relevé, et échoue** s'il n'obtient pas les valeurs visées |
 | **un écran plus haut que la fenêtre** | il se photographie à la taille de la fenêtre, à une position défilée que le scénario pose et relit : l'image ne dépend pas de la hauteur de l'écran entier |
 | **le facteur d'échelle de l'affichage** | fixé **au lancement du navigateur**, par son argument de lancement, la page ouverte au même facteur 1 : aucune commande du pilote ne le fixe pour la fenêtre |
-| **le mode d'affichage du navigateur** | un seul mode, nommé, inscrit au manifeste : les métriques de texte en diffèrent |
+| **le mode d'affichage du navigateur** | un seul mode, sans tête, et **le mode réel est nommé et inscrit au manifeste** : celui du Chromium de Playwright, `chromium-headless-shell`, ou, sous `GTT_CHROMIUM`, celui que le nom de l'exécutable désigné annonce — `chromium-headless` pour un navigateur complet. Les métriques de texte en diffèrent : une capture prise dans un autre mode s'écarte du manifeste au lieu de passer pour la même |
 | **le cadrage mémorisé** | le § 8.5 range le cadrage dans un fichier de réglages locaux : le scénario démarre sur un **profil neuf**, ce qui lui donne du même geste un dossier de travail neuf |
 | **le numéro d'ordre du nom de démonstration** | charger une démonstration crée « ‹nom› 2 » à la deuxième exécution (§ 15) ; le répertoire neuf ramène chaque exécution au premier ordinal |
-| **l'horloge** — horodatage d'historique, pied de page, « dernière modification », retour automatique en lecture | **une seule source d'horloge dans toute l'application hors moteur**, et **elle possède aussi les minuteries**. Un instant figé ne suffit pas : un compte à rebours bâti sur une minuterie du moteur d'exécution continue d'avancer sous une horloge gelée, et **le retour automatique en lecture tombe au milieu d'une étape**. Le scénario installe une horloge dont il contrôle l'avance, ce qui lui permet aussi d'éprouver les durées |
+| **l'horloge** — horodatage d'historique, pied de page, « dernière modification », retour automatique en lecture | **une seule source d'horloge dans toute l'application hors moteur**, et **elle possède aussi les minuteries** : le stockage reçoit d'elle ses horodatages en paramètre, le système de fichiers web l'horloge elle-même pour ses minuteries, et une garde de l'arborescence refuse toute minuterie armée hors d'elle dans l'interface, l'application, le stockage et le point d'entrée de la page. Un instant figé ne suffit pas : un compte à rebours bâti sur une minuterie du moteur d'exécution continue d'avancer sous une horloge gelée, et **le retour automatique en lecture tombe au milieu d'une étape**. Le scénario installe une horloge dont il contrôle l'avance, ce qui lui permet aussi d'éprouver les durées |
 | **le numéro de version affiché** | une construction de documentation pose une **marque de provenance à la place du numéro** (§ 18.6), dans le bandeau, sur le premier écran, au pied des pages imprimées et sur la feuille de contrôle des badges. Sans elle, le texte relevé de chaque capture change à chaque livraison, l'empreinte d'étape change avec lui, et **toutes les images se réécrivent à chaque incrément** — précisément le bruit que la réécriture conditionnelle du § 19.5 existe pour supprimer |
 | **le chemin affiché** dans la liste des événements (§ 8.1) | racine de travail neutre, et le contrôle **refuse une capture dont le texte relevé — celui de tous les nœuds de texte de la région photographiée, pas des seuls éléments que l'étape nomme — porte un chemin hors de cette racine**. Un chemin réel porte un nom de compte, qu'une documentation publie |
 | **la police réellement rendue** | la police embarquée (§ 11.1) est celle du pilotage. Le scénario **mesure une chaîne témoin** par `getComputedTextLength()` et la compare à la valeur enregistrée **avec une tolérance relative, constante mesurée** (§ 14.1) — exiger l'égalité exacte reproduirait, sur une mesure de texte, l'erreur que cette section refuse sur les pixels. La tolérance se fixe au-dessous de l'écart qu'introduit un repli de police, qui est d'un tout autre ordre |
@@ -9879,7 +11447,7 @@ livré, et non une approximation à l'écran. Sa fraîcheur se contrôle sur
 l'**empreinte canonique du PDF produit**, que l'horloge contrôlée du § 19.4 rend
 stable, et non sur les pixels tramés.
 
-Le PDF tramé est celui que la section des badges vient de produire dans le
+Le PDF tramé est celui que la section de l'impression vient de produire dans le
 parcours — la feuille de contrôle à part pour `24`, la première feuille de
 cartes pour `25` et `25a` —, et non une seconde production : la page le passe
 aux commandes du lanceur, sous `node`, qui le lisent par `pdfjs-dist` — sa
@@ -10001,16 +11569,18 @@ questions et s'arrête.
    les combinaisons, et la petite démonstration est le plus petit cas du catalogue.
    Ce compte est vérifiable et remplace avantageusement toute affirmation sur la
    difficulté du problème.
-3. **Comment le logiciel cherche** : il part d'un placement complet dont le point
-   de départ dépend de la **graine**, **échange** des personnes entre tables, garde
-   ce qui améliore, et s'arrête sur un **compte** de mouvements sans amélioration
-   (§ 5.10). D'où **la réponse à la première question** : deux recherches parties
-   de deux points différents s'arrêtent sur deux placements différents, et aucun
-   des deux n'est « le bon ». Cette phrase est **vérifiable, et elle est
-   vérifiée** : un test sous `node` affirme que deux graines donnent deux résultats
-   et qu'une même graine donne deux fois le même. Un énoncé vérifiable vieillit
-   mieux qu'un énoncé vague : si le moteur est réécrit et que la phrase cesse
-   d'être vraie, le test le dit.
+3. **Comment le logiciel cherche** : il part d'un placement complet dont le
+   point de départ dépend de la **graine**, **échange** des personnes entre
+   tables, garde ce qui ne dégrade pas le placement, à score égal compris, et
+   s'arrête après un **compte** de mouvements essayés, le compte d'arrêt
+   (§ 5.10), ou plus tôt s'il ne reste rien à améliorer. D'où **la réponse à
+   la première question** : deux recherches parties de deux points différents
+   s'arrêtent sur deux placements différents, et aucun des deux n'est « le
+   bon ». Cette phrase est **vérifiable, et elle est vérifiée** : un test sous
+   `node` affirme que deux graines donnent deux résultats et qu'une même graine
+   donne deux fois le même. Un énoncé vérifiable vieillit mieux qu'un énoncé
+   vague : si le moteur est réécrit et que la phrase cesse d'être vraie, le
+   test le dit.
 4. **Ce que les contraintes font** : chacune est un **objectif**, pas un interdit
    (§ 5.3). Quand elles ne tiennent pas ensemble, le logiciel produit le meilleur
    compromis et dit lequel, au lieu de refuser et de ne rien montrer.
@@ -10048,17 +11618,22 @@ du moteur, et **font croire au lecteur que le texte ne lui est pas destiné** �
 après quoi il ne lit plus la section, qui est la seule réponse écrite à la question
 qu'il posera.
 
-La section s'appuie sur les captures d'écran `10`, `11`, `11b`, `12`, `16`,
-`17` et `18` : le diagnostic, les propositions classées, les dérivées, le
-profil trié, « minimum atteint » sur la petite démonstration, et la vue de
-comparaison et son escalier. La
-comparaison par le manque s'y lit sur `17` et `18`, les colonnes du tableau des
-propositions en donnant les chiffres ; une dérivée s'y lit sur `11b`, qui montre
-qu'elle entre au même classement que son départ. Le point 3 s'appuie en outre
-sur `15c` : la course d'une recherche, et son plateau. Le contraste de la
-variante « conflit inévitable » (§ 15.3) — une personne déplacée d'une
-organisation à l'autre, et la mention bascule — est le plus court exposé de
-toute la section, et il tient en deux images.
+La section s'appuie sur les captures d'écran `10`, `11`, `11b`, `12`, `13`,
+`16`, `17` et `18` : le diagnostic, les propositions classées, les dérivées, le
+profil trié, les collisions de la variante « conflit inévitable », « minimum
+atteint » sur la petite démonstration, et la vue de comparaison et son
+escalier. La comparaison par le manque s'y lit sur `17` et `18`, les colonnes
+du tableau des propositions en donnant les chiffres ; une dérivée s'y lit sur
+`11b`, qui montre qu'elle entre au même classement que son départ. Le point 3
+s'appuie en outre sur `15c` : la course d'une recherche, et son plateau. Le
+contraste de la variante « conflit inévitable » (§ 15.3) — une personne
+déplacée d'une organisation à l'autre, et la mention bascule — est le plus
+court exposé de toute la section, et il tient en deux images : `16`, « minimum
+atteint » sans collision, puis `13`, les quatre collisions cumulées au segment
+« prouvé inévitable ». Le point 7 le porte, puisque c'est ce que relancer ne
+peut pas effacer. Une épreuve du niveau `node` refuse une section qui ne cite
+pas chacune de ces captures, et un point 3 qui ne cite pas `15c` ou un point 7
+qui ne cite pas `16` et `13`.
 
 ### 19.10 Le banc de mesure
 

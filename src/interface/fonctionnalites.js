@@ -37,6 +37,7 @@ export const CATEGORIES = Object.freeze([
     f('PRE-12', '10.1', '10.3'),
     f('PRE-13', '4', '7.7'),
     f('PRE-14', '8.9', '10.2'),
+    f('PRE-15', '4', '10.1', '10.2'),
   ),
   categorie(
     'PLA',
@@ -57,6 +58,7 @@ export const CATEGORIES = Object.freeze([
     f('PLA-15', '5.8'),
     f('PLA-16', '7.5'),
     f('PLA-17', '7.7'),
+    f('PLA-18', '5.7', '7.5', '12.15'),
   ),
   categorie(
     'PRO',
@@ -68,6 +70,7 @@ export const CATEGORIES = Object.freeze([
     f('PRO-06', '11.7'),
     f('PRO-07', '11.7'),
     f('PRO-08', '11.7'),
+    f('PRO-09', '11.6'),
   ),
   categorie(
     'FIC',

@@ -8,19 +8,24 @@
 // lit sur la boîte rendue et les attributs, jamais sur une classe : le
 // cadrage de chaque <svg> contre la découpe recalculée de la bande et de la
 // hauteur de ligne mesurées comme l'aperçu les mesure, la troncature des
-// listes contre celle du plan à l'écran, la barre d'échelle, les mentions,
-// la bande qui compte le cartouche, l'absence d'identifiant, de poignée et
-// de tabulation, et les marques qui se lisent en noir et blanc.
+// listes contre celle du plan à l'écran, organisations comprises, la barre
+// d'échelle, les mentions, la bande qui compte le cartouche, l'absence
+// d'identifiant, de poignée et de tabulation, les marques qui se lisent en
+// noir et blanc, une colonne de tables par page, aucun texte des listes
+// hors de ses pages ni sur une autre table, et le plan écarté sous les
+// organisations, aucune liste sur une autre.
 //
 // App est montée par test/navigateur/ecrans.js sur le système de fichiers
 // simulé, au cadre de 1 366 × 700. Le projet navigateur emploie expect, et
 // test et describe de Vitest (§ 14.8).
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { appliquerCommande } from '../../application/commandes.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { constante } from '../../geometrie/constantes.js';
 import { echelleGraphique } from '../../geometrie/echelle.js';
+import { colonnesDeTables } from '../../geometrie/pages.js';
 import { TAILLE_TEXTE_LISTE_CM } from '../../geometrie/texte.js';
 import { analyser } from '../../stockage/document.js';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
@@ -35,9 +40,9 @@ import {
 } from '../../../test/navigateur/ecrans.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { CONFLITS } from '../marques.js';
-import { hauteurLigne } from '../plan/mesure_texte.js';
-import { libelleLongueur, modeleDessin } from '../plan/modele.js';
-import { nomDeCharge } from '../plan/vue_plan.js';
+import { creerMesureur, hauteurLigne } from '../plan/mesure_texte.js';
+import { RETRAIT_ORGANISATION, libelleLongueur, modeleDessin, rangeesEcartees, rangeesListe } from '../plan/modele.js';
+import { nomDeCharge, organisationDeCharge } from '../plan/vue_plan.js';
 import { MM_PAR_PX, bandeDeFeuille, feuilleDe, optionsApercu, sortieApercu } from './modele.js';
 import { LARGEUR_ECHELLE_MM, pagesDuPlan, renvois } from './plan.js';
 
@@ -89,7 +94,7 @@ function listesSous(racine) {
 // La bande que l'aperçu a mesurée, relue comme il la mesure : sur la feuille
 // gabarit, la seule feuille hors du document imprimé.
 function bandeDuGabarit(m) {
-  const contenus = tous(m, '[data-ecran="apercu"] [data-contenu]').filter((contenu) => contenu.closest('[data-impression]') === null);
+  const contenus = tous(m, '[data-apercu-impression] [data-contenu]').filter((contenu) => contenu.closest('[data-impression]') === null);
   expect(contenus, 'la feuille gabarit').toHaveLength(1);
   return bandeDeFeuille({
     feuillePx: contenus[0].parentElement.getBoundingClientRect().height,
@@ -98,40 +103,81 @@ function bandeDuGabarit(m) {
   });
 }
 
-// La hauteur de ligne des listes, mesurée comme la vue la mesure : une
-// sonde au style des listes, sous le document imprimé.
-function hauteurDesListes(m) {
+// La hauteur de ligne des listes, les rangées en retrait de chaque table du
+// modèle et, organisations montrées, les rangées du plan écarté, mesurées
+// comme la vue les mesure : une sonde au style des listes, composée en
+// geometricPrecision, sous le document imprimé.
+function mesuresDesListes(m, modele, { organisations = false } = {}) {
   const svg = document.createElementNS(SVG, 'svg');
   const texte = document.createElementNS(SVG, 'text');
+  const italique = document.createElementNS(SVG, 'tspan');
   texte.setAttribute('font-size', String(TAILLE_TEXTE_LISTE_CM));
-  texte.style.fontFamily = 'var(--police-interface)';
+  Object.assign(texte.style, { fontFamily: 'var(--police-interface)', textRendering: 'geometricPrecision', whiteSpace: 'pre' });
+  italique.style.fontStyle = 'italic';
+  texte.append(italique);
   svg.append(texte);
   dans(m, '[data-impression]').append(svg);
   try {
-    return hauteurLigne(texte);
+    const reglage = { mesurer: creerMesureur(texte), mesurerItalique: creerMesureur(italique), largeur: constante('LARGEUR_BLOC_NOMS_CM') };
+    const lignesAjoutees = new Map(
+      modele.tables.map((table) => [table.id, rangeesListe(table, t, reglage).filter(({ retrait }) => retrait).length]),
+    );
+    const hauteur = hauteurLigne(texte);
+    return { hauteur, lignesAjoutees, rangees: organisations ? rangeesEcartees(modele, t, { ...reglage, hauteur }) : [] };
   } finally {
     svg.remove();
   }
 }
 
 // Les pages attendues du plan que l'aperçu montre, recalculées par
-// pagesDuPlan sur la même sortie, la même bande et la même hauteur de ligne.
-function pagesAttendues(m, charge) {
+// pagesDuPlan sur la même sortie, la même bande, la même hauteur de ligne
+// et les mêmes rangées, organisations comprises quand l'aperçu les montre,
+// le plan écarté alors (§ 7.4) ; avec elles, les rangées en retrait de
+// chaque table et celles du plan écarté, aucune quand rien ne s'écarte.
+function attendusDuPlan(m, charge) {
   const options = optionsApercu(m.ui.etat().apercu, 'A4');
   const { etat, tour } = sortieApercu(charge, options, m.ui.etat().proposition);
-  const modele = modeleDessin(etat, { listes: options.listes, nomDe: nomDeCharge(charge), impression: true });
+  const dessiner = (rangees) =>
+    modeleDessin(etat, {
+      listes: options.listes,
+      nomDe: nomDeCharge(charge),
+      organisations: options.organisations,
+      organisationDe: organisationDeCharge(charge),
+      impression: true,
+      rangees,
+    });
   const pied = feuilleDe({ nom: charge.evenement.nom, date: null, tour, horodatage: null, version: 'epreuve' }, false);
-  return pagesDuPlan(
+  const { hauteur, lignesAjoutees, rangees } = mesuresDesListes(m, dessiner([]), { organisations: options.listes && options.organisations });
+  const modele = dessiner(rangees);
+  const pages = pagesDuPlan(
     etat,
     modele.tables.map((table) => table.geometrie),
     options.decoupe,
-    { papier: 'A4', bandeMm: bandeDuGabarit(m), listes: options.listes, hauteurLigne: hauteurDesListes(m), pied },
+    {
+      papier: 'A4',
+      bandeMm: bandeDuGabarit(m),
+      listes: options.listes,
+      hauteurLigne: hauteur,
+      lignesAjoutees: options.listes ? lignesAjoutees : new Map(),
+      parColonne: options.parColonne,
+      pied,
+    },
   );
+  return { pages, lignesAjoutees, rangees };
+}
+
+const pagesAttendues = (m, charge) => attendusDuPlan(m, charge).pages;
+
+// Bascule un réglage de l'aperçu par son bouton, et attend le document.
+async function basculer(m, nom) {
+  const avant = m.ui.etat().apercu[nom];
+  await cliquer(m, `[data-apercu-impression] [data-commande="${nom}"]`);
+  await attendre(`${nom} basculé`, () => m.ui.etat().apercu[nom] === !avant && feuilles(m).length > 0, IMAGES);
 }
 
 // Change la découpe du plan par son sélecteur, et attend le document.
 async function decouper(m, decoupe) {
-  const choix = dans(m, '[data-ecran="apercu"] [data-champ="decoupe"]');
+  const choix = dans(m, '[data-apercu-impression] [data-champ="decoupe"]');
   choix.value = decoupe;
   choix.dispatchEvent(new Event('change', { bubbles: true }));
   await attendre(`la découpe ${decoupe}`, () => m.ui.etat().apercu.decoupe === decoupe && feuilles(m).length > 0, IMAGES);
@@ -219,13 +265,339 @@ describe('la troncature des listes, celle de l’écran (§ 7.4)', () => {
     const ecran = new Map(listesSous(dans(m, '[data-plan]')).map(({ table, lignes }) => [table, lignes]));
     const marque = t('plan.liste.abreviation');
     expect([...ecran.values()].flat().filter((ligne) => ligne.includes(marque)).length, 'des lignes abrégées').toBeGreaterThanOrEqual(NOMS_LONGS.length);
-    await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+    await cliquer(m, '[data-commande="section"][data-cible="badges"]');
     await attendre('les listes imprimées', () => tous(m, '[data-impression] [data-liste] tspan').length > 0, IMAGES);
     const imprimees = listesSous(dans(m, '[data-impression]'));
     expect(new Set(imprimees.map(({ table }) => table))).toEqual(new Set(ecran.keys()));
     for (const { table, lignes } of imprimees) {
       expect(lignes, `table ${table}`).toEqual(ecran.get(table));
     }
+  });
+});
+
+describe('l’organisation dans les listes imprimées (§ 7.4, § 11.7)', () => {
+  test('reprise de l’écran à l’ouverture : chaque ligne imprimée est celle de l’écran, organisation comprise ; « Organisation » la retire du papier seul, et reste offerte inactive sous les listes masquées', async () => {
+    const charge = chargeAuxNomsLongs();
+    const m = await ouvrirEvenement(contexte, charge, { section: 'plan', options: { fichiers: [fichierReglages('A4')] } });
+    m.ui.basculerOrganisations();
+    // Ajusté au cadre, ce plan est sous K_LISTES : un zoom à la fois
+    // jusqu'à ce que ses listes se dessinent.
+    for (let crans = 0; crans < 6 && tous(m, '[data-plan] [data-liste]').length === 0; crans += 1) {
+      await cliquer(m, '[data-commande="zoomer"]');
+    }
+    await attendre('les organisations du plan', () => tous(m, '[data-plan] [data-liste] [data-partie="organisation"]').length > 0, IMAGES);
+    const ecran = new Map(listesSous(dans(m, '[data-plan]')).map(({ table, lignes }) => [table, lignes]));
+    await cliquer(m, '[data-commande="section"][data-cible="badges"]');
+    await attendre('les listes imprimées', () => tous(m, '[data-impression] [data-liste] tspan').length > 0, IMAGES);
+    expect(m.ui.etat().apercu.organisations).toBe(true);
+    const bouton = () => dans(m, '[data-apercu-impression] [data-commande="organisations"]');
+    expect(bouton().textContent).toBe(t('impression.organisations'));
+    expect(bouton().getAttribute('aria-pressed')).toBe('true');
+    const imprimees = listesSous(dans(m, '[data-impression]'));
+    expect(tous(m, '[data-impression] [data-liste] [data-partie="organisation"]').length).toBeGreaterThan(0);
+    for (const { table, lignes } of imprimees) expect(lignes, `table ${table}`).toEqual(ecran.get(table));
+
+    await basculer(m, 'organisations');
+    await attendre('les organisations retirées du papier', () => tous(m, '[data-impression] [data-partie="organisation"]').length === 0, IMAGES);
+    expect(m.ui.etat().organisations, 'l’écran garde les siennes').toBe(true);
+    await basculer(m, 'listes');
+    expect(bouton().getAttribute('aria-disabled')).toBe('true');
+    expect(bouton().getAttribute('title')).toBe(t('impression.organisationsSansListes'));
+    await cliquer(m, '[data-apercu-impression] [data-commande="organisations"]');
+    expect(m.ui.etat().apercu.organisations, 'inactive, la bascule ne change rien').toBe(false);
+  });
+
+  // Les tables de la rangée du bas portent des organisations plus longues
+  // encore, repliées sur plusieurs rangées. Les listes repliées écartent les
+  // rangées (§ 7.4) : l'épreuve juge ici les tables qu'elles couvriraient,
+  // les listes entre elles ont leur épreuve.
+  test('une organisation trop longue passe sous le nom, en retrait, jamais abrégée, sur le papier comme à l’écran ; la découpe compte ses rangées, et chaque liste reste dans sa page, sur aucune autre table', async () => {
+    let charge = chargeDeuxColonnes();
+    const longues = ['Fédération des jardins partagés du quartier des Merles', `Atelier ${'des sternes '.repeat(9)}`.trim()];
+    const bas = charge.tables.slice(-2).map(({ id }) => id);
+    const assis = charge.reservations.filter(({ table, siege }) => bas.includes(table) && siege <= 3).map(({ participant }) => participant);
+    for (const [rang, id] of assis.entries()) {
+      charge = appliquerCommande('modifierParticipant', charge, { id, champs: { organisation: longues[rang % 2] } }).charge;
+    }
+    const m = await ouvrirEvenement(contexte, charge, { section: 'plan', options: { fichiers: [fichierReglages('A4')] } });
+    m.ui.basculerOrganisations();
+    // Ajusté au cadre, ce plan est sous K_LISTES : un zoom à la fois
+    // jusqu'à ce que ses listes se dessinent.
+    for (let crans = 0; crans < 6 && tous(m, '[data-plan] [data-liste]').length === 0; crans += 1) {
+      await cliquer(m, '[data-commande="zoomer"]');
+    }
+    await attendre('les organisations du plan', () => tous(m, '[data-plan] [data-liste] [data-partie="organisation"]').length > 0, IMAGES);
+    const ecran = new Map(listesSous(dans(m, '[data-plan]')).map(({ table, lignes }) => [table, lignes]));
+    await cliquer(m, '[data-commande="section"][data-cible="badges"]');
+    await attendre('les listes imprimées', () => tous(m, '[data-impression] [data-liste] tspan').length > 0, IMAGES);
+    expect(m.ui.etat().apercu.organisations).toBe(true);
+    const marque = t('plan.liste.abreviation');
+    for (const parColonne of [false, true]) {
+      if (m.ui.etat().apercu.parColonne !== parColonne) await basculer(m, 'parColonne');
+      for (const decoupe of ['auto', 'unePage']) {
+        await decouper(m, decoupe);
+        const cas = `${decoupe}, ${parColonne ? 'une colonne par page' : 'plan entier'}`;
+        const { pages, lignesAjoutees } = attendusDuPlan(m, charge);
+        await attendre(`les pages, ${cas}`, () => feuilles(m).length === pages.length && tous(m, '[data-impression] [data-liste] tspan').length > 0, IMAGES);
+        expect(bas.every((id) => lignesAjoutees.get(id) > 0), `${cas} : des rangées repliées aux tables du bas`).toBe(true);
+        // Par table, le bloc rendu et les tuiles des pages qui le portent,
+        // en cm de dessin.
+        const blocs = new Map();
+        for (const [rang, feuille] of feuilles(m).entries()) {
+          const lu = viewBoxDe(tuileDe(feuille));
+          for (const cote of ['x', 'y', 'largeur', 'hauteur']) {
+            expect(Math.abs(lu[cote] - pages[rang].viewBox[cote]), `${cas}, page ${rang}, ${cote}`).toBeLessThanOrEqual(1e-9);
+          }
+          for (const liste of feuille.querySelectorAll('[data-liste]')) {
+            const rangees = [...liste.children];
+            const ys = rangees.map((rangee) => Number(rangee.getAttribute('y')));
+            const pas = ys[1] - ys[0];
+            const bloc = blocs.get(liste.dataset.liste) ?? { tuiles: [] };
+            bloc.haut = ys[0] - pas;
+            bloc.bas = ys.at(-1) + pas;
+            bloc.gauche = Number(rangees[0].getAttribute('x'));
+            bloc.droite = Math.max(...rangees.map((rangee) => Number(rangee.getAttribute('x')) + rangee.getComputedTextLength()));
+            bloc.tuiles.push(lu);
+            blocs.set(liste.dataset.liste, bloc);
+          }
+          const cadre = tuileDe(feuille).getBoundingClientRect();
+          const tables = [...feuille.querySelectorAll('[data-table]')].map((table) => ({ id: table.dataset.table, boite: table.getBoundingClientRect() }));
+          for (const liste of feuille.querySelectorAll('[data-liste]')) {
+            const rangees = [...liste.children];
+            const bord = Number(rangees[0].getAttribute('x'));
+            const repliees = rangees.filter((rangee) => Number(rangee.getAttribute('x')) !== bord);
+            expect(repliees, `${cas} : table ${liste.dataset.liste}`).toHaveLength(lignesAjoutees.get(Number(liste.dataset.liste)));
+            expect(rangees.map((rangee) => rangee.textContent), `${cas} : table ${liste.dataset.liste}`).toEqual(ecran.get(liste.dataset.liste));
+            for (const rangee of repliees) {
+              expect(Number(rangee.getAttribute('x')) - bord).toBeCloseTo(RETRAIT_ORGANISATION, 9);
+              expect([...rangee.children].map((partie) => partie.dataset.partie)).toEqual(['organisation']);
+              expect(rangee.textContent.includes(marque), `${cas} : ${rangee.textContent}`).toBe(false);
+            }
+            const boite = liste.getBoundingClientRect();
+            if (decoupe === 'unePage') {
+              const dedans =
+                boite.left >= cadre.left - TOLERANCE_PX &&
+                boite.right <= cadre.right + TOLERANCE_PX &&
+                boite.top >= cadre.top - TOLERANCE_PX &&
+                boite.bottom <= cadre.bottom + TOLERANCE_PX;
+              expect(dedans, `${cas} : la liste de la table ${liste.dataset.liste} dans sa page`).toBe(true);
+            }
+            const couvertes = tables.filter(({ id, boite: table }) => id !== liste.dataset.liste && recoupe(boite, table)).map(({ id }) => id);
+            expect(couvertes, `${cas} : la liste de la table ${liste.dataset.liste}`).toEqual([]);
+          }
+        }
+        // Découpé, un bloc peut passer d'une page à la voisine : ses pages,
+        // ensemble, le couvrent entier, rangées repliées comprises.
+        for (const [table, { haut, bas: fond, gauche, droite, tuiles }] of blocs) {
+          const couvert =
+            Math.min(...tuiles.map(({ x }) => x)) <= gauche + 1e-9 &&
+            Math.max(...tuiles.map(({ x, largeur }) => x + largeur)) >= droite - 1e-9 &&
+            Math.min(...tuiles.map(({ y }) => y)) <= haut + 1e-9 &&
+            Math.max(...tuiles.map(({ y, hauteur }) => y + hauteur)) >= fond - 1e-9;
+          expect(couvert, `${cas} : le bloc de la table ${table} sur ses pages`).toBe(true);
+        }
+      }
+    }
+  });
+});
+
+// Huit rondes de 8, deux colonnes de quatre sur la grille de la grande
+// démonstration, chaque place réservée pour tous les tours : les lignes
+// les plus longues qu'une liste porte, « n. (réservée, tous les tours) Nom »,
+// et les organisations de la démonstration.
+function chargeDeuxColonnes() {
+  let charge = analyser(texteLivre('grande')).charge;
+  charge.tables = charge.tables.slice(0, 8).map((table, rang) => ({ ...table, position: { x: (rang % 2) * 813, y: Math.floor(rang / 2) * 300 } }));
+  charge.reservations = [];
+  charge.titres = [];
+  let participant = 1;
+  for (const { id } of charge.tables) {
+    for (let siege = 1; siege <= 8; siege += 1) {
+      charge = appliquerCommande('reserver', charge, { participant, table: id, siege, portee: 'tous' }).charge;
+      participant += 1;
+    }
+  }
+  return charge;
+}
+
+// Les écarts admis entre deux boîtes rendues, en px d'écran.
+const TOLERANCE_PX = 0.5;
+const recoupe = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
+describe('une colonne de tables par page, et aucun texte qui déborde (§ 7.4, § 11.7)', () => {
+  test('« Une colonne par page » : les pages de la découpe par colonnes, chacune ne portant que les tables d’une colonne', async () => {
+    const charge = chargeDeuxColonnes();
+    const m = await ouvrirApercu(contexte, charge, { section: 'participants' });
+    expect(m.ui.etat().apercu.parColonne).toBe(false);
+    const bouton = dans(m, '[data-apercu-impression] [data-commande="parColonne"]');
+    expect(bouton.textContent).toBe(t('impression.parColonne'));
+    expect(bouton.getAttribute('aria-pressed')).toBe('false');
+    await basculer(m, 'parColonne');
+    expect(dans(m, '[data-apercu-impression] [data-commande="parColonne"]').getAttribute('aria-pressed')).toBe('true');
+    const attendues = pagesAttendues(m, charge);
+    await attendre('les pages par colonne', () => feuilles(m).length === attendues.length, IMAGES);
+    const options = optionsApercu(m.ui.etat().apercu, 'A4');
+    const { etat } = sortieApercu(charge, options, m.ui.etat().proposition);
+    const geometries = modeleDessin(etat, { listes: true, nomDe: nomDeCharge(charge), impression: true }).tables.map(({ geometrie }) => geometrie);
+    const colonnes = colonnesDeTables(geometries, { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: new Map(geometries.map(({ id }) => [id, 1])) });
+    expect(colonnes).toHaveLength(2);
+    for (const [rang, feuille] of feuilles(m).entries()) {
+      const lu = viewBoxDe(tuileDe(feuille));
+      for (const cote of ['x', 'y', 'largeur', 'hauteur']) {
+        expect(Math.abs(lu[cote] - attendues[rang].viewBox[cote]), `page ${rang}, ${cote}`).toBeLessThanOrEqual(1e-9);
+      }
+      const portees = [...new Set([...feuille.querySelectorAll('[data-table]')].map((table) => Number(table.dataset.table)))];
+      expect(portees.length, `page ${rang}`).toBeGreaterThan(0);
+      expect(colonnes.some((colonne) => portees.every((id) => colonne.includes(id))), `page ${rang} : ${portees}`).toBe(true);
+    }
+  });
+
+  // A4 et Lettre, chaque découpe, une colonne par page ou non, organisations
+  // ou non. La chasse rendue d'une ligne est la somme de ses tspans.
+  test('huit tables sur deux colonnes : chaque ligne dans son bloc, chaque liste dans sa page ou couverte par ses pages, sur aucune autre table', async () => {
+    const largeurBloc = constante('LARGEUR_BLOC_NOMS_CM');
+    for (const papier of ['A4', 'Lettre']) {
+      const m = await ouvrirApercu(contexte, chargeDeuxColonnes(), { papier, section: 'participants' });
+      for (const parColonne of [false, true]) {
+        if (m.ui.etat().apercu.parColonne !== parColonne) await basculer(m, 'parColonne');
+        for (const organisations of [false, true]) {
+          if (m.ui.etat().apercu.organisations !== organisations) await basculer(m, 'organisations');
+          for (const decoupe of ['auto', 'unePage', 'decoupe']) {
+            await decouper(m, decoupe);
+            await attendre('les listes', () => tous(m, '[data-impression] [data-liste] tspan').length > 0, IMAGES);
+            const cas = `${papier}, ${decoupe}, ${parColonne ? 'une colonne par page' : 'plan entier'}, ${organisations ? 'organisations' : 'noms seuls'}`;
+            expect(tous(m, '[data-impression] [data-partie="organisation"]').length > 0, cas).toBe(organisations);
+            // Par table, les pages qui portent sa liste : la boîte rendue de
+            // la liste dans chacune, sa boîte et la tuile en cm de dessin.
+            const portees = new Map();
+            for (const feuille of feuilles(m)) {
+              const page = feuille.getBoundingClientRect();
+              const cadre = tuileDe(feuille).getBoundingClientRect();
+              expect(cadre.right <= page.right && cadre.bottom <= page.bottom, `${cas} : la tuile dans la feuille`).toBe(true);
+              const tables = [...feuille.querySelectorAll('[data-table]')].map((table) => ({ id: table.dataset.table, boite: table.getBoundingClientRect() }));
+              for (const liste of feuille.querySelectorAll('[data-liste]')) {
+                // Une rangée en retrait compte son retrait.
+                const bord = Number(liste.firstElementChild.getAttribute('x'));
+                for (const ligne of liste.children) {
+                  const largeur = Number(ligne.getAttribute('x')) - bord + ligne.getComputedTextLength();
+                  expect(largeur, `${cas} : ${ligne.textContent}`).toBeLessThanOrEqual(largeurBloc + 1e-6);
+                }
+                const boite = liste.getBoundingClientRect();
+                const dedans =
+                  boite.left >= cadre.left - TOLERANCE_PX &&
+                  boite.right <= cadre.right + TOLERANCE_PX &&
+                  boite.top >= cadre.top - TOLERANCE_PX &&
+                  boite.bottom <= cadre.bottom + TOLERANCE_PX;
+                const lues = portees.get(liste.dataset.liste) ?? [];
+                lues.push({ dedans, bbox: liste.getBBox(), tuile: viewBoxDe(tuileDe(feuille)) });
+                portees.set(liste.dataset.liste, lues);
+                const couvertes = tables.filter(({ id, boite: table }) => id !== liste.dataset.liste && recoupe(boite, table)).map(({ id }) => id);
+                expect(couvertes, `${cas} : la liste de la table ${liste.dataset.liste}`).toEqual([]);
+              }
+            }
+            // Une liste qu'une seule page porte y tient ; découpée, elle passe
+            // d'une page à la voisine comme le reste du dessin (§ 11.7), et
+            // ses pages, ensemble, la couvrent.
+            for (const [table, lues] of portees) {
+              if (lues.length === 1) {
+                expect(lues[0].dedans, `${cas} : la liste de la table ${table} dans sa page`).toBe(true);
+                continue;
+              }
+              const { x, y, width, height } = lues[0].bbox;
+              const tuiles = lues.map(({ tuile }) => tuile);
+              const couverte =
+                Math.min(...tuiles.map((tuile) => tuile.x)) <= x + 1e-6 &&
+                Math.max(...tuiles.map((tuile) => tuile.x + tuile.largeur)) >= x + width - 1e-6 &&
+                Math.min(...tuiles.map((tuile) => tuile.y)) <= y + 1e-6 &&
+                Math.max(...tuiles.map((tuile) => tuile.y + tuile.hauteur)) >= y + height - 1e-6;
+              expect(couverte, `${cas} : la liste de la table ${table} sur ses ${lues.length} pages`).toBe(true);
+            }
+          }
+        }
+      }
+      await contexte.defaire();
+      contexte = creerContexte();
+    }
+  });
+
+  // La grille de la fixture a le pas de rangée par défaut, qui ne compte que
+  // les emprises (§ 7.4) : une liste de huit lignes y tient, non la même
+  // quand chaque ligne replie son organisation. Le plan écarté descend
+  // alors chaque rangée sous la précédente, de ce que la liste du dessus
+  // demande, sans rien écrire.
+  // Chaque paire est « a/b », a < b ; la boîte d'une liste est celle de son
+  // <text>, celle d'une table celle de son groupe, en cm de dessin.
+  test('organisations repliées : les rangées s’écartent, aucune liste ne couvre une autre, à l’écran et sur le papier ; les positions enregistrées ne changent pas', async () => {
+    const charge = chargeDeuxColonnes();
+    const positions = charge.tables.map(({ id, position }) => ({ id, ...position }));
+    const chevauchees = (racine) => {
+      const boites = [...racine.querySelectorAll('text[data-liste]')].map((liste) => ({ id: Number(liste.dataset.liste), boite: liste.getBBox() }));
+      const paires = [];
+      for (const [rang, a] of boites.entries()) {
+        for (const b of boites.slice(rang + 1)) {
+          const recouvre =
+            a.boite.x < b.boite.x + b.boite.width &&
+            b.boite.x < a.boite.x + a.boite.width &&
+            a.boite.y < b.boite.y + b.boite.height &&
+            b.boite.y < a.boite.y + a.boite.height;
+          if (recouvre) paires.push(`${Math.min(a.id, b.id)}/${Math.max(a.id, b.id)}`);
+        }
+      }
+      return paires.sort();
+    };
+    // Le haut et la gauche de la boîte de chaque table, par identifiant.
+    const coins = (racine) =>
+      new Map([...racine.querySelectorAll('[data-table]')].map((table) => [Number(table.dataset.table), { x: table.getBBox().x, y: table.getBBox().y }]));
+    // Les rangées de la fixture, de haut en bas : chacune descend de plus
+    // que la précédente, la première reste, et aucune abscisse ne change.
+    const rangeesDe = [0, 300, 600, 900].map((y) => charge.tables.filter(({ position }) => position.y === y).map(({ id }) => id));
+    const ecartees = (avant, apres, cas) => {
+      let descente = 0;
+      for (const [rang, ids] of rangeesDe.entries()) {
+        const descentes = ids.map((id) => apres.get(id).y - avant.get(id).y);
+        for (const id of ids) expect(apres.get(id).x, `${cas} : table ${id}`).toBeCloseTo(avant.get(id).x, 6);
+        expect(Math.max(...descentes) - Math.min(...descentes), `${cas} : la rangée ${rang} reste alignée`).toBeLessThan(1e-6);
+        if (rang === 0) expect(descentes[0], `${cas} : la première rangée reste`).toBeCloseTo(0, 6);
+        else expect(descentes[0], `${cas} : la rangée ${rang} descend`).toBeGreaterThan(descente + 1);
+        descente = descentes[0];
+      }
+    };
+
+    const m = await ouvrirEvenement(contexte, charge, { section: 'plan', options: { fichiers: [fichierReglages('A4')] } });
+    // Ajusté au cadre, ce plan est sous K_LISTES : un zoom à la fois
+    // jusqu'à ce que ses listes se dessinent.
+    for (let crans = 0; crans < 6 && tous(m, '[data-plan] [data-liste]').length === 0; crans += 1) {
+      await cliquer(m, '[data-commande="zoomer"]');
+    }
+    await attendre('les listes du plan', () => tous(m, '[data-plan] [data-liste]').length === charge.tables.length, IMAGES);
+    expect(chevauchees(dans(m, '[data-plan]')), 'écran, noms seuls').toEqual([]);
+    const ecranSans = coins(dans(m, '[data-plan]'));
+    m.ui.basculerOrganisations();
+    await attendre('les organisations du plan', () => tous(m, '[data-plan] [data-liste] [data-partie="organisation"]').length > 0, IMAGES);
+    await attendre('le plan écarté', () => coins(dans(m, '[data-plan]')).get(rangeesDe[1][0]).y > ecranSans.get(rangeesDe[1][0]).y, IMAGES);
+    expect(chevauchees(dans(m, '[data-plan]')), 'écran, organisations').toEqual([]);
+    ecartees(ecranSans, coins(dans(m, '[data-plan]')), 'écran');
+
+    await cliquer(m, '[data-commande="section"][data-cible="badges"]');
+    await attendre('les listes imprimées', () => tous(m, '[data-impression] [data-liste] tspan').length > 0, IMAGES);
+    await decouper(m, 'unePage');
+    expect(m.ui.etat().apercu.parColonne).toBe(false);
+    const papier = new Map();
+    for (const organisations of [false, true]) {
+      if (m.ui.etat().apercu.organisations !== organisations) await basculer(m, 'organisations');
+      await attendre('la page du plan', () => feuilles(m).length === 1 && tous(m, '[data-impression] [data-liste]').length === charge.tables.length, IMAGES);
+      expect(tous(m, '[data-impression] [data-partie="organisation"]').length > 0).toBe(organisations);
+      const { pages, rangees } = attendusDuPlan(m, m.seance.etat().charge);
+      expect(rangees.length > 0, 'rangées écartées attendues').toBe(organisations);
+      await attendre('la page attendue', () => {
+        const lu = viewBoxDe(tuileDe(feuilles(m)[0]));
+        return ['x', 'y', 'largeur', 'hauteur'].every((cote) => Math.abs(lu[cote] - pages[0].viewBox[cote]) <= 1e-9);
+      }, IMAGES);
+      expect(chevauchees(tuileDe(feuilles(m)[0])), `papier, ${organisations ? 'organisations' : 'noms seuls'}`).toEqual([]);
+      papier.set(organisations, coins(tuileDe(feuilles(m)[0])));
+    }
+    ecartees(papier.get(false), papier.get(true), 'papier');
+    expect(m.seance.etat().charge.tables.map(({ id, position }) => ({ id, ...position })), 'rien n’est écrit').toEqual(positions);
   });
 });
 
@@ -266,7 +638,7 @@ describe('l’échelle graphique et les mentions de chaque page (§ 7.7)', () =>
       expect(listes.length, `feuille ${feuille.dataset.feuille}`).toBe(portees ? 1 : 0);
       if (portees) expect(plat(listes[0].textContent)).toBe(t('impression.plan.listes'));
     }
-    await cliquer(m, '[data-ecran="apercu"] [data-commande="listes"]');
+    await cliquer(m, '[data-apercu-impression] [data-commande="listes"]');
     await attendre('les listes masquées', () => m.ui.etat().apercu.listes === false && feuilles(m).length > 0, IMAGES);
     await attendre('les mentions des listes retirées', () => tous(m, '[data-impression] [data-mention="listes"]').length === 0, IMAGES);
     expect(tous(m, '[data-impression] [data-liste]')).toHaveLength(0);
@@ -319,8 +691,8 @@ describe('la bande du plan (HAUTEUR_BANDE_IMPRESSION, § 14.1)', () => {
     feuilleDeStyle.textContent = '[data-pied] { padding-bottom: 20mm !important; }';
     document.head.append(feuilleDeStyle);
     try {
-      await cliquer(m, '[data-ecran="apercu"] [data-commande="fermerApercu"]');
-      await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+      await cliquer(m, '[data-commande="section"][data-cible="plan"]');
+      await cliquer(m, '[data-commande="section"][data-cible="badges"]');
       await attendre('le plan', () => feuilles(m).length > 0, IMAGES);
       const apres = mesurer();
       for (const [quand, pages] of [['avant', avant], ['après', apres]]) {
@@ -391,7 +763,7 @@ describe('la commande de la vue', () => {
     const charge = chargePrincipale();
     expect(charge.evenement.tours).toBeGreaterThan(1);
     const m = await ouvrirApercu(contexte, charge);
-    const choix = dans(m, '[data-ecran="apercu"] [data-champ="tour"]');
+    const choix = dans(m, '[data-apercu-impression] [data-champ="tour"]');
     choix.value = '2';
     choix.dispatchEvent(new Event('change', { bubbles: true }));
     await attendre('le tour 2', () => m.ui.etat().apercu.tour === 2 && feuilles(m).length > 0, IMAGES);

@@ -7,32 +7,41 @@
 // filtrées, la cellule qu'atteint une touche, la commande qu'exécute une
 // cellule validée, les groupes, imbriqués, de la liste groupée par une
 // colonne ou plusieurs et les lignes que laissent voir les groupes repliés,
-// l'orthographe d'organisation à reprendre, l'itinéraire d'une personne dans
-// le retenu et ses réservations. La présence par tour se lit par
-// presenceSaisie (src/application/places.js) et se range par clePresence
-// (presence.js) ; les conflits d'organisation se rangent par cleTriConflits
-// (liste_conflits.js). Aucune fonction ne modifie ce qu'elle reçoit ; la clé
-// normalisée vient de l'appelant, qui la tient de src/application/csv.js.
+// l'orthographe d'organisation à reprendre, le nom et la durée du message
+// d'ajout, l'itinéraire d'une personne dans le retenu et ses réservations.
+// La présence par tour se lit par presenceSaisie (src/application/places.js)
+// et se range par clePresence (presence.js) ; les conflits d'organisation se
+// rangent par cleTriConflits (liste_conflits.js), les inclusions par
+// cleTriInclusions (liste_inclusions.js). Aucune fonction ne modifie ce
+// qu'elle reçoit ; la clé normalisée vient de l'appelant, qui la tient de
+// src/application/csv.js.
 
+import { nomAffiche } from '../../application/personnes.js';
 import { presenceSaisie } from '../../application/places.js';
 import { effetDe } from '../raccourcis.js';
 import { cleTriConflits, commandeDeConflits } from './liste_conflits.js';
+import { cleTriInclusions, commandeDInclusions, lectureInclusions } from './liste_inclusions.js';
 import { affichagePresence, clePresence } from './presence.js';
 
 /** Les colonnes de la grille : les propriétés d'un participant, et les
  *  mesures de MESURES. Les propriétés s'associent à l'export par leur champ
  *  (CHAMP_DE_COLONNE), non par leur rang : la grille ne montre pas les
  *  étiquettes, les conflits d'organisation y suivent l'organisation, ceux
- *  du placement les suivent, et la présence suit l'exclusion. Le collage en
- *  bloc suit l'ordre des champs de l'export, non celui-ci. */
+ *  du placement les suivent, les inclusions suivent ceux du placement, et
+ *  celles du placement les inclusions, l'animation suit le titre pressenti,
+ *  et la présence suit l'exclusion. Le collage en bloc suit l'ordre des
+ *  champs de l'export, non celui-ci. */
 export const COLONNES = Object.freeze([
   'nom',
   'prenom',
   'organisation',
   'conflits',
   'conflitsPlacement',
+  'inclusions',
+  'inclusionsPlacement',
   'courriel',
   'titrePressenti',
+  'animation',
   'exclu',
   'presence',
   'notes',
@@ -40,9 +49,47 @@ export const COLONNES = Object.freeze([
 
 /** Les colonnes qui écrivent une mesure, non une propriété : les conflits du
  *  placement montré (conflitsParTour, conflits.js), que la grille lit dans
- *  conflitsDuPlacement. Elles se lisent seulement : ni saisie, ni tri, ni
- *  filtre, ni groupement, ni export. */
-export const MESURES = Object.freeze(['conflitsPlacement']);
+ *  conflitsDuPlacement, les inclusions du même placement
+ *  (inclusionsDePersonne, qualite/inclusions.js), et l'animation — les
+ *  tables que la personne anime, ou « à désigner » sous la marque de
+ *  l'animation réservée (celluleAnimation). Elles se lisent seulement : ni
+ *  saisie, ni tri, ni filtre, ni groupement, ni export. */
+export const MESURES = Object.freeze(['conflitsPlacement', 'inclusionsPlacement', 'animation']);
+
+/** Les colonnes que la grille ne montre qu'à la demande : les inclusions et
+ *  celles du placement, masquées par défaut, montrées ensemble. Montrées,
+ *  les treize colonnes ne tiennent plus toujours dans la carte d'une
+ *  fenêtre de 1024 px, et la grille défile alors dans son conteneur. */
+export const MASQUABLES = Object.freeze(['inclusions', 'inclusionsPlacement']);
+
+/**
+ * Les colonnes que la grille montre, dans l'ordre de COLONNES : toutes,
+ * hors des colonnes de MASQUABLES que montrees ne nomme pas.
+ *
+ * @param {Iterable<string>} montrees   des colonnes de MASQUABLES
+ * @returns {string[]}
+ */
+export function colonnesMontrees(montrees) {
+  const voulues = new Set(montrees);
+  return COLONNES.filter((colonne) => !MASQUABLES.includes(colonne) || voulues.has(colonne));
+}
+
+/**
+ * Le rang de la colonne colonne parmi colonnes, celles que la grille
+ * montre ; pour une colonne qu'elles ne montrent pas, le rang de la
+ * première montrée qui la suit dans COLONNES, ou celui de la dernière
+ * quand aucune ne la suit.
+ *
+ * @param {string} colonne   une colonne de COLONNES
+ * @param {readonly string[]} colonnes   celles de colonnesMontrees
+ * @returns {number}
+ */
+export function rangDeColonne(colonne, colonnes) {
+  const rang = colonnes.indexOf(colonne);
+  if (rang >= 0) return rang;
+  const suivante = COLONNES.slice(COLONNES.indexOf(colonne) + 1).find((autre) => colonnes.includes(autre));
+  return suivante === undefined ? colonnes.length - 1 : colonnes.indexOf(suivante);
+}
 
 /** Les colonnes dont l'en-tête trie : COLONNES hors des mesures, que
  *  lignesGrille ne reçoit pas. */
@@ -54,18 +101,30 @@ const CHAMPS_RENOMMES = new Map([
   ['conflits', 'conflit_organisation'],
 ]);
 
+// Les colonnes de propriétés qu'aucune colonne de l'export n'écrit seule :
+// les inclusions, que l'export écrit en deux colonnes, l'une pour les
+// organisations, l'autre pour les personnes.
+const SANS_EXPORT = ['inclusions'];
+
 /** Le champ de l'export CSV (CHAMPS, src/application/csv.js) de chaque
- *  colonne hors des mesures, dans l'ordre de COLONNES : l'en-tête sous
- *  lequel l'export écrit sa cellule. */
+ *  colonne hors des mesures et des inclusions, dans l'ordre de COLONNES :
+ *  l'en-tête sous lequel l'export écrit sa cellule. */
 export const CHAMP_DE_COLONNE = new Map(
-  COLONNES.filter((colonne) => !MESURES.includes(colonne)).map((colonne) => [colonne, CHAMPS_RENOMMES.get(colonne) ?? colonne]),
+  COLONNES.filter((colonne) => !MESURES.includes(colonne) && !SANS_EXPORT.includes(colonne)).map((colonne) => [
+    colonne,
+    CHAMPS_RENOMMES.get(colonne) ?? colonne,
+  ]),
 );
 
-// Les colonnes de texte : toutes, hors des conflits, des mesures, de
+// Les colonnes de listes : une personne y porte plusieurs valeurs, qui ne la
+// rangent dans aucun groupe unique et que le filtre ne lit pas.
+const LISTES = ['conflits', 'inclusions'];
+
+// Les colonnes de texte : toutes, hors des listes, des mesures, de
 // l'exclusion et de la présence, qui ne sont pas des textes saisis : le
 // filtre ne les lit pas.
 const TEXTES = COLONNES.filter(
-  (colonne) => colonne !== 'conflits' && !MESURES.includes(colonne) && colonne !== 'exclu' && colonne !== 'presence',
+  (colonne) => !LISTES.includes(colonne) && !MESURES.includes(colonne) && colonne !== 'exclu' && colonne !== 'presence',
 );
 
 // La clé du libellé de chaque colonne, et celle de chaque statut calculé.
@@ -75,8 +134,11 @@ const CLES_COLONNES = new Map([
   ['organisation', 'participants.colonne.organisation'],
   ['conflits', 'participants.colonne.conflits'],
   ['conflitsPlacement', 'participants.colonne.conflitsPlacement'],
+  ['inclusions', 'participants.colonne.inclusions'],
+  ['inclusionsPlacement', 'participants.colonne.inclusionsPlacement'],
   ['courriel', 'participants.colonne.courriel'],
   ['titrePressenti', 'participants.colonne.titrePressenti'],
+  ['animation', 'participants.colonne.animation'],
   ['exclu', 'participants.colonne.exclu'],
   ['presence', 'participants.colonne.presence'],
   ['notes', 'participants.colonne.notes'],
@@ -86,6 +148,26 @@ const CLES_STATUTS = new Map([
   ['partiel', 'participants.statut.partiel'],
   ['mobile', 'participants.statut.mobile'],
 ]);
+
+/**
+ * Ce que la cellule « Animation » écrit pour une personne (§ 10.2) : les
+ * numéros affichés des tables qu'elle anime, {sorte: 'tables', numeros},
+ * croissants, lus dans animees (tablesAnimees,
+ * src/application/animateurs.js) ; « à désigner », {sorte: 'aDesigner'},
+ * pour une personne non exclue qui porte la marque de l'animation réservée
+ * et n'anime aucune table ; sinon {sorte: 'vide'}. Une exclue n'anime rien
+ * et n'est pas à désigner.
+ *
+ * @param {{id: number, exclu: boolean, animationReservee?: true}} personne
+ * @param {Map<number, number[]>} animees
+ * @returns {{sorte: 'tables', numeros: number[]}|{sorte: 'aDesigner'}|{sorte: 'vide'}}
+ */
+export function celluleAnimation(personne, animees) {
+  const numeros = animees.get(personne.id);
+  if (numeros !== undefined && numeros.length > 0) return { sorte: 'tables', numeros };
+  if (personne.animationReservee === true && !personne.exclu) return { sorte: 'aDesigner' };
+  return { sorte: 'vide' };
+}
 
 /**
  * La clé du libellé d'une colonne de COLONNES.
@@ -125,12 +207,13 @@ const SENS = new Map([
 /**
  * Les lignes affichées : une ligne reste quand la clé normalisée d'un de ses
  * champs texte non null contient celle du filtre — un champ null n'est
- * jamais passé à cleNormalisee, qui lève sur lui ; les conflits,
- * l'exclusion et la présence ne sont pas lus —, puis tri par colonne,
- * croissant ou décroissant, sur la clé normalisée (exclu : faux avant
- * vrai ; presence : clePresence, « tous » en tête dans le sens croissant ;
- * conflits : cleTriConflits), un champ null ou une personne sans conflit
- * après toute valeur dans les deux sens, départagé par
+ * jamais passé à cleNormalisee, qui lève sur lui ; les conflits, les
+ * inclusions, l'exclusion et la présence ne sont pas lus —, puis tri par
+ * colonne, croissant ou décroissant, sur la clé normalisée (exclu : faux
+ * avant vrai ; presence : clePresence, « tous » en tête dans le sens
+ * croissant ; conflits : cleTriConflits ; inclusions : cleTriInclusions, le
+ * nombre de lignes), un champ null, une personne sans conflit ou sans
+ * inclusion après toute valeur dans les deux sens, départagé par
  * identifiant croissant. Sans tri, l'ordre est celui des identifiants
  * croissants ; un filtre dont la clé est vide garde tout. Les mesures ne se
  * lisent ni au filtre ni au tri.
@@ -159,6 +242,7 @@ export function lignesGrille(participants, { tri, filtre }, cleNormalisee) {
     if (colonne === 'exclu') return p.exclu ? 1 : 0;
     if (colonne === 'presence') return clePresence(presenceSaisie(p));
     if (colonne === 'conflits') return cleTriConflits(p.conflits, cleNormalisee);
+    if (colonne === 'inclusions') return cleTriInclusions(p);
     return p[colonne] === null ? null : cleNormalisee(p[colonne]);
   };
   const valeurs = new Map(retenues.map((p) => [p, valeurDe(p)]));
@@ -177,30 +261,55 @@ export function lignesGrille(participants, { tri, filtre }, cleNormalisee) {
 }
 
 /** Les colonnes par lesquelles la liste se groupe : celles de la grille,
- *  dans leur ordre, hors des conflits — une liste, dont une personne porte
- *  plusieurs noms, ne range pas chacune dans un seul groupe — et des
- *  mesures, puis le statut calculé (§ 4.2), qui n'est pas une colonne. */
-export const GROUPEMENTS = Object.freeze([...COLONNES.filter((colonne) => colonne !== 'conflits' && !MESURES.includes(colonne)), 'statut']);
+ *  dans leur ordre, hors des conflits et des inclusions — une liste, dont
+ *  une personne porte plusieurs noms, ne range pas chacune dans un seul
+ *  groupe — et des mesures, puis le statut calculé (§ 4.2), qui n'est pas
+ *  une colonne. */
+export const GROUPEMENTS = Object.freeze([...COLONNES.filter((colonne) => !LISTES.includes(colonne) && !MESURES.includes(colonne)), 'statut']);
 
 /**
  * La commande qu'exécute la validation d'une cellule de la grille : celle de
  * la présence, changerPresence de ses tours (null pour tous) ; celle des
  * conflits, changerConflits de la liste saisie (commandeDeConflits,
  * liste_conflits.js) ; toute autre, modifierParticipant sur ce seul champ.
- * Une mesure ne se saisit pas.
+ * Une mesure ne se saisit pas ; les inclusions, lues aussi contre la saisie
+ * de l'ouverture, passent par commandeDeValidation.
  *
  * @param {string} colonne   une colonne de COLONNES, hors exclu, qui se
- *   bascule, et hors des mesures
+ *   bascule, hors des mesures et des inclusions
  * @param {number} id
  * @param {unknown} valeur   la valeur lue de la saisie
  * @returns {{nom: string, args: Object}}
- * @throws {RangeError} une mesure
+ * @throws {RangeError} une mesure, les inclusions
  */
 export function commandeDeCellule(colonne, id, valeur) {
   if (MESURES.includes(colonne)) throw new RangeError(`colonne en lecture seule : ${JSON.stringify(colonne)}`);
+  if (colonne === 'inclusions') throw new RangeError('les inclusions posent leur commande par commandeDeValidation');
   if (colonne === 'presence') return { nom: 'changerPresence', args: { id, tours: valeur } };
   if (colonne === 'conflits') return commandeDeConflits(id, valeur);
   return { nom: 'modifierParticipant', args: { id, champs: { [colonne]: valeur } } };
+}
+
+/**
+ * La commande qu'exécute la validation d'une cellule de la grille, une
+ * seule entrée d'historique pour le geste : pour les inclusions,
+ * changerInclusions des seules listes que la saisie change
+ * (commandeDInclusions, liste_inclusions.js), lues contre stockee, la
+ * saisie de l'ouverture, et contre la personne à la validation — null quand
+ * la saisie ne change plus rien ; pour toute autre colonne, celle de
+ * commandeDeCellule.
+ *
+ * @param {string} colonne   comme pour commandeDeCellule, inclusions
+ *   comprises
+ * @param {{id: number}} personne   la personne à la validation
+ * @param {unknown} valeur   la valeur lue de la saisie
+ * @param {string} stockee   la saisie de l'ouverture
+ * @returns {{nom: string, args: Object}|null}
+ * @throws {RangeError} une mesure
+ */
+export function commandeDeValidation(colonne, personne, valeur, stockee) {
+  if (colonne !== 'inclusions') return commandeDeCellule(colonne, personne.id, valeur);
+  return commandeDInclusions(personne, lectureInclusions(stockee).valeur, valeur);
 }
 
 /**
@@ -573,6 +682,33 @@ export function orthographeExistante(saisie, participants, cleNormalisee) {
   if (portees.includes(texte)) return null;
   const cle = cleNormalisee(texte);
   return portees.find((organisation) => cleNormalisee(organisation) === cle) ?? null;
+}
+
+/** La durée du message d'ajout du formulaire (§ 10.2), en millisecondes :
+ *  il se retire seul à son terme. */
+export const DUREE_MESSAGE_AJOUT_MS = 5_000;
+
+// Une saisie lue comme la commande l'enregistre : en NFC, sans ses blancs
+// de bord, null quand il ne reste rien ; une valeur absente vaut null. Elle
+// reste identique à saisie() de src/application/commandes.js, que
+// ajouterParticipant applique : le message nomme sinon une autre personne
+// que celle qui est écrite.
+function saisieLue(texte) {
+  const valeur = (texte ?? '').normalize('NFC').trim();
+  return valeur === '' ? null : valeur;
+}
+
+/**
+ * Le nom que le message d'ajout donne à la personne ajoutée : celui des
+ * libellés (nomAffiche), composé du nom et du prénom envoyés, lus comme
+ * ajouterParticipant les enregistre.
+ *
+ * @param {{nom: string, prenom?: string}} champs  la saisie envoyée, dont
+ *        la commande a accepté le nom
+ * @returns {string}
+ */
+export function nomAjoute({ nom, prenom }) {
+  return nomAffiche({ nom: saisieLue(nom), prenom: saisieLue(prenom) });
 }
 
 /**

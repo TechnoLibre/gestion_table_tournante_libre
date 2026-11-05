@@ -32,7 +32,7 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import { creerFichiersSimules } from '../../../test/fichiers_simules.js';
 import { pointer, touche } from '../../../test/navigateur/entrees.js';
-import { composantes, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, contraste, sousTheme, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { demanderCreationTables } from './CreerTables.svelte';
@@ -486,6 +486,93 @@ describe('le libellé d’une table, saisi au champ (§ 4, § 8.9)', () => {
     expect(revision(m)).toBe(r + 1);
     expect(Object.hasOwn(charge(m).tables[1], 'libelle')).toBe(false);
     expect(charge(m).tables[0].libelle).toBe('Honneur');
+  });
+});
+
+describe('le nom de chaque tour, saisi au champ (§ 4, § 8.9)', () => {
+  const groupe = (m) => section(m).querySelector('[data-noms-tours]');
+  const champNom = (m, tour) => section(m).querySelector(`input[data-champ="nom-tour-${tour}"]`);
+  const champs = (m) => [...groupe(m).querySelectorAll('input')];
+
+  // La couleur que porte le jeton nom, lue sur une sonde.
+  function jeton(nom) {
+    const sonde = document.createElement('span');
+    sonde.style.color = `var(${nom})`;
+    document.body.append(sonde);
+    const couleur = composantes(getComputedStyle(sonde).color);
+    sonde.remove();
+    return couleur;
+  }
+
+  test('un champ par tour, vide, son étiquette et son texte indicatif, le nom par défaut ; saisi, le nom s’écrit en une entrée ; le nom par défaut ou le même ne relancent rien ; 61 caractères refusés ; vidé, il part', async () => {
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 }));
+    expect(groupe(m).querySelector('legend').textContent).toBe(t('tables.tours.noms'));
+    expect(champs(m).map((entree) => entree.value)).toEqual(['', '', '']);
+    expect(champs(m).map((entree) => entree.placeholder)).toEqual([1, 2, 3].map((tour) => t('tables.tours.nomParDefaut', { tour })));
+    expect(champNom(m, 2).labels[0].textContent).toBe(t('tables.tours.nom', { tour: 2 }));
+
+    let r = revision(m);
+    await saisir(m, champNom(m, 2), '  Plat principal ');
+    expect(revision(m)).toBe(r + 1);
+    expect(charge(m).evenement.nomsTours).toEqual([null, 'Plat principal', null]);
+    expect(champNom(m, 2).value).toBe('Plat principal');
+
+    r = revision(m);
+    const avant = ecritures(m);
+    await saisir(m, champNom(m, 2), 'Plat principal ');
+    await saisir(m, champNom(m, 1), 'Tour 1');
+    expect(revision(m)).toBe(r);
+    expect(ecritures(m)).toBe(avant);
+    expect(groupe(m).querySelector('[data-refus]')).toBeNull();
+    expect(champNom(m, 1).value).toBe('');
+
+    await saisir(m, champNom(m, 3), 'x'.repeat(61));
+    const refus = groupe(m).querySelector('[data-refus="NOM_TOUR_TROP_LONG"]');
+    expect(refus).not.toBeNull();
+    expect(refus.querySelector('p').textContent).toBe(t('NOM_TOUR_TROP_LONG', { longueur: 61, maximum: 60 }));
+    expect(ecritures(m)).toBe(avant);
+    await touche('Escape');
+    await attendre(m);
+    expect(groupe(m).querySelector('[data-refus]')).toBeNull();
+
+    r = revision(m);
+    await saisir(m, champNom(m, 2), '');
+    expect(revision(m)).toBe(r + 1);
+    expect(Object.hasOwn(charge(m).evenement, 'nomsTours')).toBe(false);
+    expect(champNom(m, 2).value).toBe('');
+  });
+
+  test('changer le nombre de tours ajoute ou retire des champs ; la baisse nomme dans sa fenêtre le nom qu’elle retire, Défaire le rend', async () => {
+    const depart = chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 });
+    depart.evenement.nomsTours = [null, null, 'Dessert'];
+    const m = await preparer(depart);
+    expect(champNom(m, 3).value).toBe('Dessert');
+    await saisir(m, champ(m, 'tours'), '4');
+    expect(champs(m)).toHaveLength(4);
+    expect(champNom(m, 4).value).toBe('');
+    await saisir(m, champ(m, 'tours'), '2');
+    expect(fenetre()).not.toBeNull();
+    expect(elementsFenetre()).toContain(t('tables.tours.nomRetire', { tour: 3, nom: 'Dessert' }));
+    await cliquer(m, fenetre().querySelector('[data-commande="confirmer"]'));
+    expect(champs(m)).toHaveLength(2);
+    expect(Object.hasOwn(charge(m).evenement, 'nomsTours')).toBe(false);
+    await m.seance.defaire();
+    await attendre(m);
+    expect(champs(m)).toHaveLength(4);
+    expect(champNom(m, 3).value).toBe('Dessert');
+  });
+
+  test('le texte indicatif prend l’encre secondaire de la page et tient 4,5:1 sur le fond du champ, dans les deux thèmes', async () => {
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 2, tours: 2 }));
+    const entree = champNom(m, 1);
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        const indicatif = composantes(getComputedStyle(entree, '::placeholder').color);
+        const fond = composantes(getComputedStyle(entree).backgroundColor);
+        expect(indicatif, theme).toEqual(jeton('--couleur-page-texte-secondaire'));
+        expect(contraste(indicatif, fond), theme).toBeGreaterThanOrEqual(4.5);
+      });
+    }
   });
 });
 
@@ -1314,6 +1401,9 @@ describe('la présence par tour (§ 6.1, § 2.1 étape 5)', () => {
     });
     const m = await preparer(donnees);
     expect(tableau(m)).not.toBeNull();
+    // Les noms des tours le précèdent dans la carte : il se lit une fois
+    // amené dans la fenêtre.
+    tableau(m).scrollIntoView({ block: 'center' });
     expect(visible(tableau(m))).toBe(true);
     expect(tableau(m).querySelector('caption').textContent.trim()).toBe(t('tables.presences.titre'));
     expect(cellules(tableau(m).querySelector('thead tr'))).toEqual(
@@ -1327,10 +1417,14 @@ describe('la présence par tour (§ 6.1, § 2.1 étape 5)', () => {
     ]);
     for (const tour of [1, 2]) expect(fondDe(teinte(ligneTour(m, tour))), `tour ${tour}`).toEqual(jeton('--couleur-avis-fond'));
     expect(teinte(ligneTour(m, 3))).toBeNull();
+    // Un tour qui a un nom se nomme par lui dans sa ligne.
+    await saisir(m, section(m).querySelector('input[data-champ="nom-tour-2"]'), 'Plat principal');
+    expect(cellules(ligneTour(m, 2))[0]).toBe('Plat principal');
+    expect(cellules(ligneTour(m, 1))[0]).toBe('1');
 
     // Une table de plus : les places suivent, sans soustraction ailleurs.
     await cliquer(m, commande(section(m), 'creerTableRonde'));
-    expect(cellules(ligneTour(m, 2))).toEqual(['2', '6', '12', '0']);
+    expect(cellules(ligneTour(m, 2))).toEqual(['Plat principal', '6', '12', '0']);
     expect(teinte(ligneTour(m, 2))).toBeNull();
 
     for (const id of [1, 2, 3]) await m.seance.executer('changerPresence', { id, tours: null });
@@ -1389,6 +1483,7 @@ describe('créer les tables qui manquent (§ 6.1)', () => {
   const formulaire = (m) => section(m).querySelector('[data-enonce="creerTables"]');
   const apercu = (m) => formulaire(m).querySelector('[data-phrase]').textContent;
   const ouvrir = (m) => commande(section(m), 'creerTablesManquantes');
+  const forme = (m, valeur) => formulaire(m).querySelector(`input[type="radio"][data-champ="formeTables"][value="${valeur}"]`);
 
   test('l’aperçu dit ce que la commande fera, verbatim : « 22 tables de 8 places : 176 places pour 171 participants »', async () => {
     assert171();
@@ -1432,6 +1527,101 @@ describe('créer les tables qui manquent (§ 6.1)', () => {
     expect(charge(m).tables.map(({ id }) => id)).toEqual([1, 2]);
     expect(ouvrir(m)).not.toBeNull();
     expect(section(m).querySelector('[data-enonce="tablesCreees"]')).toBeNull();
+  });
+
+  test('des personnes à l’animation réservée : l’aperçu dit combien la création en désignera et combien resteront ; « Créer » les désigne, l’annonce les compte, l’avertissement nomme la restante', async () => {
+    // Une table de 8 pour 20 personnes, 3 tables de 4 à créer : Iris et
+    // Théo sont marquées, Ondine aussi, mais absente au tour 2.
+    const donnees = chargeDe({ tables: [{ id: 1 }], n: 20 });
+    for (const id of [1, 2, 3]) donnees.participants[id - 1].animationReservee = true;
+    donnees.participants[2].presence = [1];
+    const m = await preparer(donnees);
+    await cliquer(m, ouvrir(m));
+    await saisir(m, champ(m, 'siegesParTable'), '4');
+    const phrase = () => formulaire(m).querySelector('[data-phrase="animateurs"]');
+    expect(apercu(m)).toBe(t('tables.manque.apercu', { tables: 3, sieges: 4, placesApres: 20, presentes: 20, partielle: true }));
+    expect(phrase().textContent).toBe(t('tables.manque.animateurs', { designees: 2, restantes: 1 }));
+    // La phrase passe sous celle des places.
+    const places = formulaire(m).querySelector('[data-phrase]').getBoundingClientRect();
+    expect(phrase().getBoundingClientRect().top).toBeGreaterThanOrEqual(places.bottom);
+    await cliquer(m, commande(formulaire(m), 'creerTables'));
+    expect(charge(m).reservations).toEqual([resa(1, 2, 1), resa(2, 3, 1)]);
+    const annonce = section(m).querySelector('[data-enonce="tablesCreees"]');
+    expect(annonce.textContent).toBe(t('tables.manque.fait', { premier: 2, dernier: 4, animateurs: 2 }));
+    const avis = m.seance.etat().avertissements.find(({ code }) => code === 'ANIMATEURS_A_DESIGNER');
+    expect(avis.details.personnes).toEqual([{ participant: 3, personne: 'Ondine Lacasse', cause: 'absente', tours: [2] }]);
+  });
+
+  test('sans personne à désigner, l’aperçu n’a pas de phrase des animateurs', async () => {
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 12 }));
+    await cliquer(m, ouvrir(m));
+    expect(formulaire(m).querySelector('[data-phrase="animateurs"]')).toBeNull();
+  });
+
+  test('la forme : « Rondes » et « Carrées » sous leur légende, rondes sans table ; « Carrées » choisie, chaque table créée est carrée', async () => {
+    const m = await preparer(chargeDe({ n: 12 }));
+    await cliquer(m, ouvrir(m));
+    const groupe = forme(m, 'ronde').closest('fieldset');
+    expect(groupe.querySelector('legend').textContent).toBe(t('tables.manque.forme'));
+    expect([...groupe.querySelectorAll('label')].map((etiquette) => etiquette.textContent.trim())).toEqual([
+      t('tables.manque.forme.ronde'),
+      t('tables.manque.forme.carree'),
+    ]);
+    // Le texte verbatim, tel que l'écran d'App le rend : la forme stockée
+    // et dessinée est carrée.
+    const { t: tEcran } = traductionEcran();
+    expect([tEcran('tables.manque.forme'), tEcran('tables.manque.forme.ronde'), tEcran('tables.manque.forme.carree')]).toEqual([
+      'Forme',
+      'Rondes',
+      'Carrées',
+    ]);
+    expect(forme(m, 'ronde').checked).toBe(true);
+    expect(forme(m, 'carree').checked).toBe(false);
+    // Choisir la forme n'écrit rien : seul « Créer » l'applique.
+    const ecrites = ecritures(m);
+    await cliquer(m, forme(m, 'carree'));
+    expect(forme(m, 'carree').checked).toBe(true);
+    expect(ecritures(m)).toBe(ecrites);
+    await cliquer(m, commande(formulaire(m), 'creerTables'));
+    expect(charge(m).tables.map(({ numero, forme: f }) => [numero, f])).toEqual([[1, 'carree'], [2, 'carree']]);
+  });
+
+  test('le défaut tiré de l’événement : la forme de la table la plus récemment créée ; une forme choisie puis « Annuler » revient au défaut à la réouverture ; « Créer » sans choix crée des tables de ce défaut ; « Rondes » choisie, elles sont rondes', async () => {
+    // La table d'identifiant 2, la plus récente, est carrée, bien que
+    // numérotée avant la table ronde d'identifiant 1.
+    const chargeCarree = () => chargeDe({ tables: [{ id: 1, numero: 2 }, { id: 2, numero: 1, forme: 'carree' }], n: 30 });
+    const m = await preparer(chargeCarree());
+    await cliquer(m, ouvrir(m));
+    expect(forme(m, 'carree').checked).toBe(true);
+    expect(forme(m, 'ronde').checked).toBe(false);
+    await cliquer(m, forme(m, 'ronde'));
+    await cliquer(m, commande(formulaire(m), 'annulerCreationTables'));
+    await cliquer(m, ouvrir(m));
+    expect(forme(m, 'carree').checked).toBe(true);
+    // Les boutons laissés tels quels, « Créer » applique le défaut coché.
+    await cliquer(m, commande(formulaire(m), 'creerTables'));
+    expect(charge(m).tables.slice(2).map(({ forme: f }) => f)).toEqual(['carree', 'carree']);
+    // Sur le même défaut carré, « Rondes » cochée l'emporte.
+    const autre = await preparer(chargeCarree());
+    await cliquer(autre, ouvrir(autre));
+    await cliquer(autre, forme(autre, 'ronde'));
+    await cliquer(autre, commande(formulaire(autre), 'creerTables'));
+    expect(charge(autre).tables.slice(2).map(({ forme: f }) => f)).toEqual(['ronde', 'ronde']);
+  });
+
+  test('le défaut suit l’événement après le montage : une table carrée ajoutée à un événement sans table, le formulaire ouvert coche « Carrées »', async () => {
+    // Le formulaire est monté avec la section, l'événement sans table : le
+    // défaut suit la charge courante, pas celle du montage.
+    const m = await preparer(chargeDe({ n: 30 }));
+    await cliquer(m, ouvrir(m));
+    expect(forme(m, 'ronde').checked).toBe(true);
+    await cliquer(m, commande(formulaire(m), 'annulerCreationTables'));
+    await m.seance.executer('creerTable', { forme: 'carree' });
+    await attendre(m);
+    expect(charge(m).tables.map(({ forme: f }) => f)).toEqual(['carree']);
+    await cliquer(m, ouvrir(m));
+    expect(forme(m, 'carree').checked).toBe(true);
+    expect(forme(m, 'ronde').checked).toBe(false);
   });
 
   test('le formulaire ouvert, un geste ailleurs comble le manque : il se replie, et le manque revenu par « Défaire » ne montre que la commande', async () => {
@@ -1607,6 +1797,7 @@ describe('les animateurs d’une table (§ 2.1 étape 6, § 6.1)', () => {
     expect(fenetre()).toHaveAccessibleName('Ajouter des animateurs à la table 1');
     await vi.waitFor(() => expect(document.activeElement).toBe(recherche()));
     expect(titre().value).toBe('animateur');
+    expect(titre()).toHaveAccessibleName('Titre pour les personnes sans titre pressenti');
     expect(grouper().checked).toBe(true);
 
     expect(statutDe(1)).toBe('Anime cette table (« animateur »)');
@@ -1641,6 +1832,34 @@ describe('les animateurs d’une table (§ 2.1 étape 6, § 6.1)', () => {
     expect(statutDe(7)).toBe('Absence au tour 3');
     expect(caseDe(7).disabled).toBe(true);
     expect(caseDe(7).checked).toBe(false);
+  });
+
+  test('une animatrice devenue absente à un tour reste dans la rangée, marquée « Absence au tour 3 » ; son × retire sa réservation et son titre en une entrée', async () => {
+    const donnees = chargeAnimateurs();
+    donnees.participants[0].presence = [1, 2];
+    const m = await preparer(donnees);
+    const r0 = revision(m);
+    const iris = rangee(m, 1).querySelector('[data-participant="1"]');
+    expect(iris, 'Iris dans la rangée de la table 1').not.toBeNull();
+    expect(iris.textContent).toContain('Iris Ombrelle');
+    // La marque, d'abord par la traduction de l'écran, puis en toutes
+    // lettres.
+    const { t: tEcran } = traductionEcran();
+    const marque = iris.querySelector('[data-absence]');
+    expect(marque.textContent.trim()).toBe(tEcran('tables.animateurs.statut.absente', { tours: [3] }));
+    expect(marque.textContent.trim()).toBe('Absence au tour 3');
+    expect(visible(marque)).toBe(true);
+    // Théo, présent à chaque tour, n'en porte aucune.
+    expect(rangee(m, 2).querySelector('[data-participant="2"]')).not.toBeNull();
+    expect(rangee(m, 2).querySelector('[data-absence]')).toBeNull();
+    const retrait = commande(iris, 'retirerAnimateur');
+    expect(retrait).toHaveAccessibleName('Retirer Iris Ombrelle des animateurs de la table 1');
+    await cliquer(m, retrait);
+    expect(revision(m)).toBe(r0 + 1);
+    expect(charge(m).reservations.some((r) => r.participant === 1)).toBe(false);
+    expect(charge(m).titres.some((titreDeTable) => titreDeTable.table === 1 && titreDeTable.siege === 1)).toBe(false);
+    expect(pastilles(m, 1)).toEqual([]);
+    expect(rangee(m, 1).textContent).toContain(t('tables.animateurs.aucun'));
   });
 
   test('la recherche qui cache la première orthographe d’une organisation ne renomme pas son groupe', async () => {
@@ -1717,7 +1936,7 @@ describe('les animateurs d’une table (§ 2.1 étape 6, § 6.1)', () => {
     expect(charge(m).reservations).toEqual(expect.arrayContaining([resa(6, 1, 2), resa(7, 1, 3)]));
     expect(charge(m).titres).toEqual(
       expect.arrayContaining([
-        { table: 1, siege: 2, libelle: 'animateur' },
+        { table: 1, siege: 2, libelle: 'animatrice' },
         { table: 1, siege: 3, libelle: 'animateur' },
       ]),
     );
@@ -1734,7 +1953,7 @@ describe('les animateurs d’une table (§ 2.1 étape 6, § 6.1)', () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(ajouter(m, 1)));
   });
 
-  test('un titre saisi vaut pour toutes les personnes choisies ; la table pleine est signalée contre sa ligne', async () => {
+  test('un titre saisi vaut pour les personnes choisies sans titre pressenti, les autres reçoivent le leur ; la table pleine est signalée contre sa ligne', async () => {
     const m = await preparer(chargeAnimateurs());
     await cliquer(m, ajouter(m, 2));
     await cliquer(m, caseDe(6));
@@ -1745,7 +1964,7 @@ describe('les animateurs d’une table (§ 2.1 étape 6, § 6.1)', () => {
     await cliquer(m, commande(fenetre(), 'confirmerAnimateurs'));
     await attendre(m);
     expect(fenetre()).toBeNull();
-    expect(charge(m).titres.filter(({ table }) => table === 2).map(({ libelle }) => libelle)).toEqual(['hôte', 'accueil', 'accueil']);
+    expect(charge(m).titres.filter(({ table }) => table === 2).map(({ libelle }) => libelle)).toEqual(['hôte', 'animatrice', 'accueil']);
     expect(ligne(m, 2).querySelector('[data-avertissement="TABLE_GELEE"]')).not.toBeNull();
   });
 

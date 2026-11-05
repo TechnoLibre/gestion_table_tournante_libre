@@ -100,6 +100,7 @@ export const TABLE = new Map([
   ['propositions.colonne.rencontresMobiles', 'Personnes distinctes rencontrées, minimum : mobiles'],
   ['propositions.colonne.rencontresAncres', 'Personnes distinctes rencontrées, minimum : ancrés'],
   ['propositions.colonne.conflitsOrganisation', "Conflits d'organisation (paire et tour)"],
+  ['propositions.colonne.inclusionsNonSatisfaites', 'Inclusions non satisfaites'],
   ['propositions.colonne.collisionsCumulees', 'Collisions cumulées (paire et tour)'],
   ['propositions.colonne.pairesDistinctes', 'Paires distinctes de même organisation'],
   ['propositions.colonne.excedentCollisions', 'Excédent de collisions (retrouvailles au-delà de la première)'],
@@ -176,6 +177,13 @@ export const TABLE = new Map([
       "quand une personne nomme une organisation, chacun de ses collègues évite chacun des membres de celle-ci. Critère du " +
       "classement à la place que lui donne l'ordre écrit au-dessus du tableau ; l'ordre par défaut le lit en premier. " +
       "Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.inclusionsNonSatisfaites',
+    'Les rencontres que demandent les inclusions et que la soirée ne fait pas, une rencontre demandée des deux côtés ' +
+      "comptant une fois : une inclusion est satisfaite dès qu'on partage une table avec la personne ou un membre de " +
+      "l'organisation incluse. Critère du classement à la place que lui donne l'ordre écrit au-dessus du tableau ; " +
+      "l'ordre par défaut le lit après les conflits. Plus il est bas, mieux c'est.",
   ],
   [
     'propositions.explication.collisionsCumulees',
@@ -332,6 +340,14 @@ export const TABLE = new Map([
   ['propositions.certificat.atteint', 'minimum atteint'],
   ['propositions.certificat.inconnue', 'atteignabilité inconnue'],
 
+  // --- Sous le chiffre d'une cellule (§ 5.4, § 12.10.3, § 12.10.4) ---------------
+  // Le plafond réalisé qui accompagne le plus grand manque, et les deux
+  // lignes secondaires d'un agrégat, chaque chiffre déjà mis en forme. La
+  // tuile et la colonne de la comparaison écrivent les mêmes lignes
+  // secondaires.
+  ['propositions.plafondRealise', ({ plafond }) => `plafond réalisé ${plafond}`],
+  ['propositions.secondaires', ({ mobiles, ancres }) => `mobiles ${mobiles} \u{00B7} ancrés ${ancres}`],
+
   // --- Ce que les réservations imposent, à part (§ 5.4) --------------------------
   [
     'propositions.imposes.retours',
@@ -350,8 +366,10 @@ export const TABLE = new Map([
 
   // --- Les lignes (§ 5.7, § 9, § 12.6) -----------------------------------------
   ['propositions.marque.retenue', 'retenue'],
-  // Les conflits d'organisation qu'une ligne laisse, sous son identifiant.
+  // Les conflits d'organisation et les inclusions qu'une ligne laisse, sous
+  // son identifiant.
   ['propositions.conflitsRestants', ({ nombre }) => compte(nombre, 'conflit restant', 'conflits restants')],
+  ['propositions.inclusionsRestantes', ({ nombre }) => compte(nombre, 'inclusion non satisfaite', 'inclusions non satisfaites')],
   ['propositions.retenu.titre', 'Placement retenu'],
   ['propositions.retenu.origine', ({ proposition }) => `Tel que la proposition n° ${proposition}.`],
   [
@@ -391,6 +409,9 @@ export const TABLE = new Map([
       `Dérivée de n° ${depart}, ${tours.length === 1 ? 'tour' : 'tours'} ${enumeration(tours)} ${tours.length === 1 ? 'figé' : 'figés'}.`,
   ],
   ['propositions.filiation.departAbsent', ({ depart }) => `Dérivée de n° ${depart}, qui n'est plus dans la liste.`],
+  // Un tour figé de la filiation : son numéro mis en forme, suivi de son nom
+  // entre parenthèses quand il en a un.
+  ['propositions.filiation.tourFige', ({ numero, nom }) => (nom === null ? numero : `${numero} (${nom})`)],
 
   // --- Les commandes (§ 2.1 étape 10, § 5.7) ------------------------------------
   ['propositions.commande.voir', 'Voir sur le plan'],

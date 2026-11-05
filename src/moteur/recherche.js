@@ -55,10 +55,10 @@
 // max(0, M − 1), M les rencontres de la paire, sous nouveauxVoisins, plus les
 // retours choisis sous nouvelleTable. Un critère décoché ou sans objet ne
 // pose aucune composante (§ 5.7, D10) : sous l'ordre par défaut, sans
-// conflit d'organisation, sans objectif ni case des animateurs, le n-uplet
-// est celui de l'ordre fixe de référence, ses composantes toujours nulles en
-// moins, ce qui ne change aucune comparaison. Aucune n'est négative, et le n-uplet nul ne s'améliore
-// plus.
+// conflit d'organisation, sans inclusion active, sans objectif ni case des
+// animateurs, le n-uplet est celui de l'ordre fixe de référence, ses
+// composantes toujours nulles en moins, ce qui ne change aucune comparaison.
+// Aucune n'est négative, et le n-uplet nul ne s'améliore plus.
 //
 // Incrémental. L'état tient à jour ce dont le score dépend : la matrice des
 // rencontres par paire ; rencontres(p) ; l'histogramme des écarts au plafond
@@ -71,6 +71,35 @@
 // personne, le nombre d'affiliés rencontrés de chaque organisation, d'où
 // |F(p)|, A(p) et Σ r(p). Un échange ne touche que les paires des deux tables
 // concernées, au tour concerné : O(capacité).
+//
+// Les inclusions (§ 5.10). Une unité d'inclusion (inclusions.js) est
+// satisfaite, comme inclusionSatisfaite la juge, quand la paire de sa ligne
+// de personne est réunie à un tour, ou quand la source de sa ligne
+// d'organisation compte un affilié de cette organisation parmi ses
+// rencontres : deux compteurs que l'état tient déjà. Un échange ne change
+// donc que les unités des deux personnes déplacées — celles dont elles sont
+// une extrémité, celles qu'elles portent, et celles qui incluent leur
+// organisation —, relues après l'échange, O(1) chacune ; aucune lecture ne
+// s'ajoute aux paires. Elles ne se tiennent que lorsque le n-uplet les
+// compose, le critère sans objet sans ligne active. Les unités qui manquent
+// forment un ensemble indexé, que chaque relecture tient en O(1).
+//
+// Le mouvement dirigé (§ 5.10). Quand le n-uplet compose les inclusions, et
+// tant qu'une unité manque, chaque mouvement tire d'abord
+// borne(PART_RAPPROCHER) : 0 en fait un mouvement dirigé, toute autre valeur
+// le mouvement ordinaire, qui tire alors comme au paragraphe « Mouvement ».
+// Le mouvement dirigé (rapprocher) tire une unité parmi celles qui
+// manquent, puis l'un de ses partenaires — la personne dont la rencontre la
+// satisfait, ou, pour une organisation que plusieurs membres satisfont,
+// l'un d'eux —, puis un tour où les deux sont assis et celui des deux qui y
+// est libre, qui rejoint la table de l'autre : il prend l'un de ses sièges
+// mobiles, hors de celui de l'autre, par l'échange ordinaire avec son
+// occupant, personne ou place fantôme. Sans tour ni personne libre qui le
+// permette, le mouvement est évalué et rejeté. Il ne touche ni un siège
+// fixé ni un tour figé, et s'accepte, se refuse et se défait comme un
+// autre : seul le choix des sièges change. Sans unité qui manque — aucune
+// ligne active, critère décoché, ou toutes satisfaites —, rien ne se tire de
+// plus, et la suite des tirages est celle du mouvement ordinaire.
 //
 // Les objectifs (A13). Les tours servis s(p) suivent la personne déplacée :
 // la table de correspondance par objectif distinct dit si la table quittée
@@ -217,6 +246,7 @@ import {
 } from './configuration.js';
 import { compilationDe, composantesDe } from './criteres.js';
 import { ErreurAnnulee, ErreurConfiguration } from './erreurs.js';
+import { ciblesDesInclusions } from './inclusions.js';
 import { mesurer } from './indicateurs.js';
 import { ecartsAuPlafondAPriori } from './manque.js';
 import { plafondsAPriori } from './plafond.js';
@@ -278,9 +308,19 @@ import { plafondsAPriori } from './plafond.js';
  *           le n-uplet ne compose pas les animateurs non rencontrés
  * @property {number|null} animateursNonRencontres   Σ (B(p) − m(p)) ; null
  *           de même
+ * @property {boolean} suitInclusions   vrai quand le n-uplet compose les
+ *           inclusions non satisfaites : l'état ne les tient qu'alors
+ * @property {number|null} inclusionsNonSatisfaites   unités des inclusions
+ *           (inclusions.js) que le plan ne satisfait pas ; null quand le
+ *           n-uplet ne les compose pas
+ * @property {Uint8Array|null} inclusionSatisfaite   1 par unité satisfaite ;
+ *           null de même
+ * @property {Int32Array|null} enManque   les unités non satisfaites, aux
+ *           inclusionsNonSatisfaites premières cases, dans un ordre qui
+ *           dépend des mouvements passés ; null de même
  * @property {Object} composition        la forme du n-uplet de l'instance :
  *           taille, termes de chaque composante, ordres de comparaison,
- *           rang du plus grand écart et suitAnimateurs
+ *           rang du plus grand écart, suitAnimateurs et suitInclusions
  *
  * @typedef {{tour: number, a: number, b: number}} Mouvement
  *          l'échange des occupants des sièges a et b au tour d'index tour
@@ -295,6 +335,9 @@ export const HISTORIQUE_PAR_DEFAUT = 1_000;
 // Longueurs d'historique sans changement du score courant au-delà desquelles
 // une descente se relance, dans l'ordre des contraintes seulement.
 const PATIENCE = 10;
+// Sur PART_RAPPROCHER mouvements tirés tant qu'une unité d'inclusion manque,
+// un en moyenne la rapproche (en-tête du module, « Le mouvement dirigé »).
+const PART_RAPPROCHER = 2;
 const MOT_MAX = 0xffffffff;
 // Plus grand compte de rencontres d'une paire que tient un Uint16Array : une
 // paire se réunit au plus une fois par tour.
@@ -318,12 +361,14 @@ const RETOURS = 9;
 const ANIMATEURS = 10;
 const REDONDANCE = 11;
 const CONFLITS = 12;
+const INCLUSIONS = 13;
 
 // Le code de chaque grandeur que composantesDe nomme (criteres.js), les
 // rencontres répétées mises à part : leur valeur dépend des cases. La Map ne
 // sert qu'à retrouver un code par son nom.
 const CODE_DE = new Map([
   ['conflitsOrganisation', CONFLITS],
+  ['inclusionsNonSatisfaites', INCLUSIONS],
   ['ecartAuPlafondAPrioriMax', ECART],
   ['carresEcartsAuPlafondAPriori', CARRES],
   ['excedentCollisions', EXCEDENT],
@@ -352,6 +397,7 @@ function lire(q, code) {
     case RETOURS: return q.totalRetoursChoisis;
     case ANIMATEURS: return q.animateursNonRencontres;
     case CONFLITS: return q.conflitsOrganisation;
+    case INCLUSIONS: return q.inclusionsNonSatisfaites;
     default: return q.totalRedondance;
   }
 }
@@ -363,8 +409,9 @@ function lire(q, code) {
 // terme par composante qu'il descend ; un palier partagé, un terme par
 // critère dans sa composante. Les rencontres répétées posent un terme par
 // case cochée de « nouveaux voisins » et « nouvelle table », au même poids.
-// suitAnimateurs dit qu'un terme lit les animateurs non rencontrés : l'état
-// ne les tient qu'alors. Tout nom que pose la compilation a son code dans
+// suitAnimateurs dit qu'un terme lit les animateurs non rencontrés, et
+// suitInclusions qu'un terme lit les inclusions non satisfaites : l'état ne
+// les tient qu'alors. Tout nom que pose la compilation a son code dans
 // CODE_DE : compilationDe refuse un critère hors du registre CRITERES, et
 // composantesDe ne rend, pour l'écart et les tours hors objectif, que des
 // grandeurs de cette table.
@@ -400,6 +447,7 @@ function composition(instance) {
     ordreContraintes: Int32Array.from(ordreContraintes),
     rangEcart,
     suitAnimateurs: termes.some(([code]) => code === ANIMATEURS),
+    suitInclusions: termes.some(([code]) => code === INCLUSIONS),
   };
 }
 
@@ -430,18 +478,77 @@ function exigerChampsProposition({ graine, arret, historique }) {
   exigerReglage('historique', historique, 1, Number.MAX_SAFE_INTEGER);
 }
 
-// Ce que toutes les propositions d'une instance partagent : la disposition
-// des sièges, les sièges fixés et les sièges mobiles de chaque tour, les
-// personnes libres présentes à chaque tour par index croissant, le plafond a
-// priori de chacun, par (personne, table), le seuil de visites au-delà duquel
-// une visite est un retour choisi, les animateurs de chaque table à chaque
-// tour, et la composition du n-uplet. Un absent n'a ni siège fixé, sa
-// réservation étant suspendue, ni entrée parmi les libres : les sièges qu'il
-// laisse sont des places fantômes. Lève PLACES_MANQUANTES quand les sièges
-// d'un tour ne suffisent pas à asseoir ses présents (§ 5.9) : détails
-// {placesManquantes}, le plus grand manque, et, dès qu'une absence existe,
-// tours, chaque tour à manque positif {tour, manque}, croissants ; sans
-// absence, tours manque, et les détails sont ceux du compte sur N.
+// Les unités des inclusions (inclusions.js) telles que la recherche les relit
+// (en-tête du module, « Les inclusions ») : U, leur nombre ; pour l'unité u,
+// cle[u], la case du compteur qui la satisfait dès qu'il est positif —
+// a × N + b dans les paires, a < b, pour une ligne de personne, p × G + g
+// dans les affiliés rencontrés par groupe pour une ligne d'organisation —, et
+// deGroupe[u], 1 pour la seconde ; puis, pour chaque personne p, les unités
+// qu'un échange qui la déplace peut changer, de unites[debut[p]] à
+// unites[debut[p + 1]] : celles dont elle est une extrémité, celles qu'elle
+// porte, et celles qui incluent son organisation. Pour le mouvement dirigé,
+// source[u], la source de l'unité, et ses partenaires, de
+// partenaires[debutPartenaires[u]] à partenaires[debutPartenaires[u + 1]] :
+// la personne dont la rencontre la satisfait (unitePartenaire), ou, pour une
+// organisation que plusieurs membres satisfont, chacun de ses membres par
+// index croissant.
+function unitesDeRecherche(instance, aPriori) {
+  const { N, groupe, groupes, inclusionCible } = instance;
+  const G = groupes.length;
+  const { uniteLigne, uniteSource, unitePartenaire } = ciblesDesInclusions(instance, aPriori);
+  const U = uniteLigne.length;
+  const cle = new Int32Array(U);
+  const deGroupe = new Uint8Array(U);
+  const parPersonne = Array.from({ length: N }, () => []);
+  const incluantLeGroupe = Array.from({ length: G }, () => []);
+  const membres = Array.from({ length: G }, () => []);
+  for (let q = 0; q < N; q += 1) if (groupe[q] !== SANS_GROUPE) membres[groupe[q]].push(q);
+  const partenairesDe = [];
+  for (let u = 0; u < U; u += 1) {
+    const p = uniteSource[u];
+    const cible = inclusionCible[uniteLigne[u]];
+    parPersonne[p].push(u);
+    partenairesDe.push(unitePartenaire[u] >= 0 ? [unitePartenaire[u]] : membres[-1 - cible]);
+    if (cible >= 0) {
+      cle[u] = Math.min(p, cible) * N + Math.max(p, cible);
+      parPersonne[cible].push(u);
+    } else {
+      cle[u] = p * G - 1 - cible;
+      deGroupe[u] = 1;
+      incluantLeGroupe[-1 - cible].push(u);
+    }
+  }
+  for (let q = 0; q < N; q += 1) if (groupe[q] !== SANS_GROUPE) parPersonne[q].push(...incluantLeGroupe[groupe[q]]);
+  const debut = new Int32Array(N + 1);
+  for (let q = 0; q < N; q += 1) debut[q + 1] = debut[q] + parPersonne[q].length;
+  const debutPartenaires = new Int32Array(U + 1);
+  for (let u = 0; u < U; u += 1) debutPartenaires[u + 1] = debutPartenaires[u] + partenairesDe[u].length;
+  return {
+    U,
+    cle,
+    deGroupe,
+    debut,
+    unites: Int32Array.from(parPersonne.flat()),
+    source: uniteSource,
+    debutPartenaires,
+    partenaires: Int32Array.from(partenairesDe.flat()),
+  };
+}
+
+// Ce que toutes les propositions d'une instance partagent : la disposition des
+// sièges, les sièges fixés et les sièges mobiles de chaque tour, les personnes
+// libres présentes à chaque tour par index croissant, le plafond a priori de
+// chacun, par (personne, table), le seuil de visites au-delà duquel une visite
+// est un retour choisi, les animateurs de chaque table à chaque tour, la
+// composition du n-uplet et, quand elle compose les inclusions, leurs unités
+// vues par la recherche (unitesDeRecherche), tirées de ce plafond a priori. Un
+// absent n'a ni siège fixé, sa réservation étant suspendue, ni entrée parmi
+// les libres : les sièges qu'il laisse sont des places fantômes. Lève
+// PLACES_MANQUANTES quand les sièges d'un tour ne suffisent pas à asseoir ses
+// présents (§ 5.9) : détails {placesManquantes}, le plus grand manque, et, dès
+// qu'une absence existe, tours, chaque tour à manque positif {tour, manque},
+// croissants ; sans absence, tours manque, et les détails sont ceux du compte
+// sur N.
 function preparer(instance) {
   const manques = placesManquantesParTour(instance);
   const placesManquantes = Math.max(...manques);
@@ -461,10 +568,13 @@ function preparer(instance) {
 
   // siegesFixes[r × S + s] : la personne fixée au siège s du tour r,
   // FANTOME pour un siège mobile. mobiles[r × S + i], i < nombreMobiles[r] :
-  // le i-ème siège mobile du tour r, dans l'ordre des sièges.
+  // le i-ème siège mobile du tour r, dans l'ordre des sièges ; ceux de la
+  // table t, rangées dans l'ordre des sièges, vont de i = mobilesDe[r × (T +
+  // 1) + t] à mobilesDe[r × (T + 1) + t + 1].
   const siegesFixes = new Int32Array(R * S).fill(FANTOME);
   const mobiles = new Int32Array(R * S);
   const nombreMobiles = new Int32Array(R);
+  const mobilesDe = new Int32Array(R * (T + 1));
   const libres = [];
   const occupes = new Int32Array(T);
   for (let r = 0; r < R; r += 1) {
@@ -488,6 +598,10 @@ function preparer(instance) {
       }
     }
     nombreMobiles[r] = m;
+    for (let t = 0, i = 0; t < T; t += 1) {
+      while (i < m && mobiles[r * S + i] < debut[t + 1]) i += 1;
+      mobilesDe[r * (T + 1) + t + 1] = i;
+    }
   }
 
   // Pour une table visitée m fois, dont f à un tour où la personne y est
@@ -508,6 +622,7 @@ function preparer(instance) {
   let plusGrand = 0;
   for (let p = 0; p < N; p += 1) plusGrand = Math.max(plusGrand, aPriori[p]);
 
+  const forme = composition(instance);
   return {
     instance,
     N,
@@ -519,13 +634,15 @@ function preparer(instance) {
     siegesFixes,
     mobiles,
     nombreMobiles,
+    mobilesDe,
     libres,
     seuilRetour,
     debutAnimes: instance.debutAnimes,
     animes: instance.animes,
     aPriori,
     largeurHistogramme: plusGrand + 1,
-    composition: composition(instance),
+    inclusions: forme.suitInclusions ? unitesDeRecherche(instance, aPriori) : null,
+    composition: forme,
   };
 }
 
@@ -656,6 +773,35 @@ function changerTable(etat, p, depart, arrivee, r) {
   }
 }
 
+// Relit l'unité d'inclusion u (unitesDeRecherche) : satisfaite quand son
+// compteur est positif. Quand elle change, les inclusions non satisfaites
+// suivent, et l'ensemble enManque avec elles, dont elles sont le nombre :
+// une unité qui manque s'ajoute à la fin ; une unité satisfaite cède sa
+// place à la dernière.
+function relireUnite(etat, u) {
+  const { cle, deGroupe } = etat.inclusions;
+  const satisfaite = (deGroupe[u] === 1 ? etat.parGroupe[cle[u]] : etat.paires[cle[u]]) > 0 ? 1 : 0;
+  if (satisfaite === etat.inclusionSatisfaite[u]) return;
+  const { enManque, placeEnManque } = etat;
+  etat.inclusionSatisfaite[u] = satisfaite;
+  if (satisfaite === 1) {
+    etat.inclusionsNonSatisfaites -= 1;
+    const derniere = enManque[etat.inclusionsNonSatisfaites];
+    enManque[placeEnManque[u]] = derniere;
+    placeEnManque[derniere] = placeEnManque[u];
+  } else {
+    enManque[etat.inclusionsNonSatisfaites] = u;
+    placeEnManque[u] = etat.inclusionsNonSatisfaites;
+    etat.inclusionsNonSatisfaites += 1;
+  }
+}
+
+// Relit les unités d'inclusion que le déplacement de p peut changer.
+function relireInclusions(etat, p) {
+  const { debut, unites } = etat.inclusions;
+  for (let i = debut[p], fin = debut[p + 1]; i < fin; i += 1) relireUnite(etat, unites[i]);
+}
+
 // Ajoute sens aux visites de p à la table t, et ajuste les retours choisis.
 function changerVisite(etat, p, t, sens) {
   const i = p * etat.T + t;
@@ -699,7 +845,8 @@ function voisiner(etat, p, base, t, exclu, sens) {
 
 // Échange les occupants des sièges a et b, de deux tables différentes, au
 // tour r. Chaque occupant quitte d'abord ses voisins, puis rejoint ceux de
-// l'autre table, ses tours servis et ses animateurs avec : l'échange est sa
+// l'autre table, ses tours servis et ses animateurs avec ; puis, quand l'état
+// les tient, les unités d'inclusion des deux se relisent. L'échange est sa
 // propre réciproque, et le refaire rend l'état d'avant, compteurs compris.
 function echanger(etat, r, a, b) {
   const { siege, tableDe, tableDuSiege, R } = etat;
@@ -726,6 +873,10 @@ function echanger(etat, r, a, b) {
     voisiner(etat, y, base, ta, a, 1);
     changerTable(etat, y, tb, ta, r);
   }
+  if (etat.suitInclusions) {
+    if (x !== FANTOME) relireInclusions(etat, x);
+    if (y !== FANTOME) relireInclusions(etat, y);
+  }
 }
 
 // Placement initial d'une instance préparée : les personnes fixées à leurs
@@ -734,18 +885,19 @@ function echanger(etat, r, a, b) {
 // absent, vaut RESERVE. Les compteurs partent de zéro et suivent chaque paire,
 // chaque visite et chaque rencontre d'animateur par les mêmes fonctions que
 // les mouvements, les conflits d'organisation paire par paire, sur la même
-// relation ; les écarts partent du plafond a priori, aucune rencontre
-// n'étant encore comptée, et les animateurs non rencontrés de Σ B(p),
-// quand l'état les tient (suitAnimateurs de la composition). Les
-// tours servis se comptent siège par siège, puis l'histogramme des
-// P(p) − s(p) se forme sur les personnes concernées. Chaque personne assise
-// l'est à une table qu'elle peut occuper — sa table fixée, ou un siège
-// mobile, que seule une table à siège libre offre — : servie et rencontres
-// d'animateurs s'y lisent alors, comme mesurer les lit. Un libre que le
-// départ assied au siège fixé d'une réserve imposée, à une table sans siège
-// libre (paragraphe « Départ »), n'y est ni servi ni ne rencontre
-// d'animateur, comme mesurer le lit ; aucun mouvement ne l'y conduit, ce
-// siège n'étant pas mobile.
+// relation ; les écarts partent du plafond a priori, aucune rencontre n'étant
+// encore comptée, les animateurs non rencontrés de Σ B(p) et les inclusions
+// non satisfaites de toutes leurs unités, quand l'état les tient
+// (suitAnimateurs et suitInclusions de la composition). Les tours servis se
+// comptent siège par siège, puis l'histogramme des P(p) − s(p) se forme sur
+// les personnes concernées ; les unités d'inclusion se relisent enfin, une à
+// une, sur les paires comptées. Chaque personne assise l'est à une table
+// qu'elle peut occuper — sa table fixée, ou un siège mobile, que seule une
+// table à siège libre offre — : servie et rencontres d'animateurs s'y lisent
+// alors, comme mesurer les lit. Un libre que le départ assied au siège fixé
+// d'une réserve imposée, à une table sans siège libre (paragraphe « Départ »),
+// n'y est ni servi ni ne rencontre d'animateur, comme mesurer le lit ; aucun
+// mouvement ne l'y conduit, ce siège n'étant pas mobile.
 //
 // remplir, quand il n'est pas null, assied les libres à la place du
 // mélange : remplir(etat) écrit les sièges dans etat.siege, où les fixés
@@ -754,7 +906,7 @@ function etatInitial(structure, rng, remplir = null) {
   const { instance, N, T, R, S, mobiles, libres, aPriori, tableDuSiege, debut } = structure;
   const { fixe, siegesLibres } = instance;
   const G = instance.groupes.length;
-  const { suitAnimateurs } = structure.composition;
+  const { suitAnimateurs, suitInclusions } = structure.composition;
   const etat = {
     instance,
     contraintes: instance.contraintes,
@@ -822,6 +974,21 @@ function etatInitial(structure, rng, remplir = null) {
       : R <= UINT8_MAX ? new Uint8Array(N * instance.A) : new Uint32Array(N * instance.A),
     rencontresAnimateurs: suitAnimateurs ? new Int32Array(N) : null,
     animateursNonRencontres: suitAnimateurs ? 0 : null,
+    // Les inclusions : leurs unités vues par la recherche, de l'instance ;
+    // celles que le plan satisfait, le nombre des autres et leur ensemble
+    // indexé, de cet état, null quand il ne les tient pas. Toutes manquent
+    // avant que le placement ne soit compté.
+    suitInclusions,
+    inclusions: structure.inclusions,
+    inclusionSatisfaite: suitInclusions ? new Uint8Array(structure.inclusions.U) : null,
+    inclusionsNonSatisfaites: suitInclusions ? structure.inclusions.U : null,
+    enManque: suitInclusions ? Int32Array.from({ length: structure.inclusions.U }, (_, u) => u) : null,
+    placeEnManque: suitInclusions ? Int32Array.from({ length: structure.inclusions.U }, (_, u) => u) : null,
+    // Le mouvement dirigé : les tables fixées, de l'instance ; les sièges
+    // mobiles de chaque table, de la structure ; ses options, de cet état.
+    fixe,
+    mobilesDe: structure.mobilesDe,
+    options: suitInclusions ? new Int32Array(2 * R) : null,
   };
   for (let p = 0; p < N; p += 1) {
     etat.histogramme[aPriori[p]] += 1;
@@ -873,6 +1040,7 @@ function etatInitial(structure, rng, remplir = null) {
     etat.horsObjectifMax = Math.max(etat.horsObjectifMax, hors);
   }
   etat.personnesAuMax = etat.horsObjectifMax === 0 ? 0 : etat.histogrammeObjectifs[etat.horsObjectifMax];
+  if (suitInclusions) for (let u = 0; u < etat.inclusions.U; u += 1) relireUnite(etat, u);
   return etat;
 }
 
@@ -921,6 +1089,15 @@ function lireSignal(signal) {
   if (signal?.aborted) throw new ErreurAnnulee('recherche annulée');
 }
 
+// La fonction de mouvement d'une descente qui compose les inclusions : tant
+// qu'une unité manque, borne(PART_RAPPROCHER) choisit entre rapprocher, sur
+// 0, et base, le mouvement ordinaire ; sans unité qui manque, base seul, sans
+// rien tirer de plus (en-tête du module, « Le mouvement dirigé »).
+const avecRapprochement = (base, tirables) => (etat, rng) =>
+  etat.inclusionsNonSatisfaites > 0 && rng.borne(PART_RAPPROCHER) === 0
+    ? rapprocher(etat, rng, tirables)
+    : base(etat, rng);
+
 // Descente par acceptation tardive depuis un placement initial tiré de rng ;
 // rend { plan, evalues, releves, relances } : la meilleure affectation vue,
 // en plan indexé, les mouvements évalués, et les copies de la meilleure
@@ -939,8 +1116,10 @@ function lireSignal(signal) {
 // départ, au début et à chaque relance, et tirables liste les index des
 // tours non figés, où proposerParmi tire chaque mouvement ; null pour l'un
 // et l'autre, la descente tire son placement de rng et ses mouvements par
-// proposerEtAppliquer. La fonction de mouvement se choisit une fois, avant
-// la boucle. Rend aussi relances, le nombre de relances.
+// proposerEtAppliquer. Quand la composition compose les inclusions, le
+// mouvement dirigé les précède (avecRapprochement), dans les mêmes tours. La
+// fonction de mouvement se choisit une fois, avant la boucle. Rend aussi
+// relances, le nombre de relances.
 function descendre(structure, rng, {
   arret,
   historique,
@@ -954,7 +1133,8 @@ function descendre(structure, rng, {
   const { composition: forme } = structure;
   const { taille, ordreScore, ordreContraintes } = forme;
   const partir = depart ?? (() => etatInitial(structure, rng));
-  const mouvoir = tirables === null ? proposerEtAppliquer : (e, g) => proposerParmi(e, g, tirables);
+  const base = tirables === null ? proposerEtAppliquer : (e, g) => proposerParmi(e, g, tirables);
+  const mouvoir = forme.suitInclusions ? avecRapprochement(base, tirables) : base;
   let etat = partir();
   const courant = composer(forme, etat, new Float64Array(taille));
   const candidat = new Float64Array(taille);
@@ -1699,8 +1879,9 @@ export function scoreIncremental(etat) {
  * écarts au plafond a priori par ecartsAuPlafondAPriori (manque.js), sur les
  * plafonds de plafondsAPriori ; les conflits d'organisation, l'excédent de
  * collisions, les collisions cumulées, les retours choisis, Σ r(p), les
- * quatre valeurs des objectifs et les animateurs non rencontrés par mesurer
- * — nulles quand la mesure n'a personne de concerné, ni paire en conflit.
+ * quatre valeurs des objectifs, les animateurs non rencontrés et les avis
+ * des inclusions par mesurer — nulles quand la mesure n'a personne de
+ * concerné, ni paire en conflit, ni ligne active.
  * Une redéfinition de l'une d'elles dans son module change donc ce score,
  * et son accord avec le score tenu à jour tombe.
  *
@@ -1749,6 +1930,7 @@ export function scoreComplet(etat) {
     horsObjectifMax: objectifs.horsObjectifMax,
     personnesAuMax: objectifs.personnesAuMax,
     animateursNonRencontres: mesures.animateurs?.nonRencontres ?? 0,
+    inclusionsNonSatisfaites: mesures.inclusions?.avis ?? 0,
   };
   return composer(etat.composition, grandeurs, new Array(etat.composition.taille));
 }
@@ -1779,6 +1961,88 @@ export function proposerEtAppliquer(etat, rng) {
  */
 export function proposerParmi(etat, rng, tirables) {
   return mouvoirDans(etat, rng, tirables[rng.borne(tirables.length)]);
+}
+
+/**
+ * Le mouvement dirigé des inclusions (en-tête du module, « Le mouvement
+ * dirigé »), appliqué à l'état : une unité qui manque, tirée par borne(n), n
+ * les inclusions non satisfaites ; l'un de ses partenaires, par borne(k), k
+ * leur nombre ; une option de la paire, par borne(o), o les options ; un
+ * siège de la table d'arrivée, par borne(m) ; puis l'échange. Une option est
+ * un tour de tirables où la source et le partenaire sont assis tous deux, et
+ * celui des deux qui y est libre, rangées tour par tour, la source d'abord.
+ * Sa table d'arrivée, celle de l'autre, doit offrir au moins un siège
+ * mobile que l'autre n'occupe pas : les m sièges, dans l'ordre des sièges.
+ * Rend de quoi le défaire, ou null, sans rien changer, quand la paire n'a
+ * aucune option.
+ *
+ * @param {EtatRecherche} etat   un état qui tient les inclusions, dont une
+ *        unité au moins manque
+ * @param {ReturnType<typeof creerPcg32>} rng
+ * @param {ArrayLike<number>|null} [tirables=null]   index des tours où
+ *        rapprocher, ceux d'une dérivée ; null pour tous les tours
+ * @returns {Mouvement|null}
+ */
+export function rapprocher(etat, rng, tirables = null) {
+  const { source, debutPartenaires, partenaires } = etat.inclusions;
+  const u = etat.enManque[rng.borne(etat.inclusionsNonSatisfaites)];
+  const premier = debutPartenaires[u];
+  const q = partenaires[premier + rng.borne(debutPartenaires[u + 1] - premier)];
+  return reunir(etat, rng, source[u], q, tirables);
+}
+
+// Les sièges mobiles de la table t au tour r, moins celui qu'y occupe y quand
+// y y est libre. À un tour où rapprocher tire, un libre assis occupe un siège
+// mobile : seule une réserve imposée en laisse un fixé à un libre, et elle
+// n'est qu'aux tours figés.
+function siegesDArrivee(etat, r, t, y) {
+  const i = r * (etat.T + 1) + t;
+  return etat.mobilesDe[i + 1] - etat.mobilesDe[i] - (etat.fixe[y * etat.R + r] === LIBRE ? 1 : 0);
+}
+
+// Les options de la paire (p, q) parmi tirables, une tirée, puis le siège
+// d'arrivée et l'échange (rapprocher). Une unité qui manque assied ses deux
+// personnes à deux tables différentes à chaque tour où elles sont assises
+// toutes deux : une table partagée les ferait se rencontrer. options[n]
+// vaut 2r pour p déplacé au tour r, 2r + 1 pour q.
+function reunir(etat, rng, p, q, tirables) {
+  const { R, T, S, tableDe, fixe, options, siege, debut, mobiles, mobilesDe } = etat;
+  const k = tirables === null ? R : tirables.length;
+  let n = 0;
+  for (let j = 0; j < k; j += 1) {
+    const r = tirables === null ? j : tirables[j];
+    const tp = tableDe[p * R + r];
+    const tq = tableDe[q * R + r];
+    if (tp === RESERVE || tq === RESERVE) continue;
+    if (fixe[p * R + r] === LIBRE && siegesDArrivee(etat, r, tq, q) > 0) {
+      options[n] = 2 * r;
+      n += 1;
+    }
+    if (fixe[q * R + r] === LIBRE && siegesDArrivee(etat, r, tp, p) > 0) {
+      options[n] = 2 * r + 1;
+      n += 1;
+    }
+  }
+  if (n === 0) return null;
+  const option = options[rng.borne(n)];
+  const r = option >> 1;
+  const [x, y] = (option & 1) === 0 ? [p, q] : [q, p];
+  const base = r * S;
+  let a = debut[tableDe[x * R + r]];
+  while (siege[base + a] !== x) a += 1;
+  // Le rang tiré parmi les sièges mobiles de la table d'arrivée, celui de y
+  // sauté : à partir du sien, chaque rang avance d'un.
+  const premier = mobilesDe[r * (T + 1) + tableDe[y * R + r]];
+  let i = premier + rng.borne(siegesDArrivee(etat, r, tableDe[y * R + r], y));
+  for (let j = premier; j <= i; j += 1) {
+    if (siege[base + mobiles[base + j]] === y) {
+      i += 1;
+      break;
+    }
+  }
+  const b = mobiles[base + i];
+  echanger(etat, r, a, b);
+  return { tour: r, a, b };
 }
 
 // Les deux sièges mobiles du tour r, tirés chacun par borne(m), puis

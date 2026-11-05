@@ -4,8 +4,10 @@
 // La vue du plan côté interface (§ 7.2, § 8.5, § 13.3) : le cadre lu d'un
 // DOMRect, la vue d'ouverture — cadrage mémorisé borné au cadre, sinon
 // l'ajustement —, la vue d'après un changement de cadre, les zooms de la
-// molette et des boutons, l'englobant d'un tour, le tour montré, les noms
-// et la personne mise en évidence, dite absente au tour où elle l'est.
+// molette et des boutons, l'englobant d'un tour, le tour montré, les noms,
+// le tour où « Voir sur le plan » montre une personne et la vue qui la
+// centre, et la personne mise en évidence, dite absente ou dans la réserve
+// au tour où elle l'est.
 // Les valeurs attendues viennent de src/geometrie/vue.js, la seule
 // implémentation des conversions, sollicitée une seconde fois.
 import assert from 'node:assert/strict';
@@ -13,6 +15,7 @@ import { describe, test } from '../../../test/lanceur.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { etatPlaces } from '../../application/places.js';
 import { creerTraduction } from '../../application/traduction.js';
+import { kSieges, regimeCibles } from '../../geometrie/designation.js';
 import { englobant, geometrieTable } from '../../geometrie/tables.js';
 import {
   FACTEUR_K_MIN,
@@ -20,6 +23,7 @@ import {
   MARGE_AJUSTEMENT_PX,
   ajuster,
   bornesZoom,
+  ecranDepuisDessin,
   facteurMolette,
   kAjuste,
   zoomerSous,
@@ -36,9 +40,11 @@ import {
   placerBulle,
   sourceMontree,
   tourAffiche,
+  tourPourVoir,
   toursOfferts,
   vueApresCadre,
   vueInitiale,
+  vuePourVoir,
   zoomerBouton,
   zoomerMolette,
 } from './vue_plan.js';
@@ -235,6 +241,17 @@ describe('l’englobant d’un tour, le tour montré, les noms', () => {
     assert.deepEqual(englobantDuTour(etat), attendu);
   });
 
+  test('englobantDuTour : sur le plan écarté, celui des tables posées où les rangées les dessinent', () => {
+    // La table 2, centrée en y = 120, est la seconde rangée ; elle descend
+    // de 90 cm, la première reste.
+    const charge = chargeDEpreuve();
+    const etat = etatPlaces(charge, { tour: 1 });
+    const rangees = [{ y: 0, decalage: 0 }, { y: 120, decalage: 90 }];
+    const descendue = { ...charge.tables[1], position: { x: 300, y: 210 } };
+    assert.deepEqual(englobantDuTour(etat, rangees), englobant([geometrieTable(charge.tables[0], 6), geometrieTable(descendue, 5)]));
+    assert.deepEqual(englobantDuTour(etat, []), englobantDuTour(etat));
+  });
+
   test('englobantDuTour : null sans table', () => {
     const charge = chargeDEpreuve();
     charge.tables = [];
@@ -269,30 +286,178 @@ describe('l’englobant d’un tour, le tour montré, les noms', () => {
   });
 });
 
+describe('tourPourVoir : le tour où « Voir sur le plan » montre une personne (§ 7.1)', () => {
+  // Un état de places écrit à la main, réduit à ce que lit tourPourVoir :
+  // les occupants de chaque table, null pour une chaise vide.
+  const etat = (...tables) => ({ tables: tables.map((occupants) => ({ chaises: occupants.map((occupant) => ({ occupant })) })) });
+  // Les états des tours 1 à 4 ; chaque lecture se compte.
+  function lecteur(etats) {
+    const lus = [];
+    const etatDuTour = (tour) => {
+      lus.push(tour);
+      return etats[tour - 1];
+    };
+    return { lus, etatDuTour };
+  }
+
+  test('assise au tour montré : le tour montré, seul tour lu', () => {
+    const { lus, etatDuTour } = lecteur([etat([7, 3]), etat([3], [7]), etat([7]), etat([null])]);
+    assert.equal(tourPourVoir(7, 4, 3, etatDuTour), 3);
+    assert.deepEqual(lus, [3]);
+  });
+
+  test('sans chaise au tour montré : le premier tour où elle en a une, même avant le tour montré', () => {
+    const etats = [etat([3, null]), etat([null], [5, 7]), etat([3], [5]), etat([7])];
+    assert.equal(tourPourVoir(7, 4, 1, lecteur(etats).etatDuTour), 2);
+    assert.equal(tourPourVoir(7, 4, 3, lecteur(etats).etatDuTour), 2);
+  });
+
+  test('sans chaise à aucun tour : le tour montré', () => {
+    const etats = [etat([3]), etat([5, null]), etat([])];
+    assert.equal(tourPourVoir(7, 3, 2, lecteur(etats).etatDuTour), 2);
+  });
+
+  test('lu sur l\u{2019}état des places : absente au tour 3, la personne de l\u{2019}épreuve se montre au tour où elle est réservée', () => {
+    const charge = chargeDEpreuve();
+    charge.participants[0].presence = [1, 2];
+    charge.reservations = [{ participant: 1, table: 2, siege: 1, portee: 'tour', tour: 2 }];
+    const etatDuTour = (tour) => etatPlaces(charge, { tour });
+    assert.equal(tourPourVoir(1, 3, 3, etatDuTour), 2);
+    assert.equal(tourPourVoir(1, 3, 1, etatDuTour), 2);
+    assert.equal(tourPourVoir(2, 3, 3, etatDuTour), 3);
+  });
+});
+
+describe('vuePourVoir : la vue où « Voir sur le plan » montre une personne (§ 7.1, § 7.3)', () => {
+  // La charge d'épreuve, la table 2, une carrée réduite à 3 places, portée
+  // à 60 m de la première : ajusté au cadre, le plan est sous le seuil des
+  // deux tables, et aucune chaise ne se dessine. Iris Ombrelle (1) est
+  // réservée au siège 3 de la table 2, au pas plus large que celui de la
+  // ronde de 6 ; Grisaille (2), sans réservation, attend dans la réserve.
+  function montage() {
+    const charge = chargeDEpreuve();
+    charge.tables[1].sieges = 3;
+    charge.tables[1].position = { x: 6000, y: 120 };
+    charge.reservations = [{ participant: 1, table: 2, siege: 3, portee: 'tous', tour: null }];
+    const etat = etatPlaces(charge, { tour: 1 });
+    const englobantPlan = englobantDuTour(etat);
+    const geometrie = geometrieTable(etat.tables[1], etat.tables[1].capacite);
+    return { charge, etat, englobantPlan, geometrie, chaise: geometrie.chaises[2] };
+  }
+  // Le point de dessin d'une vue au centre du cadre.
+  const centreDe = (vue, cadre) => ({ x: (cadre.largeur / 2 - vue.tx) / vue.k, y: (cadre.hauteur / 2 - vue.ty) / vue.k });
+  const proche = (a, b) => Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9;
+
+  test('sous le seuil de sa table : k monte au seuil, kSieges, et sa chaise vient au centre du cadre', () => {
+    const { etat, englobantPlan, geometrie, chaise } = montage();
+    const ajustee = ajuster(englobantPlan, CADRE);
+    assert.equal(regimeCibles(ajustee.k, geometrie), 'table');
+    const vue = vuePourVoir(ajustee, etat, 1, englobantPlan, CADRE);
+    assert.equal(vue.k, kSieges(geometrie));
+    assert.equal(regimeCibles(vue.k, geometrie), 'sieges');
+    assert.ok(proche(centreDe(vue, CADRE), chaise));
+    const ecran = ecranDepuisDessin(vue, CADRE, chaise.x, chaise.y);
+    assert.ok(Math.abs(ecran.x - (CADRE.gauche + CADRE.largeur / 2)) < 1e-6 && Math.abs(ecran.y - (CADRE.haut + CADRE.hauteur / 2)) < 1e-6);
+  });
+
+  test('sur le plan écarté, la chaise où les rangées dessinent sa table vient au centre du cadre', () => {
+    const { etat, englobantPlan } = montage();
+    const rangees = [{ y: 0, decalage: 0 }, { y: 120, decalage: 250 }];
+    const descendue = geometrieTable({ ...etat.tables[1], position: { x: 6000, y: 370 } }, etat.tables[1].capacite);
+    const vue = vuePourVoir(ajuster(englobantPlan, CADRE), etat, 1, englobantPlan, CADRE, rangees);
+    assert.ok(proche(centreDe(vue, CADRE), descendue.chaises[2]));
+  });
+
+  test('le seuil est celui de sa table, non celui de la plus serrée', () => {
+    const { etat, englobantPlan, geometrie } = montage();
+    const autre = geometrieTable(etat.tables[0], etat.tables[0].capacite);
+    assert.ok(kSieges(geometrie) < kSieges(autre));
+    assert.equal(vuePourVoir(ajuster(englobantPlan, CADRE), etat, 1, englobantPlan, CADRE).k, kSieges(geometrie));
+  });
+
+  test('déjà plus près que le seuil : k gardé, sa chaise au centre', () => {
+    const { etat, englobantPlan, chaise } = montage();
+    const pres = { k: 2.5, tx: -40, ty: 25 };
+    const vue = vuePourVoir(pres, etat, 1, englobantPlan, CADRE);
+    assert.equal(vue.k, 2.5);
+    assert.ok(proche(centreDe(vue, CADRE), chaise));
+  });
+
+  test('un k au-delà de K_MAX revient à la borne, sa chaise au centre', () => {
+    const { etat, englobantPlan, chaise } = montage();
+    const vue = vuePourVoir({ k: 40, tx: 0, ty: 0 }, etat, 1, englobantPlan, CADRE);
+    assert.equal(vue.k, K_MAX);
+    assert.ok(proche(centreDe(vue, CADRE), chaise));
+  });
+
+  test('sans chaise au tour montré — dans la réserve, absente, exclue, hors de la charge — : null, la vue reste', () => {
+    const { charge, etat, englobantPlan } = montage();
+    const vue = ajuster(englobantPlan, CADRE);
+    assert.ok(etat.reserve.includes(2));
+    assert.equal(vuePourVoir(vue, etat, 2, englobantPlan, CADRE), null);
+    assert.equal(vuePourVoir(vue, etat, 99, englobantPlan, CADRE), null);
+    charge.participants[0].presence = [2, 3];
+    assert.equal(vuePourVoir(vue, etatPlaces(charge, { tour: 1 }), 1, englobantPlan, CADRE), null);
+    charge.participants[0].presence = undefined;
+    charge.participants[0].exclu = true;
+    assert.equal(vuePourVoir(vue, etatPlaces(charge, { tour: 1 }), 1, englobantPlan, CADRE), null);
+  });
+
+  test('sans vue, ou dans un cadre où kAjuste vaut null : null', () => {
+    const { etat, englobantPlan } = montage();
+    assert.equal(vuePourVoir(null, etat, 1, englobantPlan, CADRE), null);
+    const nul = { gauche: 0, haut: 0, largeur: 0, hauteur: 0 };
+    assert.equal(vuePourVoir({ k: 1, tx: 0, ty: 0 }, etat, 1, englobantPlan, nul), null);
+  });
+
+  test('la vue reçue n’est pas modifiée', () => {
+    const { etat, englobantPlan } = montage();
+    const vue = Object.freeze({ k: 0.05, tx: 3, ty: 4 });
+    vuePourVoir(vue, etat, 1, englobantPlan, CADRE);
+    assert.deepEqual(vue, { k: 0.05, tx: 3, ty: 4 });
+  });
+});
+
 describe('evidenceDe : la personne mise en évidence, que la barre de vue nomme (§ 7.1, § 8.4)', () => {
-  test('présente au tour : son nom affiché, absente faux ; absente au tour : absente vrai', () => {
+  test('dans la réserve au tour : reserve vrai ; absente au tour : absente vrai, reserve faux', () => {
     const charge = chargeDEpreuve();
     charge.participants[0].presence = [1, 2];
     const nomDe = nomDeCharge(charge);
-    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 1 })), { id: 1, nom: 'Iris Ombrelle', absente: false });
-    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 3 })), { id: 1, nom: 'Iris Ombrelle', absente: true });
-    assert.deepEqual(evidenceDe(2, nomDe, etatPlaces(charge, { tour: 3 })), { id: 2, nom: 'Grisaille', absente: false });
+    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 1 })), { id: 1, nom: 'Iris Ombrelle', absente: false, reserve: true });
+    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 3 })), { id: 1, nom: 'Iris Ombrelle', absente: true, reserve: false });
+    assert.deepEqual(evidenceDe(2, nomDe, etatPlaces(charge, { tour: 3 })), { id: 2, nom: 'Grisaille', absente: false, reserve: true });
   });
 
-  test('une personne que la charge n\u{2019}a plus : nom null, et jamais absente au tour', () => {
+  test('assise au tour : ni absente ni en réserve', () => {
     const charge = chargeDEpreuve();
-    assert.deepEqual(evidenceDe(99, nomDeCharge(charge), etatPlaces(charge, { tour: 2 })), { id: 99, nom: null, absente: false });
+    charge.reservations = [{ participant: 1, table: 2, siege: 1, portee: 'tour', tour: 2 }];
+    const nomDe = nomDeCharge(charge);
+    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 2 })), { id: 1, nom: 'Iris Ombrelle', absente: false, reserve: false });
   });
 
-  test('une exclue n\u{2019}est pas dite absente au tour : l\u{2019}état des places ne la nomme pas', () => {
+  test('une personne que la charge n\u{2019}a plus : nom null, et jamais absente ni en réserve au tour', () => {
+    const charge = chargeDEpreuve();
+    assert.deepEqual(evidenceDe(99, nomDeCharge(charge), etatPlaces(charge, { tour: 2 })), {
+      id: 99,
+      nom: null,
+      absente: false,
+      reserve: false,
+    });
+  });
+
+  test('une exclue n\u{2019}est dite ni absente ni en réserve au tour : l\u{2019}état des places ne la nomme pas', () => {
     const charge = chargeDEpreuve();
     charge.participants[0].presence = [1];
     charge.participants[0].exclu = true;
-    assert.equal(evidenceDe(1, nomDeCharge(charge), etatPlaces(charge, { tour: 2 })).absente, false);
+    for (const tour of [1, 2]) {
+      const { absente, reserve } = evidenceDe(1, nomDeCharge(charge), etatPlaces(charge, { tour }));
+      assert.deepEqual({ absente, reserve }, { absente: false, reserve: false });
+    }
   });
 
-  test('les libellés : la barre dit le tour d\u{2019}absence ; la liste de travail des réserves du retenu', () => {
+  test('les libellés : la barre dit le tour d\u{2019}absence, celui de la réserve ; la liste de travail des réserves du retenu', () => {
     assert.equal(t('plan.evidence.absenteAuTour', { tour: 3 }), ' \u{2014} absente au tour 3');
+    assert.equal(t('plan.evidence.reserveAuTour', { tour: 2 }), ' \u{2014} dans la réserve au tour 2');
     assert.equal(t('plan.listesTravail.reserves'), 'En réserve dans le placement retenu');
     assert.equal(t('plan.listesTravail.enReserve', { tours: [3, 4] }), ' \u{2014} en réserve aux tours 3 et 4');
     assert.equal(t('plan.listesTravail.enReserve', { tours: [2] }), ' \u{2014} en réserve au tour 2');

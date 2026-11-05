@@ -14,6 +14,7 @@
   // Le panneau lit 'seance' et 'ui' au contexte ; etatTour, l'état des
   // places du tour affiché, que SectionPlan calcule, ou null sans événement.
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import { absentesDuTour } from './absentes.js';
 
   let { etatTour } = $props();
@@ -24,6 +25,8 @@
   const uid = $props.id();
 
   const charge = $derived($seance.charge);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived(charge === null ? [] : nomsDesTours(charge));
   const absentes = $derived(etatTour === null || charge === null ? [] : absentesDuTour(etatTour, charge));
 </script>
 
@@ -31,12 +34,12 @@
   <section class="carte" data-absentes={etatTour.tour} aria-labelledby="{uid}-titre">
     <h3 id="{uid}-titre">{t('plan.absentes.titre')}</h3>
     <div class="corps">
-      <p class="sous-titre">{t('plan.absentes.tour', { tour: etatTour.tour })}</p>
+      <p class="sous-titre">{t('plan.absentes.tour', { tour: etatTour.tour, nomsTours })}</p>
       <ul>
         {#each absentes as { id, nom, presence } (id)}
           <li>
             <button type="button" data-participant={id} onclick={() => ui.ouvrirFiche(id)}
-              ><span class="donnee">{nom}</span><span>{t('plan.absentes.presente', { tours: presence })}</span></button
+              ><span class="donnee">{nom}</span><span>{t('plan.absentes.presente', { tours: presence, nomsTours })}</span></button
             >
           </li>
         {/each}

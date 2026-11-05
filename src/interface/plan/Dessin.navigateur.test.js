@@ -726,7 +726,7 @@ describe('le signal de conflit (§ 7.5, § 13.3)', () => {
   test('le bandeau pose l\u{2019}organisation d\u{2019}un plancher dans son propre nœud', () => {
     const bandeau = [
       { cle: 'plan.bandeau.toutesEnConflit', details: {} },
-      { cle: 'plan.bandeau.plancherGroupe', details: { groupe: 'Club des Merles', effectif: 6, plancherCumulees: 8 } },
+      { cle: 'plan.bandeau.plancherGroupe', details: { groupe: 'Club des Merles', effectif: 6, plancherCumulees: 8, plancherPairesDistinctes: 2 } },
     ];
     const conteneur = monterHtml(BandeauPlan, { bandeau });
     const entrees = tous(conteneur, '[data-bandeau-plan] li');

@@ -7,11 +7,16 @@
   // dessus du classement ; les propositions classées, dans l'ordre de la
   // table d'évaluation ; puis celles hors classement, « non comparables »,
   // avec leurs raisons et les personnes qu'elles nomment. Chaque cellule
-  // s'écrit par texteCellule (modele.js) ; aucune valeur ne se calcule ici.
+  // s'écrit par texteCellule (modele.js), puis, chacune sur sa ligne en
+  // encre secondaire, ce que lignesSousCellule écrit sous son chiffre — le
+  // plafond réalisé sous le plus grand manque, les lignes secondaires d'un
+  // agrégat ; aucune valeur ne se calcule ici.
   // Les violations d'une ligne comparable — retenu compris — se lisent sous
   // son identifiant, puis « N conflits restants » quand elle laisse des
   // conflits d'organisation (conflitsRestants, modele.js), dans un nœud
-  // data-conflits-restants : la recherche les vise à zéro sans les
+  // data-conflits-restants, puis « N inclusions non satisfaites » quand elle
+  // laisse des rencontres demandées (inclusionsRestantes), dans un nœud
+  // data-inclusions-non-satisfaites : la recherche les vise à zéro sans les
   // interdire, et la ligne le dit.
   //
   // vue : ce que rend tableau(), libellés et étendues compris — ses colonnes
@@ -87,20 +92,22 @@
   // Désignations : data-retenu sur la ligne du retenu, data-proposition sur
   // chaque autre ligne, data-colonne sur chaque cellule et chaque en-tête ;
   // data-classement et data-hors-classement sur les deux groupes de lignes ;
-  // data-filiation sur la phrase de filiation d'une dérivée.
+  // data-filiation sur la phrase de filiation d'une dérivée ; data-sous sur
+  // chaque ligne sous le chiffre d'une cellule.
   // Une cellule surlignée porte data-marque="selection" : ses filets
   // portent l'information, et la garde des marques (§ 14.5) les mesure à
   // 3:1 contre le fond, dans les deux thèmes. Les autres n'en portent pas.
   import { getContext } from 'svelte';
   import { derivationDe } from '../../application/depart.js';
   import { comparaisonOfferte } from '../../application/evaluation.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import Icone from '../primitives/Icone.svelte';
   import MenuActions from '../primitives/MenuActions.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import { sourceQualite } from '../qualite/source.js';
   import { gesteComparer } from './comparer.js';
   import { texteFiliation } from './filiation.js';
-  import { evaluation, texteCellule } from './modele.js';
+  import { evaluation, lignesSousCellule, texteCellule } from './modele.js';
 
   let { vue, surlignee = null, nommer, voir, retenir, expliquer, taire, decrit } = $props();
 
@@ -112,9 +119,10 @@
   const format = getContext('format');
   const ui = getContext('ui');
   const seance = getContext('seance');
-  const outils = { t, format };
-
   const charge = $derived($seance.charge);
+  // Les outils des textes du tableau : la traduction, la mise en forme, et
+  // les noms des tours de la charge, que la filiation lit.
+  const outils = $derived({ t, format, nomsTours: charge === null ? undefined : nomsDesTours(charge) });
   const table = $derived(charge === null ? null : evaluation(charge).table);
   const offerte = $derived(table !== null && comparaisonOfferte(charge, table));
 
@@ -190,7 +198,9 @@
 {#snippet mesures(ligne)}
   {#if ligne.comparable}
     {#each ligne.cellules as cellule (cellule.colonne)}
-      <td data-colonne={cellule.colonne} data-marque={marque(cellule.colonne)} class:nombre={nombres.has(cellule.colonne)} class:surlignee={cellule.colonne === surlignee}>{texteCellule(cellule, outils)}</td>
+      <td data-colonne={cellule.colonne} data-marque={marque(cellule.colonne)} class:nombre={nombres.has(cellule.colonne)} class:surlignee={cellule.colonne === surlignee}
+        >{texteCellule(cellule, outils)}{#each lignesSousCellule(cellule, outils) as sous, rang (rang)}<span class="sous" data-sous>{sous}</span>{/each}</td
+      >
     {/each}
     <td data-colonne="imposes">
       {#each ligne.imposes as phrase, rang (rang)}
@@ -209,6 +219,9 @@
     {/each}
     {#if ligne.conflitsRestants !== null}
       <p data-conflits-restants>{t(ligne.conflitsRestants.cle, ligne.conflitsRestants.details)}</p>
+    {/if}
+    {#if ligne.inclusionsRestantes !== null}
+      <p data-inclusions-non-satisfaites>{t(ligne.inclusionsRestantes.cle, ligne.inclusionsRestantes.details)}</p>
     {/if}
   {/if}
 {/snippet}
@@ -378,6 +391,15 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Une ligne sous le chiffre d'une cellule : en petit corps et en encre
+     secondaire, d'une seule ligne, alignée comme son chiffre. */
+  .sous {
+    display: block;
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
+    white-space: nowrap;
+  }
+
   p {
     margin: 0;
   }
@@ -440,10 +462,10 @@
      filiation en deux lignes, « Ajusté à la main depuis… » en trois. Plus
      étroite, sa phrase passerait à la ligne mot à mot et allongerait la
      ligne entière. Le certificat et les retours imposés tiennent sur une
-     ligne, les deux phrases imposées l'une après l'autre : seule la cellule
-     des propositions donne à une ligne plus d'une ligne de texte, et la
-     ligne garde la hauteur de ses chiffres ; le tableau défile déjà en
-     largeur. */
+     ligne, les deux phrases imposées l'une après l'autre : seules la
+     cellule des propositions et les lignes sous un chiffre donnent à une
+     ligne plus d'une ligne de texte, et la ligne garde la hauteur de ses
+     chiffres ; le tableau défile déjà en largeur. */
   td[data-colonne='proposition'] {
     min-width: 14rem;
   }

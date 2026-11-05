@@ -19,9 +19,10 @@
   //
   // Une cellule porte, comme la tuile du même placement, sa valeur, son
   // pourcentage suivi du compte du pire (Pourcentage) sur trois lignes
-  // seulement, puis les lignes de sa borne, son plancher en dernier ; la
-  // mention « ne classe pas » suit le libellé de sa ligne. Aucune cellule
-  // n'est mise en avant, aucun écart n'est écrit (§ 12.8).
+  // seulement, puis les lignes de sa borne et celle des lignes secondaires
+  // d'un agrégat, son plancher en dernier ; la mention « ne classe pas »
+  // suit le libellé de sa ligne. Aucune cellule n'est mise en avant, aucun
+  // écart n'est écrit (§ 12.8).
   //
   // comparaison : la comparaison des deux placements (ComparaisonPlacements,
   // comparerPlacements de src/application/evaluation.js) ; table : la table
@@ -34,6 +35,7 @@
   // de sa colonne au tableau ('rang' pour la place) ; data-tous-les-indicateurs
   // sur la commande du repli.
   import { getContext, tick } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import { nomDe } from '../propositions/modele.js';
   import Pourcentage from './graphiques/Pourcentage.svelte';
   import { colonnesComparaison } from './colonnes.js';
@@ -49,7 +51,12 @@
   const colonnes = $derived(
     comparaison === null || table === null
       ? null
-      : colonnesComparaison(comparaison, table, { t, format, nomDe: (id) => nomDe($seance.charge, id) }),
+      : colonnesComparaison(comparaison, table, {
+          t,
+          format,
+          nomDe: (id) => nomDe($seance.charge, id),
+          nomsTours: nomsDesTours($seance.charge),
+        }),
   );
 
   let ouvert = $state(false);

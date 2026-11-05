@@ -27,6 +27,16 @@
   // Les liens (LIENS) s'ouvrent dans une nouvelle fenêtre, sans ouvreur ni
   // référent : un nouvel onglet sur le web ; sous electron, la coquille
   // refuse la fenêtre et passe l'adresse au navigateur du système (§ 2).
+  // L'issue de cette ouverture revient à la page par un message de la
+  // fenêtre, que poste electron/preload.cjs : { type: 'gtt:lien', adresse,
+  // raison }, raison vide quand l'ouverture est lancée. Une raison non vide
+  // se dit sous les liens de la carte qui porte le lien — ceux des crédits,
+  // ou ceux de la licence —, par le refus NON_DISPONIBLE {cause}, le texte
+  // de l'ouverture échouée, que « Ouvrir le dossier » emploie aussi ; un
+  // seul à la fois, et l'ouverture lancée du même lien le retire. Un message
+  // d'une autre fenêtre, d'un autre type, d'une adresse hors de LIENS ou
+  // d'une raison qui n'est pas une chaîne ne change rien. Sur le web, aucun
+  // message ne vient.
   //
   // Un texte de licence se charge à la demande (actifs/licences.js) et
   // s'affiche sous les commandes qui l'ouvrent, un seul à la fois ; « Fermer
@@ -70,6 +80,12 @@
 
   let { bloc, pressePapiers, fermer, chargerTiers = chargerComposantsTiers } = $props();
 
+  // Le type des messages par lesquels la coquille rapporte l'issue d'un
+  // lien, celui d'electron/preload.cjs.
+  const MESSAGE_LIEN = 'gtt:lien';
+  // Les liens des crédits ; les autres sont ceux de la licence.
+  const LIENS_DES_CREDITS = ['site', 'projet'];
+
   const uid = $props.id();
   const idMenuLogo = `${uid}-menu-logo`;
   const idRefusLogo = `${uid}-refus-logo`;
@@ -89,6 +105,9 @@
   // nom est celui de LICENCES, ou la clé d'un composant tiers quand tiers
   // est vrai.
   let texteLicence = $state(null);
+  // Le dernier lien que la coquille n'a pas ouvert : { nom, refus }, nom
+  // celui de LIENS ; null sans lui.
+  let lienNonOuvert = $state(null);
   // Les composants tiers (actifs/tiers.js), null avant leur chargement ;
   // echecTiers dit que le chargement a rejeté.
   let composants = $state.raw(null);
@@ -147,6 +166,18 @@
     }
   }
 
+  // L'issue d'un lien, telle que la coquille la poste à la fenêtre.
+  function issueDeLien({ data, source }) {
+    if (source !== window || data?.type !== MESSAGE_LIEN || typeof data.raison !== 'string') return;
+    const nom = Object.entries(LIENS).find(([, adresse]) => adresse === data.adresse)?.[0];
+    if (nom === undefined) return;
+    if (data.raison !== '') {
+      lienNonOuvert = { nom, refus: { code: 'NON_DISPONIBLE', details: { cause: data.raison } } };
+    } else if (lienNonOuvert?.nom === nom) {
+      lienNonOuvert = null;
+    }
+  }
+
   async function lireLicence(nom) {
     texteLicence = { nom, contenu: await chargerTexteLicence(nom), tiers: false };
   }
@@ -192,6 +223,18 @@
   <a href={LIENS[nom]} target="_blank" rel="noopener noreferrer" data-lien={nom}>{t(cleDeLien(nom))}</a>
 {/snippet}
 
+<!-- Le refus d'un lien que la coquille n'a pas ouvert, sous les liens de sa
+     carte : credits dit laquelle. -->
+{#snippet nonOuvert(credits)}
+  {#if lienNonOuvert !== null && LIENS_DES_CREDITS.includes(lienNonOuvert.nom) === credits}
+    <div data-lien-non-ouvert={lienNonOuvert.nom}>
+      <Refus refus={lienNonOuvert.refus} />
+    </div>
+  {/if}
+{/snippet}
+
+<svelte:window onmessage={issueDeLien} />
+
 <section class="apropos" data-ecran="apropos">
   <h1>{t('coquille.apropos.titre')}</h1>
   <Carte>
@@ -235,6 +278,7 @@
         <p class="role" data-role>{t('coquille.apropos.role')}</p>
         <p>{@render lien('projet')}</p>
         <p class="note">{t('coquille.apropos.liens.note')}</p>
+        {@render nonOuvert(true)}
       </div>
       <p class="bloc" data-bloc>{bloc}</p>
       <div class="commandes">
@@ -273,6 +317,7 @@
       <p>{t('coquille.apropos.licence.permission')}</p>
       <p>{t('coquille.apropos.licence.contributions')}</p>
       <p class="liens">{@render lien('agpl')}{@render lien('liliq')}</p>
+      {@render nonOuvert(false)}
       <div class="commandes">
         <Commande cle="coquille.apropos.licence.lireAgpl" executer={() => lireLicence('agpl')} />
         <Commande cle="coquille.apropos.licence.lireLiliq" executer={() => lireLicence('liliq')} />

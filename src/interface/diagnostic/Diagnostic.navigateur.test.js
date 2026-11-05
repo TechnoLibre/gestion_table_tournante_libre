@@ -587,7 +587,8 @@ describe('le bandeau du plan énonce le diagnostic (§ 7.5)', () => {
       t('plan.bandeau.toutesEnConflit'),
       t('plan.bandeau.collisionPartout'),
       ...diagnostic.collisions.map(
-        ({ groupe, effectif, plancherCumulees }) => `${groupe} ${t('plan.bandeau.plancherGroupe', { groupe, effectif, plancherCumulees })}`,
+        ({ groupe, effectif, plancherCumulees, plancherPairesDistinctes }) =>
+          `${groupe} ${t('plan.bandeau.plancherGroupe', { groupe, effectif, plancherCumulees, plancherPairesDistinctes })}`,
       ),
     ];
   }
@@ -606,9 +607,10 @@ describe('le bandeau du plan énonce le diagnostic (§ 7.5)', () => {
     expect(visible(bandeau(m).querySelector('li'))).toBe(true);
     // Les chiffres du moteur, au chiffre près, dans le rendu.
     const { collisions } = diagnostiquer(configurationDepuisCharge(charge(m)));
-    for (const { groupe, plancherCumulees } of collisions) {
+    for (const { groupe, plancherCumulees, plancherPairesDistinctes } of collisions) {
       const ligne = [...bandeau(m).querySelectorAll('li')].find((li) => li.textContent.startsWith(groupe));
-      expect(ligne.textContent).toContain(`${plancherCumulees} collisions`);
+      expect(ligne.textContent).toContain(`${plancherCumulees} collisions cumulées`);
+      expect(ligne.textContent).toContain(`${plancherPairesDistinctes} paire`);
     }
   });
 
@@ -1115,6 +1117,10 @@ describe('le plancher exact du solveur (§ 5.6, § 5.10)', () => {
     // « Repartir d’elle », que les planchers instantanés proposent.
     const relance = phrasesInstantanees(m, 'tenter').find(({ cle }) => cle === 'diagnostic.proposition.tenter.repartir');
     expect(relance).toBeDefined();
+    // Le compte d'arrêt nommé est celui de la proposition, 40, et non celui
+    // des réglages, que la charge laisse à son défaut.
+    expect(relance.details.arret).toBe(40);
+    expect(charge(m).reglages.generation.arret).not.toBe(40);
     const repartir = ecran(relance.cle, relance.details);
     // Pendant le calcul, les planchers instantanés seuls.
     expect(section(m).querySelector('[data-proposition-choisie]')).not.toBeNull();

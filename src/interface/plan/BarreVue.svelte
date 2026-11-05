@@ -2,23 +2,31 @@
      SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
-  // La barre de vue du plan (§ 7.2, § 7.5, § 7.7, § 8.4) : le sélecteur de
-  // tour, « Zoom + », « Zoom − », « Ajuster », l'affichage des listes, la
-  // légende des conflits et le plein écran. Des contrôles HTML, hors du
-  // <svg data-plan>, tous vivants en lecture comme sur un plan bloqué : aucun
-  // n'écrit l'événement. Le tour, les listes et le plein écran passent par
+  // La barre de vue du plan (§ 7.2, § 7.4, § 7.5, § 7.7, § 8.4) : le
+  // sélecteur de tour, « Zoom + », « Zoom − », « Ajuster », l'affichage des
+  // listes et des organisations qu'elles portent, la légende des conflits et
+  // le plein écran. Des contrôles HTML, hors du <svg data-plan>, tous vivants
+  // en lecture comme sur un plan bloqué : aucun n'écrit l'événement. Le
+  // tour, les listes, les organisations et le plein écran passent par
   // l'état de navigation ('ui') ; les zooms et l'ajustement par Plan.svelte,
   // qui tient la vue : zoomer(sens), sens valant 1 ou -1, et ajuster(). Un
   // bouton à bascule dit son état par aria-pressed, le bouton de la légende,
   // qui dévoile, par aria-expanded ; la forme du bouton redit l'un et l'autre.
+  // Listes masquées, « Organisation » n'a rien à montrer : la bascule reste
+  // à sa place et garde son état, inactive — aria-disabled, un filet tireté,
+  // l'encre secondaire —, et son titre, que les technologies d'assistance
+  // lisent comme sa description, dit de montrer les listes.
   //
-  // evidence : la personne mise en évidence, {id, nom, absente} — nom null
-  // pour une personne que la charge n'a plus, absente vrai quand elle est
-  // absente au tour montré (evidenceDe) —, ou null. La barre la nomme et
-  // offre d'ôter la mise en évidence, que la personne soit assise au tour
-  // montré ou non ; le menu de la personne la pose (MenuPersonne). Une
-  // personne que la charge n'a plus se dit telle, sans nom ; une absente au
-  // tour montré, son nom suivi de « absente au tour r ».
+  // evidence : la personne mise en évidence, {id, nom, absente, reserve} —
+  // nom null pour une personne que la charge n'a plus, absente vrai quand
+  // elle est absente au tour montré, reserve quand elle y est dans la
+  // réserve (evidenceDe) —, ou null. La barre la nomme et offre d'ôter la
+  // mise en évidence, que la personne soit assise au tour montré ou non ;
+  // le menu de la personne et « Voir sur le plan » la posent. Une personne
+  // que la charge n'a plus se dit telle, sans nom ; une absente au tour
+  // montré, son nom suivi de « absente au tour r » ; une personne dans la
+  // réserve, de « dans la réserve au tour r » : sans chaise à ce tour, le
+  // plan ne marque rien, et la barre dit pourquoi.
   //
   // legende : vrai quand la légende des conflits est ouverte ; basculerLegende
   // l'ouvre ou la ferme ; idLegende, l'identifiant de la légende, que le
@@ -29,21 +37,26 @@
   //
   // La barre se lit en groupes, de gauche à droite : le placement montré, le
   // tour affiché, le zoom — ses deux boutons et « Ajuster » —, puis
-  // l'affichage — listes, légende, plein écran —, chacun un role="group"
-  // nommé, aux boutons accolés dans un même filet ; la mise en évidence
-  // ferme la barre. Une bascule active, ou la légende dévoilée, se peint de
-  // la teinte de l'action et garde sa forme distincte : trait intérieur
-  // épais, texte souligné.
+  // l'affichage — listes, organisations, légende, plein écran —, chacun un
+  // role="group" nommé, aux boutons accolés dans un même filet ; la mise en
+  // évidence ferme la barre. Une bascule active, ou la légende dévoilée, se
+  // peint de la teinte de l'action et garde sa forme distincte : trait
+  // intérieur épais, texte souligné.
   //
   // source : ce que la barre dit du placement montré, que rend sourceMontree
   // (vue_plan.js) — {libelle, revenir} — : la barre le nomme, [data-source],
   // et, quand une proposition est demandée, offre de ne plus la montrer
   // (ui.montrerProposition(null)), sous le libellé revenir. Ni l'un ni
   // l'autre n'écrit l'événement.
+  //
+  // nomsTours : les noms des tours de l'événement (nomsDesTours). Le
+  // sélecteur offre chaque tour par son nom, une donnée posée telle quelle,
+  // ou par son numéro pour un tour sans nom ; la mise en évidence nomme le
+  // tour montré de même (aides.js).
   import { getContext } from 'svelte';
   import { toursOfferts } from './vue_plan.js';
 
-  let { tour, tours, zoomer, ajuster, evidence = null, source, legende = false, basculerLegende = () => {}, idLegende = undefined } = $props();
+  let { tour, tours, nomsTours = [], zoomer, ajuster, evidence = null, source, legende = false, basculerLegende = () => {}, idLegende = undefined } = $props();
 
   const t = getContext('t');
   const ui = getContext('ui');
@@ -64,7 +77,7 @@
     <span class="intertitre">{t('plan.vue.tour')}</span>
     <select data-champ="tour" value={tour} onchange={(evenement) => ui.montrerTour(Number(evenement.currentTarget.value))}>
       {#each offerts as numero (numero)}
-        <option value={numero}>{numero}</option>
+        <option value={numero}>{nomsTours[numero - 1] ?? numero}</option>
       {/each}
     </select>
   </label>
@@ -76,6 +89,16 @@
   <div class="groupe" role="group" aria-label={t('plan.vue.groupeAffichage')}>
     <button type="button" data-commande="listes" aria-pressed={$ui.listes} onclick={() => ui.basculerListes()}
       >{t('plan.vue.listes')}</button
+    >
+    <button
+      type="button"
+      data-commande="organisations"
+      aria-pressed={$ui.organisations}
+      aria-disabled={$ui.listes ? undefined : 'true'}
+      title={$ui.listes ? undefined : t('plan.vue.organisationsSansListes')}
+      onclick={() => {
+        if ($ui.listes) ui.basculerOrganisations();
+      }}>{t('plan.vue.organisations')}</button
     >
     <button
       type="button"
@@ -93,7 +116,9 @@
     <p class="evidence" data-evidence={evidence.id}>
       <span>{t('plan.evidence.personne')}</span>{#if evidence.nom !== null}<span class="donnee">{evidence.nom}</span>{:else}<span
           >{t('plan.evidence.absente')}</span
-        >{/if}{#if evidence.absente}<span>{t('plan.evidence.absenteAuTour', { tour })}</span>{/if}
+        >{/if}{#if evidence.absente}<span>{t('plan.evidence.absenteAuTour', { tour, nomsTours })}</span>{:else if evidence.reserve}<span
+          >{t('plan.evidence.reserveAuTour', { tour, nomsTours })}</span
+        >{/if}
       <button type="button" class="commande" data-commande="oterEvidence" onclick={() => ui.mettreEnEvidence(null)}
         >{t('plan.evidence.oter')}</button
       >
@@ -187,7 +212,9 @@
     border-radius: 0 calc(var(--rayon-2) - 1px) calc(var(--rayon-2) - 1px) 0;
   }
 
-  button:hover {
+  /* Le survol ne teinte qu'une commande active ; :where garde la
+     spécificité de button:hover, qu'une bascule enfoncée recouvre. */
+  button:hover:where(:not([aria-disabled='true'])) {
     background-color: var(--couleur-carte-fond-sourd);
   }
 
@@ -199,6 +226,15 @@
     background-color: var(--couleur-action-teinte);
     box-shadow: inset 0 0 0 2px var(--couleur-page-texte);
     text-decoration: underline;
+  }
+
+  /* Une bascule inactive : l'encre secondaire, un filet tireté à
+     l'intérieur ; elle garde la marque de son état. */
+  button[aria-disabled='true'] {
+    color: var(--couleur-page-texte-secondaire);
+    cursor: default;
+    outline: 1px dashed currentColor;
+    outline-offset: -4px;
   }
 
   button:focus-visible,

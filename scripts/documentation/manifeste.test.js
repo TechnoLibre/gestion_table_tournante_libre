@@ -16,11 +16,9 @@ import { describe, test } from '../../test/lanceur.js';
 import { versionVoisine } from '../../test/version_voisine.js';
 import { VERSION } from '../../src/version.genere.js';
 import {
-  A_VENIR,
   CAPTURES,
   CHEMIN_MANIFESTE,
   ETAPES,
-  REPORTEES,
   canoniser,
   cheminImage,
   cheminsHorsRacine,
@@ -61,12 +59,12 @@ function referencesFixture() {
 }
 
 // Un manifeste dont seules les entrées comptent pour l'ordre : chaque capture
-// déclarée, sauf celles qu'on écarte, et chaque reportée.
-function manifesteDeclare({ sans = [], reportees = REPORTEES } = {}) {
+// déclarée, sauf celles qu'on écarte, et une liste de reportées vide.
+function manifesteDeclare({ sans = [] } = {}) {
   return {
     format: 1,
     captures: CAPTURES.filter((c) => !sans.includes(c.fichier)).map((c) => ({ fichier: c.fichier, etape: c.etape })),
-    reportees: reportees.map((r) => ({ ...r })),
+    reportees: [],
   };
 }
 
@@ -211,9 +209,7 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     assert.deepEqual(construite, presence);
   });
 
-  test('REPORTEES est vide : chaque écran déclaré existe ; 17, 17a, 18 et 21 photographiées', () => {
-    assert.deepEqual(REPORTEES, []);
-    assert.ok(Object.isFrozen(REPORTEES));
+  test('chaque écran déclaré existe et se photographie : 17, 17a, 18 et 21 comprises', () => {
     // La vue de comparaison et la vue d'historique se photographient :
     // chacune est déclarée dans CAPTURES, à son étape.
     const etapes = new Map(CAPTURES.map((c) => [c.fichier, c.etape]));
@@ -221,15 +217,13 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     assert.deepEqual(photographiees.map((fichier) => etapes.get(fichier)), ['10', '10', '10', '11']);
   });
 
-  test('A_VENIR est vide : chaque capture déclarée est photographiée, 24, 25 et 25a tramées d’un PDF de badges', () => {
-    assert.deepEqual(A_VENIR, []);
-    assert.ok(Object.isFrozen(A_VENIR));
+  test('24, 25 et 25a sont tramées d’un PDF de badges, à l’étape 12', () => {
     const tramees = CAPTURES.filter((c) => c.source === 'pdf').map((c) => [c.fichier, c.etape]);
     assert.deepEqual(tramees, [['24-badges-controle', '12'], ['25-badges-planche', '12'], ['25a-badge-absente', '12']]);
   });
 
-  test('CAPTURES ∪ REPORTEES : des noms uniques, et l’ordre des noms suit celui des étapes', () => {
-    const toutes = [...CAPTURES, ...REPORTEES];
+  test('CAPTURES : des noms uniques, et l’ordre des noms suit celui des étapes', () => {
+    const toutes = [...CAPTURES];
     assert.equal(new Set(toutes.map((e) => e.fichier)).size, toutes.length);
     const parNom = [...toutes].sort((a, b) => (a.fichier < b.fichier ? -1 : a.fichier > b.fichier ? 1 : 0));
     const rangs = parNom.map((e) => ETAPES.indexOf(e.etape));
@@ -390,26 +384,50 @@ describe('manifeste : l’appariement documentation, manifeste, disque (§ 19.7)
 });
 
 describe('manifeste : l’ordre contre les étapes du § 2.1 (§ 19.3)', () => {
-  test('CAPTURES ∪ REPORTEES réel : aucune faute', () => {
+  test('CAPTURES réel : aucune faute', () => {
     assert.deepEqual(verifierOrdre(manifesteDeclare()), []);
   });
 
-  test('une capture à venir, absente du manifeste, couvre son étape', () => {
-    const etape12 = ['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche', '25a-badge-absente'];
-    assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: etape12 }), { aVenir: ['24-badges-controle'] }), []);
-  });
-
-  test('A_VENIR par défaut, vide : sans ses cinq captures, l’étape 12 est une faute', () => {
+  test('une capture absente du manifeste ne couvre pas son étape : sans ses cinq captures, l’étape 12 est une faute', () => {
     const etape12 = ['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche', '25a-badge-absente'];
     assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: etape12 })), [
-      { chemin: CHEMIN_MANIFESTE, faute: 'étape 12 : aucune capture ni reportée' },
+      { chemin: CHEMIN_MANIFESTE, faute: 'étape 12 : aucune capture' },
     ]);
   });
 
-  test('sans reportée, 21 couvre seule l’étape 11 ; sans 19, 19a, 20 ni 21, elle manque', () => {
-    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: ['19-ajustement', '19a-presence-plan', '20-mode-lecture'] })), []);
-    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: ['19-ajustement', '19a-presence-plan', '20-mode-lecture', '21-historique'] })), [
-      { chemin: CHEMIN_MANIFESTE, faute: 'étape 11 : aucune capture ni reportée' },
+  test('une reportée ne couvre pas son étape, et chacune est une faute qui la nomme', () => {
+    const etape12 = ['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche', '25a-badge-absente'];
+    const manifeste = manifesteDeclare({ sans: etape12 });
+    manifeste.reportees.push({ fichier: '23-plan-retenu', etape: '12', raison: 'essai' });
+    assert.deepEqual(verifierOrdre(manifeste), [
+      { chemin: 'doc/captures/23-plan-retenu.png', faute: 'reportée : une étape ne se couvre que d’une capture photographiée' },
+      { chemin: CHEMIN_MANIFESTE, faute: 'étape 12 : aucune capture' },
+    ]);
+    // Une reportée de plus, sur une étape couverte, reste une faute.
+    const couverte = manifesteDeclare();
+    couverte.reportees.push({ fichier: '19-ajustement', etape: '11', raison: 'essai' });
+    assert.deepEqual(verifierOrdre(couverte), [
+      { chemin: 'doc/captures/19-ajustement.png', faute: 'reportée : une étape ne se couvre que d’une capture photographiée' },
+    ]);
+    const nonTableau = manifesteDeclare();
+    nonTableau.reportees = 'aucune';
+    assert.throws(() => verifierOrdre(nonTableau), /manifeste\.reportees est un tableau/);
+  });
+
+  test('etapes restreint les étapes exigées, celles d’une publication partielle ; l’ordre reste contrôlé', () => {
+    const seule = { format: 1, captures: [{ fichier: '01-premier-ecran', etape: '1' }], reportees: [] };
+    assert.deepEqual(verifierOrdre(seule, { etapes: ['1'] }), []);
+    assert.equal(verifierOrdre(seule).length, ETAPES.length - 1);
+    const desordre = manifesteDeclare();
+    desordre.captures.find((c) => c.fichier === '02-import-apercu').etape = '4';
+    assert.equal(verifierOrdre(desordre, { etapes: [] }).length, 1);
+    assert.throws(() => verifierOrdre(seule, { etapes: ['4b'] }), /étape inconnue « 4b »/);
+  });
+
+  test('21 couvre seule l’étape 11 ; sans 19, 19a, 20 ni 21, elle manque', () => {
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: ['19-ajustement', '19a-presence-plan', '20-mode-lecture'] })), []);
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: ['19-ajustement', '19a-presence-plan', '20-mode-lecture', '21-historique'] })), [
+      { chemin: CHEMIN_MANIFESTE, faute: 'étape 11 : aucune capture' },
     ]);
   });
 
@@ -417,18 +435,17 @@ describe('manifeste : l’ordre contre les étapes du § 2.1 (§ 19.3)', () => {
     assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: ['24-badges-controle', '25-badges-planche'] })), []);
   });
 
-  test('une étape sans capture ni reportée est une faute qui la nomme', () => {
+  test('une étape sans capture est une faute qui la nomme', () => {
     assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: ['07b-nombre-de-tours'] })), [
-      { chemin: CHEMIN_MANIFESTE, faute: 'étape 5 : aucune capture ni reportée' },
+      { chemin: CHEMIN_MANIFESTE, faute: 'étape 5 : aucune capture' },
     ]);
   });
 
-  test('les captures de la page de qualité couvrent l’étape 10 sans les reportées ; sans les unes ni les autres, elle manque', () => {
+  test('les captures de la page de qualité couvrent l’étape 10 ; sans elles, elle manque', () => {
     const etape10 = CAPTURES.filter((c) => c.etape === '10').map((c) => c.fichier);
     assert.equal(etape10.length, 21);
-    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [] })), []);
-    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: etape10 })), [
-      { chemin: CHEMIN_MANIFESTE, faute: 'étape 10 : aucune capture ni reportée' },
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: etape10 })), [
+      { chemin: CHEMIN_MANIFESTE, faute: 'étape 10 : aucune capture' },
     ]);
   });
 
@@ -452,14 +469,16 @@ describe('manifeste : l’ordre contre les étapes du § 2.1 (§ 19.3)', () => {
     assert.deepEqual(verifierOrdre(inconnue), [{ chemin: 'doc/captures/05-tables-etat.png', faute: 'étape inconnue « 4b »' }]);
 
     const double = manifesteDeclare();
-    double.reportees.push({ fichier: '19-ajustement', etape: '11', raison: 'iteration5' });
+    double.captures.push({ fichier: '19-ajustement', etape: '11' });
     assert.deepEqual(verifierOrdre(double), [{ chemin: 'doc/captures/19-ajustement.png', faute: 'déclarée deux fois' }]);
   });
 
-  test('balayage vide refusé : aucune entrée est une faute, et chaque étape manque', () => {
-    const fautes = verifierOrdre({ format: 1, captures: [], reportees: [] }, { aVenir: [] });
-    assert.equal(fautes[0].faute, 'aucune capture ni reportée');
+  test('balayage vide refusé : aucune capture est une faute, et chaque étape manque', () => {
+    const fautes = verifierOrdre({ format: 1, captures: [], reportees: [] });
+    assert.equal(fautes[0].faute, 'aucune capture');
     assert.equal(fautes.length, 1 + ETAPES.length);
+    // Même sous une publication partielle qui n'exige aucune étape.
+    assert.deepEqual(verifierOrdre({ format: 1, captures: [] }, { etapes: [] }), [{ chemin: CHEMIN_MANIFESTE, faute: 'aucune capture' }]);
   });
 });
 

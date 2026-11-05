@@ -49,17 +49,17 @@
 // pose à un rang y répéterait un élément, ou romprait l'ordre, sans que la
 // règle de ce rang le voie.
 //
-// Une charge que rend appliquer, l'analyse l'admet comme celle qu'il
-// reçoit, et chacune de ses propositions suit sa règle, comme dans la
-// charge que rend examiner : une valeur posée suit la règle de sa place, sa
-// forme entière (premiereFaute), jusque dans les propositions et le retenu,
-// que l'analyse ne lit que comme conteneurs (§ 8.9). Le retenu posé entier
-// fait seul exception. Un retenu que sa règle refuse, que la lecture admet
-// et que le contrôle des placements garde, canonique.js le recopie hors du
-// schéma, et difference le pose entier : à sa place, seul son conteneur se
-// contrôle (premiereFauteEnPlace), et le journal le libère, le remet en
-// place ou le remplace tel quel, quelle que soit sa faute. Sous un tel
-// retenu, rien ne se pose : difference ne descend pas en lui.
+// La forme d'une charge que rend appliquer, l'analyse l'admet comme celle de
+// la charge qu'il reçoit, et chacune de ses propositions suit sa règle, comme
+// dans la charge que rend examiner : une valeur posée suit la règle de sa
+// place, sa forme entière (premiereFaute), jusque dans les propositions et
+// le retenu, que l'analyse ne lit que comme conteneurs (§ 8.9). Le retenu
+// posé entier fait seul exception. Un retenu que sa règle refuse, que la
+// lecture admet et que le contrôle des placements garde, canonique.js le
+// recopie hors du schéma, et difference le pose entier : à sa place, seul
+// son conteneur se contrôle (premiereFauteEnPlace), et le journal le libère,
+// le remet en place ou le remplace tel quel, quelle que soit sa faute. Sous
+// un tel retenu, rien ne se pose : difference ne descend pas en lui.
 import { canoniser, canoniserPartagee, recanoniser, retenuHorsDeSaRegle } from './canonique.js';
 import { SCHEMA, premiereFaute, premiereFauteEnPlace } from './document.js';
 import { ErreurStockage } from './erreurs.js';

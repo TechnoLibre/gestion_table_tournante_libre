@@ -1344,12 +1344,16 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
       '<p>12,5 s</p><p>20\u{A0}h 30</p><p>proposition n° 4</p><p>le 17 mai</p><p>en mai 2031</p>' +
         '<p>12,5\u{A0}s, 20\u{A0}h\u{A0}30, 3\u{A0}min 4\u{A0}s, 2\u{A0}h 15\u{A0}min, n°\u{A0}4, 17\u{A0}mai\u{A0}2031, 12\u{202F}%, ' +
         'du 3\u{A0}mai-5\u{A0}juin, de 20\u{A0}h\u{A0}30-22\u{A0}h\u{A0}00</p>' +
-        "<p>3 sièges, 4 tours, 2 places, 100\u{202F}000 mouvements, 3 s'y rangent, 21:42, A4 m</p>",
+        "<p>3 sièges, 4 tours, 2 places, 100\u{202F}000 mouvements, 3 s'y rangent, 21:42, A4 m</p>" +
+        '<p>3 s\u{2019}y rangent</p><p>3 s-bornes</p><p>xn° 4</p>',
       (c) => fautesTypographie(c),
     );
-    // Sept paragraphes : une faute par place de la garde, chacune nommée par
-    // son extrait.
-    expect(lus).toBe(7);
+    // Dix paragraphes : une faute par place de la garde, chacune nommée par
+    // son extrait. Les cinq derniers ne portent que des formes qui passent ;
+    // les trois derniers, une seule chacun, pour que chacune se nomme : une
+    // unité que suit une apostrophe typographique, une unité que suit un
+    // trait d'union, un « n° » collé à la lettre qui le précède.
+    expect(lus).toBe(10);
     expect(fautes).toEqual([
       'p : « 12,5 s » (« 12,5 s »)',
       'p : « 20 h 30 » (« h 30 »)',
@@ -1426,6 +1430,30 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     const noye = lire(rgb(couleurDeJeton('--couleur-filigrane')));
     expect(noye.marques.fautes).toHaveLength(1);
     expect(noye.marques.fautes[0]).toContain('1.00:1');
+  });
+
+  test('marques, sous la fenêtre : un texte au trait plus haut que la surface qui le fait défiler se lit dès que le centre de sa boîte se voit ; une forme rognée, non', () => {
+    const fragment =
+      '<div data-impression data-surface style="background:#ffffff;height:60px;overflow:auto">' +
+      '<svg width="240" height="240" style="display:block"><text data-marque="filigrane" x="10" y="150" ' +
+      'style="fill:none;stroke:var(--couleur-filigrane);stroke-width:1px;font-size:120px">B</text>' +
+      '<circle data-marque="contourTable" cx="200" cy="120" r="50" ' +
+      'style="fill:var(--couleur-papier);stroke:var(--couleur-table-trait);stroke-width:3px" /></svg></div>';
+    avecFragment(fragment, (c) => {
+      const surface = c.querySelector('[data-surface]');
+      const texte = c.querySelector('text');
+      const { y, height } = texte.getBBox();
+      expect(height, 'le texte, plus haut que la surface').toBeGreaterThan(surface.clientHeight);
+      surface.scrollTop = y + height / 2 - surface.clientHeight / 2;
+      const centre = releverMarques(c, { fenetre: true });
+      expect(centre.vues).toEqual(['filigrane']);
+      expect(centre.mesures).toBe(1);
+      expect(centre.fautes).toEqual([]);
+      surface.scrollTop = 0;
+      expect(y + height / 2, 'le centre, sous le bas de la surface').toBeGreaterThan(surface.clientHeight);
+      expect(releverMarques(c, { fenetre: true }).vues).toEqual([]);
+      expect(releverMarques(c).vues).toEqual(['filigrane', 'contourTable']);
+    });
   });
 
   test('marques : sous le document imprimé, une marque se mesure au jeton du papier — celui du clair, dans les deux thèmes —, non à celui de la page', () => {

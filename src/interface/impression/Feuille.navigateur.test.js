@@ -100,7 +100,7 @@ describe('la feuille à l’écran est la feuille imprimée (§ 11.7)', () => {
   test('la grande démonstration sur papier Lettre, plan puis liste d’accueil : la même largeur sur chaque feuille', async () => {
     const m = await ouvrirApercu(contexte, analyser(texteLivre('grande')).charge, { papier: 'Lettre' });
     await verifierLargeurs(m, 'plan, Lettre');
-    await cliquer(m, '[data-ecran="apercu"] [data-commande="vue"][data-cible="accueil"]');
+    await cliquer(m, '[data-apercu-impression] [data-commande="vue"][data-cible="accueil"]');
     await attendre('la liste d’accueil', () => m.racine.querySelector('[data-impression][data-vue-impression="accueil"] [data-feuille]'), IMAGES);
     await verifierLargeurs(m, 'accueil, Lettre');
   });

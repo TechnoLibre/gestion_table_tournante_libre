@@ -26,13 +26,19 @@
   //
   // La section la monte sous un bloc clé sur l'identifiant du départ : un
   // autre départ en monte une neuve, ses cases toutes décochées à l'écran.
+  //
+  // Les tours se nomment par les noms que leur donne la charge de la séance
+  // (nomsDesTours), sinon par « Tour 3 ».
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
 
   let { carte, refusCases = null, cocher, repartirDeZero } = $props();
 
   const t = getContext('t');
+  const seance = getContext('seance');
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
   const uid = $props.id();
   const idTitre = `${uid}-titre`;
   const idRefus = `${uid}-refus`;
@@ -48,7 +54,7 @@
       <p>{t('generation.depart.ecarts', { depart: carte.depart })}</p>
       <ul>
         {#each carte.ecarts as ecart (ecart.participant)}
-          <li data-participant={ecart.participant}>{t(ecart.nom.cle, ecart.nom.details)}{#each ecart.morceaux as morceau, rang (rang)}{t(morceau.cle, morceau.details)}{/each}</li>
+          <li data-participant={ecart.participant}>{t(ecart.nom.cle, ecart.nom.details)}{#each ecart.morceaux as morceau, rang (rang)}{t(morceau.cle, { nomsTours, ...morceau.details })}{/each}</li>
         {/each}
       </ul>
     </div>
@@ -67,7 +73,7 @@
             aria-describedby={refusCases === null ? undefined : idRefus}
             onchange={(evenement) => cocher(tour, evenement.currentTarget.checked)}
           />
-          <label for={id}>{t('generation.depart.tour', { tour })}</label>
+          <label for={id}>{t('generation.depart.tour', { tour, nomsTours })}</label>
         </div>
       {/each}
     </div>
@@ -76,7 +82,7 @@
     {/if}
   </fieldset>
   {#if carte.ecartRetenu !== null}
-    <p class="ecart-retenu" role="status" data-ecart-retenu>{t(carte.ecartRetenu.cle, carte.ecartRetenu.details)}</p>
+    <p class="ecart-retenu" role="status" data-ecart-retenu>{t(carte.ecartRetenu.cle, { nomsTours, ...carte.ecartRetenu.details })}</p>
   {/if}
   <p class="note">{t('generation.depart.note')}</p>
 </section>

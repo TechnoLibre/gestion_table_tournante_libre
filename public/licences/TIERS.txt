@@ -118,11 +118,12 @@ SOFTWARE.
 ========================================================================
 paquet : @pdf-lib/fontkit 1.1.1
 licence : MIT
-texte : package.json (le paquet ne porte aucun fichier de licence) ; texte MIT, titulaires de package.json
+texte : package.json (le paquet ne porte aucun fichier de licence) ; texte MIT, titulaires de package.json, son auteur puis son contributeur
 ------------------------------------------------------------------------
 MIT License
 
-Copyright (c) Devon Govett (fontkit) ; Andrew Dillon (@pdf-lib/fontkit)
+Copyright (c) Andrew Dillon
+Copyright (c) Devon Govett
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1090,7 +1091,7 @@ SOFTWARE.
 ========================================================================
 incorporé à @pdf-lib/fontkit : rollup-plugin-node-builtins 2.1.2
 licence : ISC
-texte : licence de package.json (aucun fichier de licence publié) ; les substituts des modules de Node (events, stream, string_decoder, util, process) reprennent du code de Node.js, qui porte en tête l'avis MIT de Joyent, Inc., que la construction minifiée retire : il suit le texte ISC
+texte : licence de package.json (aucun fichier de licence publié) ; le paquet ne publie aucune ligne de copyright pour lui-même : le champ author de son package.json est vide, et ses sources ne nomment que les titulaires du code qu'elles reprennent ; les substituts des modules de Node (events, stream, string_decoder, util, process) reprennent du code de Node.js, qui porte en tête l'avis MIT de Joyent, Inc., que la construction minifiée retire : il suit le texte ISC
 ------------------------------------------------------------------------
 ISC License
 

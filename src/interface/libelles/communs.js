@@ -14,7 +14,7 @@
 // communs.nom.remede est le nom accessible d'un remède posé contre un
 // contrôle qui porte un nom distinct (Refus, objet).
 
-import { auxToursNommes } from '../../application/libelles/aides.js';
+import { auxToursNommes, tourDansPhrase } from '../../application/libelles/aides.js';
 
 // Le libellé d'une autre clé de cette table.
 const meme = (cle) => (details, texte) => texte(cle);
@@ -55,11 +55,11 @@ export const TABLE = new Map([
   ['communs.remede.modifier', meme('communs.commande.modifier')],
   ['communs.remede.debloquer', meme('communs.commande.debloquer')],
   ['communs.remede.reprendreVerrou', 'Reprendre le verrou'],
-  ['communs.remede.afficherTour', ({ tour }) => `Afficher le tour ${tour}`],
+  ['communs.remede.afficherTour', ({ tour, nomsTours }) => `Afficher le ${tourDansPhrase(tour, nomsTours)}`],
   // Les remèdes d'un départ refusé (§ 5.7) : le retirer, ou décocher le tour
   // figé que le refus nomme.
   ['communs.remede.repartirDeZero', 'Repartir de zéro'],
-  ['communs.remede.libererTour', ({ tour }) => `Ne plus figer le tour ${tour}`],
+  ['communs.remede.libererTour', ({ tour, nomsTours }) => `Ne plus figer le ${tourDansPhrase(tour, nomsTours)}`],
   ['communs.remede.choisirPlace', 'Choisir une place'],
   ['communs.remede.enregistrerSous', 'Enregistrer sous\u{2026}'],
   // Le remède d'un nom d'événement trop long pour s'imprimer (§ 11.7).
@@ -87,7 +87,7 @@ export const TABLE = new Map([
   // refusé ; le texte nomme l'effet, quand le remède le fixe.
   [
     'communs.remede.changerPresence',
-    ({ tours }) => (Array.isArray(tours) ? `La dire présente ${auxToursNommes(tours)}` : 'Changer sa présence'),
+    ({ tours, nomsTours }) => (Array.isArray(tours) ? `La dire présente ${auxToursNommes(tours, nomsTours)}` : 'Changer sa présence'),
   ],
   ['communs.remede.importerParticipants', 'Importer la liste'],
   ['communs.remede.importerObjectifs', 'Importer les objectifs'],
@@ -109,12 +109,17 @@ export const TABLE = new Map([
   ['communs.remede.realignerTable', 'Réaligner la table'],
   ['communs.remede.changerDefaut', 'Changer le nombre de places par défaut'],
   ['communs.remede.changerTours', 'Changer le nombre de tours'],
+  ['communs.remede.changerNomTour', 'Changer le nom du tour'],
   ['communs.remede.modifierReglage', 'Modifier le réglage'],
   ['communs.remede.changerEtiquettes', 'Changer les étiquettes'],
   ['communs.remede.ajouterConflit', 'Ajouter le conflit'],
   ['communs.remede.retirerConflit', 'Retirer le conflit'],
   ['communs.remede.changerConflits', 'Changer les conflits'],
+  ['communs.remede.changerInclusionsOrganisation', "Changer les inclusions d'organisation"],
+  ['communs.remede.changerInclusionsParticipant', 'Changer les inclusions de participant'],
+  ['communs.remede.changerInclusions', 'Changer les inclusions'],
   ['communs.remede.changerLogo', 'Changer le logo'],
+  ['communs.remede.changerImageBadges', "Changer l'image des badges"],
   ['communs.remede.poserObjectif', "Poser l'objectif"],
   ['communs.remede.retirerObjectif', "Retirer l'objectif"],
   ['communs.remede.changerRegleObjectifs', 'Changer la règle par défaut des objectifs'],

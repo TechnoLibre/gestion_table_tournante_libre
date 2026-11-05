@@ -58,6 +58,7 @@ import {
   detaillerQualite,
   evaluer,
   nettoyage,
+  plafondEnTeteDuManque,
   premiereDuClassement,
   rencontresDePersonne,
   resumeDuMeilleur,
@@ -893,6 +894,7 @@ const ORDRE_REGLE = [
   [e('animateursNonRencontres')],
   [e('redondance')],
   [e('conflitsOrganisation')],
+  [e('inclusionsNonSatisfaites')],
 ];
 
 // Les noms des valeurs d'un point de relevé : le minimum brut, puis chaque
@@ -1194,7 +1196,7 @@ describe('detaillerQualite : une seule arithmétique (§ 12.9, § 13.2, contrain
     const { charge } = genereeAvecCourses(chargeAObjectifs(), { graine: 3, nombre: 2, arret: 200 });
     const retenue = figer(executer(charge, 'retenirProposition', { id: 1 }));
     const table = evaluer(retenue);
-    const CHAMPS = ['id', 'statut', 'raisons', 'sertDeDepart', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin'];
+    const CHAMPS = ['id', 'statut', 'raisons', 'sertDeDepart', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin', 'inclusions'];
     for (const ligne of [...table.propositions, table.retenu]) assert.deepEqual(Object.keys(ligne), CHAMPS);
     // Le comptage des appels se fait sur le texte du module : la fermeture
     // de ce qu'evaluer atteint, ligneDe comprise et chaque fonction du
@@ -2337,7 +2339,7 @@ describe('evaluer : les deux champs de la configuration que lit la comparaison (
     const instance = normaliser(configurationDe(charge));
     assert.deepEqual(QUALITE.planchersDesColonnes(instance, table.diagnostic), QUALITE.planchersDesColonnes(instance, diagnostic));
     assert.deepEqual(Object.keys(table), ['population', 'propositions', 'retenu', 'classement', 'criteres', 'imposes', 'plafondsAPriori', 'diagnostic']);
-    const CHAMPS = ['id', 'statut', 'raisons', 'sertDeDepart', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin'];
+    const CHAMPS = ['id', 'statut', 'raisons', 'sertDeDepart', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin', 'inclusions'];
     for (const ligne of table.propositions) assert.deepEqual(Object.keys(ligne), CHAMPS);
     assert.equal(evaluer(charge, { plafondsAPriori: null }).plafondsAPriori, null);
   });
@@ -2457,5 +2459,99 @@ describe('évaluation : la présence par tour et le départ en dérive par ses p
       assert.equal(candidats.some(({ cle }) => cle === 1), false);
       assert.equal(defaut, a === 4 ? 5 : 4);
     }
+  });
+});
+
+describe('plafondEnTeteDuManque : le plafond réalisé sous le plus grand manque du tableau (§ 12.10.3)', () => {
+  test('il égale celui que le détail et la comparaison nomment au rang 1 du profil de manque', () => {
+    const charge = figer(generee(chargeDemo('grande'), { graine: 2, nombre: 2, arret: 300 }));
+    const table = evaluer(charge);
+    const [a, b] = table.classement.ordre;
+    const comparaison = comparerPlacements(charge, table, a, b);
+    for (const [cote, cle] of [['a', a], ['b', b]]) {
+      const ligne = table.propositions.find(({ id }) => id === cle);
+      const plafond = plafondEnTeteDuManque(ligne);
+      assert.equal(typeof plafond, 'number', String(cle));
+      assert.equal(plafond, comparaison[cote].bornes.manque.plafondRealise, String(cle));
+      assert.equal(plafond, detaillerQualite(charge, cle).bornes.manque.plafondRealise, String(cle));
+    }
+  });
+
+  test('à manque égal, le plafond le plus bas d’abord ; null sur une population vide', () => {
+    // Manques 3, 3 et 2 : deux personnes au plus grand, aux plafonds 27 et
+    // 23 ; la seconde, proportionnellement plus privée, ouvre le profil.
+    const ligne = { mesures: { rencontres: [24, 20, 22] }, plafondsRealises: [27, 23, 24] };
+    assert.equal(plafondEnTeteDuManque(ligne), 23);
+    assert.equal(plafondEnTeteDuManque({ mesures: { rencontres: [] }, plafondsRealises: [] }), null);
+  });
+});
+
+// La petite démonstration au conflit inévitable, le plan « trio » en
+// proposition 1, et des inclusions : 1 et 9 se demandent l'un l'autre, et
+// le trio ne les réunit jamais ; 1 inclut l'organisation de 3, sa voisine de
+// chaque tour ; 10 inclut 6, réunis au tour 1 ; 12 inclut 1, que le trio
+// garde à sa table ; 4 inclut 6, et l'organisation de 3, en conflit avec
+// celle de 4, contredit cette inclusion.
+function chargeAvecInclusions() {
+  let charge = chargeDemo('petite-conflit');
+  const organisationDe = (id) => charge.participants.find((personne) => personne.id === id).organisation;
+  charge = executer(charge, 'changerConflits', { id: 3, organisations: [organisationDe(4)] });
+  for (const [id, participants] of [
+    [1, [9]],
+    [9, [1]],
+    [10, [6]],
+    [12, [1]],
+    [4, [6]],
+  ]) {
+    charge = executer(charge, 'changerInclusionsParticipant', { id, participants });
+  }
+  charge = executer(charge, 'changerInclusionsOrganisation', { id: 1, organisations: [organisationDe(3)] });
+  const sansPlan = structuredClone(charge);
+  sansPlan.propositions = [propositionDe(sansPlan, 1, PLANS_CONFLIT[3].tours)];
+  return figer(sansPlan);
+}
+
+describe('les inclusions nommées de la table et du détail (§ 5.4, § 12.15)', () => {
+  test('une rencontre demandée des deux côtés fait un avis, chaque personne garde ses comptes', () => {
+    const charge = chargeAvecInclusions();
+    const [ligne] = evaluer(charge).propositions;
+    const instance = normaliser(configurationDe(charge));
+    const { inclusions } = mesurer(instance, indexerPlan(instance, planDepuisFichier(charge.propositions[0])));
+    assert.deepEqual(ligne.inclusions, {
+      cible: 4,
+      satisfaites: 2,
+      avis: 2,
+      nonSatisfaites: [
+        { participant: 1, cible: { participant: 9 }, partenaire: 9, reciproque: true },
+        { participant: 12, cible: { participant: 1 }, partenaire: 1, reciproque: false },
+      ],
+      parPersonne: inclusions.parPersonne.map(({ p, ...reste }) => ({ participant: instance.ids[p], ...reste })),
+    });
+    assert.deepEqual(
+      ligne.inclusions.parPersonne.map(({ participant, actives, satisfaites, auDelaDuPlafond }) => [participant, actives, satisfaites, auDelaDuPlafond]),
+      [
+        [1, 2, 1, false],
+        [9, 1, 0, false],
+        [10, 1, 1, false],
+        [12, 1, 0, false],
+      ],
+    );
+  });
+
+  test('le détail reprend celles de la ligne, et les hors d’atteinte du diagnostic', () => {
+    const charge = chargeAvecInclusions();
+    const [ligne] = evaluer(charge).propositions;
+    const detail = detaillerQualite(charge, 1);
+    assert.deepEqual(detail.inclusions, ligne.inclusions);
+    assert.deepEqual(detail.inclusionsHorsDAtteinte, [{ participant: 4, cible: { participant: 6 }, raison: 'conflit' }]);
+  });
+
+  test('sans inclusion active, la ligne et le détail n’en portent pas', () => {
+    const charge = structuredClone(chargeDemo('petite-conflit'));
+    charge.propositions = [propositionDe(charge, 1, PLANS_CONFLIT[3].tours)];
+    figer(charge);
+    assert.equal(evaluer(charge).propositions[0].inclusions, null);
+    assert.equal(detaillerQualite(charge, 1).inclusions, null);
+    assert.deepEqual(detaillerQualite(charge, 1).inclusionsHorsDAtteinte, []);
   });
 });

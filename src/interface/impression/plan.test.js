@@ -16,7 +16,7 @@ import { etatPlaces } from '../../application/places.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { echelleGraphique } from '../../geometrie/echelle.js';
-import { decouperPlan } from '../../geometrie/pages.js';
+import { colonnesDeTables, decouperParColonnes, decouperPlan } from '../../geometrie/pages.js';
 import { HAUTEUR_LIGNE_SUPPOSEE, englobantImpression, geometrieTable } from '../../geometrie/tables.js';
 import { analyser, creerCharge } from '../../stockage/document.js';
 import { constante } from '../../geometrie/constantes.js';
@@ -59,8 +59,8 @@ function chargeDeTables(positions) {
 }
 
 // La découpe attendue, par decouperPlan appelée directement.
-function decoupeAttendue(etat, geometries, mode, { papier = 'A4', bandeMm = 12, listes = false, hauteurLigne = H } = {}) {
-  const blocs = listes ? { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, hauteurLigne) } : null;
+function decoupeAttendue(etat, geometries, mode, { papier = 'A4', bandeMm = 12, listes = false, hauteurLigne = H, lignesAjoutees } = {}) {
+  const blocs = listes ? { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, hauteurLigne, lignesAjoutees) } : null;
   return decouperPlan(englobantImpression(geometries, { listes: blocs }), { papier, bandeMm, mode, geometries, listes: blocs });
 }
 
@@ -75,6 +75,19 @@ describe('hauteursListes : la hauteur du bloc de noms de chaque table (§ 7.4, �
     const etat = { tables: [{ id: 1, capacite: 2, gelee: false }] };
     for (const h of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, null]) {
       assert.throws(() => hauteursListes(etat, h), RangeError, String(h));
+    }
+  });
+
+  test('les lignes qu’une organisation repliée ajoute à une table comptent chacune une ligne ; une table absente de la Map n’en ajoute aucune', () => {
+    const etat = { tables: [{ id: 4, capacite: 6, gelee: false }, { id: 9, capacite: 3, gelee: true }] };
+    assert.deepEqual([...hauteursListes(etat, 20, new Map([[4, 3]]))], [[4, 10 * 20], [9, 5 * 20]]);
+    assert.deepEqual([...hauteursListes(etat, 20, new Map([[4, 0], [9, 2]]))], [[4, 7 * 20], [9, 7 * 20]]);
+  });
+
+  test('un nombre de lignes ajoutées qui n’est pas un entier ≥ 0 se refuse', () => {
+    const etat = { tables: [{ id: 1, capacite: 2, gelee: false }] };
+    for (const n of [-1, 1.5, Number.NaN, null, '2']) {
+      assert.throws(() => hauteursListes(etat, 20, new Map([[1, n]])), RangeError, String(n));
     }
   });
 });
@@ -102,6 +115,28 @@ describe('pagesDuPlan : une page par feuille, chacune la tuile de la découpe (�
       }
     });
   }
+
+  test('une colonne par page : les pages de decouperParColonnes, chacune ne portant que les tables d’une colonne ; sans elle, celles de decouperPlan', () => {
+    const { etat, geometries } = plan(demonstration('grande'));
+    const blocs = { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, H) };
+    const colonnes = colonnesDeTables(geometries, blocs);
+    assert.ok(colonnes.length > 1, `${colonnes.length} colonne(s)`);
+    for (const mode of ['auto', 'decoupe', 'unePage']) {
+      const attendue = decouperParColonnes(geometries, { papier: 'A4', bandeMm: 12, mode, geometries, listes: blocs });
+      const options = { papier: 'A4', bandeMm: 12, listes: true, hauteurLigne: H, pied: piedAu(1) };
+      const pages = pagesDuPlan(etat, geometries, mode, { ...options, parColonne: true });
+      assert.equal(pages.length, attendue.pages.length, mode);
+      assert.ok(pages.length >= colonnes.length, mode);
+      for (const [rang, page] of pages.entries()) {
+        assert.equal(page.orientation, attendue.orientation);
+        assert.deepEqual(page.viewBox, attendue.pages[rang].cadrage);
+        assert.deepEqual(page.cartouche, attendue.pages[rang].cartouche);
+        assert.deepEqual(page.tables, attendue.pages[rang].tables);
+        assert.ok(colonnes.some((colonne) => page.tables.every((id) => colonne.includes(id))), `${mode}, page ${rang}`);
+      }
+      assert.deepEqual(pagesDuPlan(etat, geometries, mode, { ...options, parColonne: false }), pagesDuPlan(etat, geometries, mode, options));
+    }
+  });
 
   test('le pied de chaque page est celui d’un seul tour, le tour imprimé', () => {
     const { etat, geometries } = plan(demonstration('grande'));
@@ -187,6 +222,31 @@ describe('pagesDuPlan : une page par feuille, chacune la tuile de la découpe (�
     // Sur une page, le plan avec ses listes couvre plus de dessin : son
     // échelle est plus petite.
     assert.ok(avec[0].taille.largeur / avec[0].viewBox.largeur < sans[0].taille.largeur / sans[0].viewBox.largeur);
+  });
+
+  test('les lignes ajoutées allongent les blocs que la découpe reçoit, au plan entier comme par colonne', () => {
+    const { etat, geometries } = plan(demonstration('petite'));
+    const lignesAjoutees = new Map(etat.tables.map(({ id }, rang) => [id, rang % 2 === 0 ? 12 : 0]));
+    const options = { papier: 'A4', bandeMm: 12, listes: true, hauteurLigne: H, pied: piedAu(1) };
+    for (const mode of ['auto', 'unePage', 'decoupe']) {
+      const attendue = decoupeAttendue(etat, geometries, mode, { listes: true, lignesAjoutees });
+      const pages = pagesDuPlan(etat, geometries, mode, { ...options, lignesAjoutees });
+      assert.deepEqual(pages.map(({ viewBox }) => viewBox), attendue.pages.map(({ cadrage }) => cadrage), mode);
+      const blocs = { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, H, lignesAjoutees) };
+      const parColonnes = decouperParColonnes(geometries, { papier: 'A4', bandeMm: 12, mode, geometries, listes: blocs });
+      const lues = pagesDuPlan(etat, geometries, mode, { ...options, lignesAjoutees, parColonne: true });
+      assert.deepEqual(lues.map(({ viewBox }) => viewBox), parColonnes.pages.map(({ cadrage }) => cadrage), `${mode}, par colonne`);
+    }
+    // Sur une page, une table seule dont le bloc s'allonge de quarante
+    // lignes couvre plus de dessin en hauteur qu'en largeur : l'échelle
+    // baisse.
+    const seule = plan(chargeDeTables([[0, 0]]));
+    const [sans] = pagesDuPlan(seule.etat, seule.geometries, 'unePage', options);
+    const [avec] = pagesDuPlan(seule.etat, seule.geometries, 'unePage', { ...options, lignesAjoutees: new Map([[1, 40]]) });
+    assert.ok(avec.taille.largeur / avec.viewBox.largeur < sans.taille.largeur / sans.viewBox.largeur);
+    // Listes masquées, les lignes ajoutées n'entrent pas.
+    const masquees = { ...options, listes: false };
+    assert.deepEqual(pagesDuPlan(etat, geometries, 'auto', { ...masquees, lignesAjoutees }), pagesDuPlan(etat, geometries, 'auto', masquees));
   });
 
   test('un plan vide : une page, aucune table, une échelle graphique finie', () => {

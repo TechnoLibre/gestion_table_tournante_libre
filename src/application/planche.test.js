@@ -128,6 +128,16 @@ describe('planche : ce que porte un badge (§ 11.4, § 11.5, § 4.1)', () => {
     assert.deepEqual(badgeDe(m, 5).textes.lignes, ['Tour 1 — pas de table', 'Tour 2 — table 7']);
   });
 
+  test('une personne en réserve à tous les tours garde une ligne « pas de table » par tour : la réserve n’est pas une table, ni « Toute la soirée »', () => {
+    const m = modele(aReserve({ plan: [{ sieges: [[1, 2], [3, 4]], reserve: [5] }, { sieges: [[1, 2], [3, 4]], reserve: [5] }] }));
+    assert.deepEqual(badgeDe(m, 5).textes.lignes, ['Tour 1 — pas de table', 'Tour 2 — pas de table']);
+    assert.deepEqual(badgeDe(m, 5).lignes, [
+      { tour: 1, table: null, siege: null, titre: null, absente: false },
+      { tour: 2, table: null, siege: null, titre: null, absente: false },
+    ]);
+    assert.deepEqual(badgeDe(m, 1).textes.lignes, ['Toute la soirée — table 7']);
+  });
+
   test('un itinéraire constant s’écrit en une ligne « Toute la soirée » à R ≥ 2 ; à R = 1, la ligne du tour', () => {
     const quatre = modele(deuxATable7(4));
     assert.deepEqual(badgeDe(quatre, 1).textes.lignes, ['Toute la soirée — table 7']);
@@ -839,23 +849,64 @@ describe('planche : la feuille de contrôle (§ 11.3, § 11.5, § 11.8)', () => 
 
 describe('planche : les refus de la production et leurs textes (§ 11.5, § 11.8)', () => {
   test('refusProduction relaie un refus de la mise en page avec le remède du contrat ; un autre code lève TypeError', () => {
-    assert.deepEqual(refusProduction('PLANCHE_TROP_DE_TOURS', { tours: 40 }), {
+    const ligne = (champs = {}) => ({ tour: 1, table: 5, siege: null, titre: null, absente: false, ...champs });
+    const badge = (lignes) => ({ participant: 3, nom: 'Ondine Lacasse', lignes });
+    const nue = badge([ligne(), ligne({ tour: 2 })]);
+    assert.deepEqual(refusProduction('PLANCHE_TROP_DE_TOURS', { tours: 40, repliees: false }, nue), {
       code: 'PLANCHE_TROP_DE_TOURS',
-      details: { tours: 40, remede: null },
+      details: { tours: 40, lignesLongues: false, remede: null },
     });
-    assert.deepEqual(refusProduction('PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse' }), {
+    // Des lignes repliées sans libellé ni titre : rien à raccourcir, le
+    // refus ne dit que le nombre de tours.
+    assert.deepEqual(refusProduction('PLANCHE_TROP_DE_TOURS', { tours: 15, repliees: true }, nue), {
+      code: 'PLANCHE_TROP_DE_TOURS',
+      details: { tours: 15, lignesLongues: false, remede: null },
+    });
+    // Un libellé ou un titre sur une ligne : la personne, vers les tables.
+    for (const longue of [ligne({ libelleTable: 'Terrasse côté jardin nord' }), ligne({ titre: 'animateur VIP' }), ligne({ nomTour: 'Plat principal' })]) {
+      assert.deepEqual(refusProduction('PLANCHE_TROP_DE_TOURS', { tours: 8, repliees: true }, badge([ligne({ tour: 2 }), longue])), {
+        code: 'PLANCHE_TROP_DE_TOURS',
+        details: {
+          tours: 8,
+          lignesLongues: true,
+          participant: 3,
+          personne: 'Ondine Lacasse',
+          remede: { geste: 'ouvrirSection', section: 'tables' },
+        },
+      });
+      // Non repliées, les mêmes lignes ne sont pas en cause.
+      assert.equal(refusProduction('PLANCHE_TROP_DE_TOURS', { tours: 8, repliees: false }, badge([longue])).details.lignesLongues, false);
+    }
+    assert.deepEqual(refusProduction('PLANCHE_NOM_TROP_LONG', {}, nue), {
       code: 'PLANCHE_NOM_TROP_LONG',
       details: { participant: 3, personne: 'Ondine Lacasse', remede: { geste: 'ouvrirSection', section: 'participants' } },
     });
+    // L'organisation en gros, trop longue : la marque de la mise en page
+    // reste, et le remède est le même, la fiche portant l'organisation.
+    assert.deepEqual(refusProduction('PLANCHE_NOM_TROP_LONG', { organisation: true }, nue), {
+      code: 'PLANCHE_NOM_TROP_LONG',
+      details: {
+        organisation: true,
+        participant: 3,
+        personne: 'Ondine Lacasse',
+        remede: { geste: 'ouvrirSection', section: 'participants' },
+      },
+    });
     for (const code of ['PLANCHE_DERIVE', 'RETENU_FAUTIF', 'toString', null]) {
-      assert.throws(() => refusProduction(code, {}), TypeError, String(code));
+      assert.throws(() => refusProduction(code, {}, nue), TypeError, String(code));
     }
   });
 
-  test('chaque refus de la planche se dit : le nombre de tours, la personne au nom trop long, chaque raison de la dérive', () => {
-    assert.match(libelle('PLANCHE_TROP_DE_TOURS', { tours: 40, remede: null }), /\b40 tours\b/);
+  test('chaque refus de la planche se dit : le nombre de tours, ou la personne aux lignes de tour trop longues, la personne au nom trop long, chaque raison de la dérive', () => {
+    assert.match(libelle('PLANCHE_TROP_DE_TOURS', { tours: 40, lignesLongues: false, remede: null }), /\b40 tours\b/);
+    const longues = libelle('PLANCHE_TROP_DE_TOURS', { tours: 8, lignesLongues: true, participant: 3, personne: 'Ondine Lacasse' });
+    assert.match(longues, /Ondine Lacasse/);
+    assert.match(longues, /nom de tour, un libellé de table ou un titre/);
+    assert.doesNotMatch(longues, /\b8 tours\b/);
     assert.match(libelle('PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse' }), /Ondine Lacasse/);
     assert.match(libelle('PLANCHE_NOM_TROP_LONG', { participant: 3 }), /n° 3\b/);
+    const organisation = libelle('PLANCHE_NOM_TROP_LONG', { organisation: true, participant: 3, personne: 'Ondine Lacasse' });
+    assert.match(organisation, /^L'organisation de Ondine Lacasse\b/);
     const derive = libelle('PLANCHE_DERIVE', {
       raisons: [
         { code: 'PARTICIPANT_NON_PLACE', participant: 6, personne: 'Ondine Grisaille' },
@@ -869,6 +920,29 @@ describe('planche : les refus de la production et leurs textes (§ 11.5, § 11.8
   });
 });
 
+describe('planche : le nom du tour sur les lignes de tour (§ 11.4)', () => {
+  test('« <nom du tour> — table 7 » pour un tour nommé, « Tour 2 » pour les autres ; « Toute la soirée » ne porte aucun nom', () => {
+    const charge = aReserve();
+    charge.evenement.nomsTours = ['Plat principal', null];
+    const m = modele(charge);
+    assert.deepEqual(badgeDe(m, 2).textes.lignes, ['Plat principal — table 7', 'Tour 2 — pas de table']);
+    assert.equal(badgeDe(m, 2).lignes[0].nomTour, 'Plat principal');
+    assert.equal(Object.hasOwn(badgeDe(m, 2).lignes[1], 'nomTour'), false);
+    assert.deepEqual(badgeDe(m, 1).textes.lignes, ['Toute la soirée — table 7']);
+    assert.equal(Object.hasOwn(badgeDe(m, 1).lignes[0], 'nomTour'), false);
+    // La liste CSV d'une seule colonne reprend les lignes du badge, texte
+    // pour texte ; celle d'une colonne par tour nomme le tour en tête.
+    assert.ok(texteCsv(listeBadges(m, charge, { colonnes: 'unique' })).includes('Plat principal — table 7 ; Tour 2 — pas de table'));
+    assert.ok(texteCsv(listeBadges(m, charge)).startsWith('\u{FEFF}Nom;Prénom;Organisation;Plat principal;Tour 2\r\n'));
+  });
+
+  test('le nom s’insère tel quel : un caractère d’usage privé ou un texte qui ressemble à un gabarit ne se lit jamais comme une place à remplir', () => {
+    const charge = aReserve();
+    charge.evenement.nomsTours = [null, 'Mets \u{E000}\u{E001} ${tour}'];
+    assert.deepEqual(badgeDe(modele(charge), 5).textes.lignes, ['Tour 1 — pas de table', 'Mets \u{E000}\u{E001} ${tour} — table 7']);
+  });
+});
+
 describe('planche : le papier des badges (§ 11.2)', () => {
   test('Avery 5392 impose Lettre, quel que soit le papier de la machine ; l’A6 prend celui de la machine, Lettre sans choix ; un modèle inconnu lève TypeError', () => {
     for (const papier of [null, 'A4', 'Lettre']) assert.equal(papierDesBadges('avery5392', papier), 'Lettre');
@@ -879,11 +953,6 @@ describe('planche : le papier des badges (§ 11.2)', () => {
 
 // Une table et son libellé.
 const libellee = (id, numero, sieges, libelle) => ({ ...table(id, numero, sieges), libelle });
-
-// Le texte de chaque morceau abrégeable des lignes d'un badge, ligne par
-// ligne : ce que ses positions découpent dans le texte de la ligne.
-const morceauxDe = ({ textes }) =>
-  textes.lignes.map((ligne, rang) => textes.abregeables[rang].map(({ debut, fin }) => ligne.slice(debut, fin)));
 
 describe('planche : le libellé de la table sur les lignes de tour (§ 11.4, § 11.5)', () => {
   test('entre parenthèses après le numéro, dans « Tour » comme dans « Toute la soirée » ; une table sans libellé laisse la ligne telle quelle', () => {
@@ -904,9 +973,15 @@ describe('planche : le libellé de la table sur les lignes de tour (§ 11.4, § 
     const charge = aReserve({ tables: [libellee(1, 7, 2, 'Terrasse\n\tNord\u2028'), table(2, 3, 2)] });
     const m = modele(charge);
     assert.deepEqual(badgeDe(m, 2).textes.lignes, ['Tour 1 — table 7 (Terrasse Nord)', 'Tour 2 — pas de table']);
-    const cellules = texteCsv(listeBadges(m, charge)).split('\r\n').filter((l) => l.includes('Terrasse'));
-    assert.ok(cellules.some((l) => l.includes('Tour 1 — table 7 (Terrasse Nord)')), JSON.stringify(cellules));
-    assert.ok(cellules.every((l) => !/Terrasse[\s\S]*\n[\s\S]*Nord/.test(l)), JSON.stringify(cellules));
+    for (const [colonnes, cellule] of [
+      ['unique', 'Tour 1 — table 7 (Terrasse Nord)'],
+      ['parTour', ';table 7 (Terrasse Nord);'],
+    ]) {
+      const texte = texteCsv(listeBadges(m, charge, { colonnes }));
+      const cellules = texte.split('\r\n').filter((l) => l.includes('Terrasse'));
+      assert.ok(cellules.some((l) => l.includes(cellule)), JSON.stringify(cellules));
+      assert.ok(!/[^\r]\n/.test(texte), JSON.stringify(texte));
+    }
   });
 
   test('avec le siège et le titre : « Tour 1 — table 7 (Terrasse), siège 1 — animateur » ; absente, ni table ni libellé', () => {
@@ -929,19 +1004,16 @@ describe('planche : le libellé de la table sur les lignes de tour (§ 11.4, § 
     assert.deepEqual(badgeDe(modele(charge), 1).textes.lignes, ['Tour 1 — table 7 (Terrasse)', 'Tour 2 — table 7 (Verrière)']);
   });
 
-  test('les morceaux abrégeables : le libellé, puis le titre, par leur position dans la ligne ; aucun sans eux', () => {
+  test('le libellé et le titre s’insèrent tels quels, parenthèses et tirets compris ; les textes du badge ne désignent rien à abréger', () => {
     const charge = titree({ reservations: [{ participant: 1, table: 1, siege: 1, portee: 'tour', tour: 1 }] });
     charge.tables = [libellee(1, 7, 3, 'Coin (nord) — fenêtre')];
-    const m = modele(charge);
-    const badge = badgeDe(m, 1);
-    assert.deepEqual(morceauxDe(badge), [['Coin (nord) — fenêtre', 'animateur'], ['Coin (nord) — fenêtre']]);
-    assert.deepEqual(badge.textes.abregeables[0], [
-      { debut: 'Tour 1 — table 7 ('.length, fin: 'Tour 1 — table 7 (Coin (nord) — fenêtre'.length },
-      { debut: 'Tour 1 — table 7 (Coin (nord) — fenêtre), siège 1 — '.length, fin: badge.textes.lignes[0].length },
+    const badge = badgeDe(modele(charge), 1);
+    assert.deepEqual(badge.textes.lignes, [
+      'Tour 1 — table 7 (Coin (nord) — fenêtre), siège 1 — animateur',
+      'Tour 2 — table 7 (Coin (nord) — fenêtre), siège 2',
     ]);
-    const sans = modele(aReserve());
-    for (const b of sans.badges) assert.deepEqual(b.textes.abregeables, b.textes.lignes.map(() => []));
-    assert.deepEqual(morceauxDe(badgeDe(modele(titree({ reservations: [{ participant: 1, table: 1, siege: 1, portee: 'tous', tour: null }], tour2: [1, 2, 3] })), 1)), [['animateur']]);
+    assert.ok(!('abregeables' in badge.textes), JSON.stringify(Object.keys(badge.textes)));
+    for (const b of modele(aReserve()).badges) assert.ok(!('abregeables' in b.textes));
   });
 });
 
@@ -949,21 +1021,101 @@ describe('planche : le libellé de la table sur les lignes de tour (§ 11.4, § 
 const texteCsv = (octets) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(octets);
 
 describe('planche : la liste des badges en CSV (§ 11.6)', () => {
-  test('Nom;Prénom;Organisation;Tours, une ligne par badge dans l’ordre de la pile ; Prénom vide quand il manque ; les lignes de tour dans une cellule citée', () => {
+  // La soirée à réserve, la table 7 libellée, deux organisations, dont une
+  // qui porte le séparateur.
+  const organisee = () => {
     const charge = aReserve({ tables: [libellee(1, 7, 2, 'Terrasse'), table(2, 3, 2)] });
     charge.participants[0].organisation = 'Club des Merles';
     charge.participants[1].organisation = 'Atelier « la Sarcelle »; Nord';
+    return charge;
+  };
+
+  test('par défaut, une colonne par tour : Nom;Prénom;Organisation;Tour 1;Tour 2, la place seule dans la cellule du tour, même pour un itinéraire constant', () => {
+    const charge = organisee();
+    const m = modele(charge);
+    const attendu =
+      '\u{FEFF}Nom;Prénom;Organisation;Tour 1;Tour 2\r\n' +
+      'Grisaille;;;pas de table;table 7 (Terrasse)\r\n' +
+      'Lacasse;Ondine;;table 3;table 3\r\n' +
+      'Ombrelle;Émile;;table 3;table 3\r\n' +
+      'Ombrelle;Iris;Club des Merles;table 7 (Terrasse);table 7 (Terrasse)\r\n' +
+      'Pervenche;Théo;"Atelier « la Sarcelle »; Nord";table 7 (Terrasse);pas de table\r\n';
+    assert.equal(texteCsv(listeBadges(m, charge)), attendu);
+    assert.deepEqual(listeBadges(m, charge, { colonnes: 'parTour' }), listeBadges(m, charge));
+    // Mêmes entrées, mêmes octets.
+    assert.deepEqual(listeBadges(modele(charge), charge), listeBadges(m, charge));
+  });
+
+  test('une seule colonne : Nom;Prénom;Organisation;Tours, les lignes du badge texte pour texte, jointes par « ; », « Toute la soirée » quand rien ne change', () => {
+    const charge = organisee();
     const m = modele(charge);
     const attendu =
       '\u{FEFF}Nom;Prénom;Organisation;Tours\r\n' +
-      'Grisaille;;;"Tour 1 — pas de table\nTour 2 — table 7 (Terrasse)"\r\n' +
+      'Grisaille;;;"Tour 1 — pas de table ; Tour 2 — table 7 (Terrasse)"\r\n' +
       'Lacasse;Ondine;;Toute la soirée — table 3\r\n' +
       'Ombrelle;Émile;;Toute la soirée — table 3\r\n' +
       'Ombrelle;Iris;Club des Merles;Toute la soirée — table 7 (Terrasse)\r\n' +
-      'Pervenche;Théo;"Atelier « la Sarcelle »; Nord";"Tour 1 — table 7 (Terrasse)\nTour 2 — pas de table"\r\n';
-    assert.equal(texteCsv(listeBadges(m, charge)), attendu);
-    // Mêmes entrées, mêmes octets.
-    assert.deepEqual(listeBadges(modele(charge), charge), listeBadges(m, charge));
+      'Pervenche;Théo;"Atelier « la Sarcelle »; Nord";"Tour 1 — table 7 (Terrasse) ; Tour 2 — pas de table"\r\n';
+    assert.equal(texteCsv(listeBadges(m, charge, { colonnes: 'unique' })), attendu);
+    // La pile garde son ordre : l'enregistrement de rang n porte les lignes
+    // du badge de rang n.
+    const enregistrements = texteCsv(listeBadges(m, charge, { colonnes: 'unique' })).split('\r\n').slice(1, -1);
+    m.badges.forEach(({ textes }, rang) => assert.ok(enregistrements[rang].includes(textes.lignes.join(' ; ')), enregistrements[rang]));
+  });
+
+  test('les têtes de tour portent le nom du tour, tel quel, cité au besoin ; la cellule garde la place, absente, siège et titre compris', () => {
+    const reservations = [{ participant: 1, table: 1, siege: 1, portee: 'tour', tour: 1 }];
+    const charge = absenteHors(titree({ reservations, tour2: [null, 1, 3] }), 2, [1]);
+    charge.tables = [libellee(1, 7, 3, 'Terrasse')];
+    charge.evenement.nomsTours = ['Entrée; potage', null];
+    const m = modele(charge);
+    assert.equal(
+      texteCsv(listeBadges(m, charge)),
+      '\u{FEFF}Nom;Prénom;Organisation;"Entrée; potage";Tour 2\r\n' +
+        'Lacasse;Ondine;;table 7 (Terrasse), siège 3;table 7 (Terrasse), siège 3\r\n' +
+        'Ombrelle;Iris;;table 7 (Terrasse), siège 1 — animateur;table 7 (Terrasse), siège 2\r\n' +
+        'Pervenche;Théo;;table 7 (Terrasse), siège 2;absente\r\n',
+    );
+    assert.equal(
+      texteCsv(listeBadges(m, charge, { colonnes: 'unique' })).split('\r\n')[3],
+      'Pervenche;Théo;;"Entrée; potage — table 7 (Terrasse), siège 2 ; Tour 2 — absente"',
+    );
+  });
+
+  test('un nom de tour ou un titre sur deux lignes, lu d’un fichier : la tête, la cellule et la ligne du badge tiennent sur une ligne', () => {
+    const reservations = [{ participant: 1, table: 1, siege: 1, portee: 'tour', tour: 1 }];
+    const charge = titree({ reservations });
+    charge.titres[0].libelle = 'animateur\nen  chef';
+    charge.evenement.nomsTours = ['Plat\r\nprincipal', null];
+    const m = modele(charge);
+    const parTour = texteCsv(listeBadges(m, charge));
+    const unique = texteCsv(listeBadges(m, charge, { colonnes: 'unique' }));
+    assert.equal(parTour.split('\r\n')[0], '\u{FEFF}Nom;Prénom;Organisation;Plat principal;Tour 2');
+    assert.equal(parTour.split('\r\n')[2], 'Ombrelle;Iris;;table 7, siège 1 — animateur en chef;table 7, siège 2');
+    assert.equal(unique.split('\r\n')[2], 'Ombrelle;Iris;;"Plat principal — table 7, siège 1 — animateur en chef ; Tour 2 — table 7, siège 2"');
+    // Aucun saut hors de la fin des enregistrements, ni dans le PDF.
+    for (const texte of [parTour, unique]) assert.doesNotMatch(texte.replaceAll('\r\n', ''), /[\r\n]/);
+    for (const { textes } of m.badges) for (const ligne of textes.lignes) assert.doesNotMatch(ligne, /[\p{Cc}]/u);
+  });
+
+  test('un seul tour : une colonne « Tour 1 », ou la ligne « Tour 1 — … » dans « Tours » ; une forme inconnue lève TypeError', () => {
+    const charge = deuxATable7(1);
+    const m = modele(charge);
+    assert.equal(texteCsv(listeBadges(m, charge)), '\u{FEFF}Nom;Prénom;Organisation;Tour 1\r\nOmbrelle;Iris;;table 7\r\nPervenche;Théo;;table 7\r\n');
+    assert.equal(
+      texteCsv(listeBadges(m, charge, { colonnes: 'unique' })),
+      '\u{FEFF}Nom;Prénom;Organisation;Tours\r\nOmbrelle;Iris;;Tour 1 — table 7\r\nPervenche;Théo;;Tour 1 — table 7\r\n',
+    );
+    for (const mauvaise of ['par_tour', 'toString', null, true]) {
+      assert.throws(() => listeBadges(m, charge, { colonnes: mauvaise }), TypeError, String(mauvaise));
+    }
+  });
+
+  test('le libellé de la table et le titre s’insèrent tels quels dans la cellule du tour, gabarit et usage privé compris', () => {
+    const charge = titree({ reservations: [{ participant: 1, table: 1, siege: 1, portee: 'tour', tour: 1 }] });
+    charge.tables = [libellee(1, 7, 3, 'Coin \u{E001} ${table}')];
+    const ligne = texteCsv(listeBadges(modele(charge), charge)).split('\r\n')[2];
+    assert.equal(ligne, 'Ombrelle;Iris;;table 7 (Coin \u{E001} ${table}), siège 1 — animateur;table 7 (Coin \u{E001} ${table}), siège 2');
   });
 
   test('les cellules suivent la pile : l’ordre par table, une réédition, une proposition ; un exclu n’a pas de ligne', () => {
@@ -993,8 +1145,165 @@ describe('planche : la liste des badges en CSV (§ 11.6)', () => {
     const m = modele(charge, { source: 'proposition', proposition: 2 });
     assert.equal(
       texteCsv(listeBadges(m, charge)),
-      '\u{FEFF}Nom;Prénom;Organisation;Tours\r\nOmbrelle;Iris;;Tour 1 — table 3\r\nPervenche;Théo;;Tour 1 — table 7 (Terrasse)\r\n',
+      '\u{FEFF}Nom;Prénom;Organisation;Tour 1\r\nOmbrelle;Iris;;table 3\r\nPervenche;Théo;;table 7 (Terrasse)\r\n',
     );
+  });
+});
+
+// Le nom des doublons laissé en blanc (§ 11.4, § 11.6) : sous cacherNumero,
+// le badge d'une personne marquée nomNumerote porte son nom entier et la
+// marque nomEnBlanc, que la mise en page mesure sans le poser ; l'ordre de
+// la pile, les homonymes, la liste de réédition et la liste en CSV lisent le
+// nom entier.
+describe('planche : le nom des doublons laissé en blanc (§ 11.4, § 11.6)', () => {
+  // Deux « Roger Galet » numérotés par l'import, une « Zoé Galet », un
+  // « Louis Arc 14 » dont le numéro est saisi à la main, sans marque, et
+  // une personne sans prénom numérotée deux fois, « Galet 01 01 ».
+  const numerotes = () =>
+    soiree({
+      personnes: [
+        personne(1, 'Roger', 'Galet 01', { nomNumerote: true }),
+        personne(2, 'Roger', 'Galet 02', { nomNumerote: true }),
+        personne(3, 'Zoé', 'Galet'),
+        personne(4, 'Louis', 'Arc 14'),
+        personne(5, null, 'Galet 01 01', { nomNumerote: true }),
+      ],
+      tables: [table(1, 1, 3), table(2, 2, 3)],
+      plan: [{ sieges: [[1, 2, 3], [4, 5]] }],
+    });
+  const cache = (charge, autres = {}) => modele(charge, { cacherNumero: true, ...autres });
+  const enBlanc = ({ textes }) => Object.hasOwn(textes, 'nomEnBlanc');
+
+  test('le badge d’une personne marquée porte son nom entier, prénom compris, et la marque nomEnBlanc ; un numéro saisi sans marque reste imprimé', () => {
+    const m = cache(numerotes());
+    assert.deepEqual(
+      m.badges.map((badge) => [badge.participant, badge.nom, badge.textes.nom, badge.textes.nomEnBlanc]),
+      [
+        [4, 'Louis Arc 14', 'Louis Arc 14', undefined],
+        [3, 'Zoé Galet', 'Zoé Galet', undefined],
+        [1, 'Roger Galet 01', 'Roger Galet 01', true],
+        [5, 'Galet 01 01', 'Galet 01 01', true],
+        [2, 'Roger Galet 02', 'Roger Galet 02', true],
+      ],
+    );
+    // Hors de la marque, les textes sont ceux du nom imprimé.
+    const imprime = modele(numerotes());
+    m.badges.forEach(({ textes: { nomEnBlanc: _marque, ...reste } }, rang) => assert.deepEqual(reste, imprime.badges[rang].textes));
+  });
+
+  test('par défaut, et sans personne marquée, le modèle est celui d’avant : aucun badge ne porte la marque', () => {
+    const charge = numerotes();
+    assert.deepEqual(modele(charge, { cacherNumero: false }), modele(charge));
+    for (const badge of modele(charge).badges) {
+      assert.equal(badge.textes.nom, badge.nom);
+      assert.ok(!enBlanc(badge), badge.nom);
+    }
+    for (const sans of [aReserve(), homonymes()]) assert.deepEqual(cache(sans), modele(sans));
+  });
+
+  test('l’ordre de la pile et les homonymes se lisent sur le nom entier : aucun identifiant au pied des badges en blanc', () => {
+    const charge = numerotes();
+    const m = cache(charge);
+    assert.deepEqual(
+      m.badges.map(({ participant }) => participant),
+      modele(charge).badges.map(({ participant }) => participant),
+    );
+    assert.deepEqual(m.homonymes, []);
+    assert.deepEqual(homonymesDe(charge), []);
+    for (const badge of m.badges) {
+      assert.equal(badge.identifiant, null);
+      assert.ok(!badge.textes.pied.some((ligne) => ligne.startsWith('Identifiant')), badge.nom);
+    }
+    assert.deepEqual(
+      cache(charge, { ordre: 'table' }).badges.map(({ participant }) => participant),
+      modele(charge, { ordre: 'table' }).badges.map(({ participant }) => participant),
+    );
+  });
+
+  test('la liste de réédition de la feuille de contrôle et la liste en CSV gardent le nom entier', () => {
+    const charge = numerotes();
+    const reedite = cache(charge, { selection: [2, 1] });
+    assert.ok(reedite.badges.every(enBlanc));
+    const lignes = textesControle(reedite, { papier: 'A4', imposition: 'feuille', planches: 1 });
+    assert.deepEqual(lignes.slice(-2), ['Roger Galet 01', 'Roger Galet 02']);
+    for (const colonnes of ['parTour', 'unique']) {
+      assert.deepEqual(listeBadges(cache(charge), charge, { colonnes }), listeBadges(modele(charge), charge, { colonnes }));
+    }
+    assert.match(texteCsv(listeBadges(cache(charge), charge)), /\r\nGalet 01;Roger;/);
+  });
+
+  test('un nom que le numéro seul compose est laissé en blanc lui aussi ; une option qui n’est pas un booléen lève TypeError', () => {
+    const charge = numerotes();
+    charge.participants[4].nom = ' 01';
+    const m = cache(charge);
+    assert.deepEqual([badgeDe(m, 5).textes.nom, badgeDe(m, 5).textes.nomEnBlanc], [' 01', true]);
+    for (const mauvais of ['oui', 1, null]) assert.throws(() => cache(charge, { cacherNumero: mauvais }), TypeError, String(mauvais));
+  });
+});
+
+// L'organisation en gros (§ 11.4) : sous organisationEnGros, le badge d'une
+// personne qui a une organisation porte la marque organisationEnGros, que la
+// mise en page lit pour échanger le nom et l'organisation ; un badge sans
+// organisation ne la porte pas. Rien d'autre ne change, ni les textes, ni
+// l'ordre de la pile, ni la feuille de contrôle, ni la liste en CSV.
+describe('planche : l’organisation en gros (§ 11.4)', () => {
+  const enGros = (charge, autres = {}) => modele(charge, { organisationEnGros: true, ...autres });
+  const marque = ({ textes }) => Object.hasOwn(textes, 'organisationEnGros');
+
+  test('le badge d’une personne qui a une organisation porte la marque, sans organisation non ; hors de la marque, les textes sont ceux d’avant', () => {
+    const charge = homonymes();
+    const m = enGros(charge);
+    assert.deepEqual(
+      m.badges.filter(marque).map(({ participant }) => participant).sort(),
+      [3, 4, 5, 6],
+    );
+    for (const badge of m.badges) {
+      if (marque(badge)) assert.equal(badge.textes.organisationEnGros, true, badge.nom);
+      else assert.equal(badge.organisation, null, badge.nom);
+    }
+    const avant = modele(charge);
+    m.badges.forEach(({ textes: { organisationEnGros: _marque, ...reste }, ...badge }, rang) => {
+      const { textes, ...badgeAvant } = avant.badges[rang];
+      assert.deepEqual(reste, textes);
+      assert.deepEqual(badge, badgeAvant);
+    });
+    assert.deepEqual({ ...m, badges: [] }, { ...avant, badges: [] });
+  });
+
+  test('par défaut, et sans organisation, le modèle est celui d’avant ; une option qui n’est pas un booléen lève TypeError', () => {
+    const charge = homonymes();
+    assert.deepEqual(modele(charge, { organisationEnGros: false }), modele(charge));
+    assert.ok(!modele(charge).badges.some(marque));
+    assert.deepEqual(enGros(aReserve()), modele(aReserve()));
+    // Une organisation faite de blancs n'en est pas une : pas de marque.
+    const blancs = aReserve();
+    blancs.participants[0].organisation = '   ';
+    assert.deepEqual(enGros(blancs), modele(blancs));
+    for (const mauvais of ['oui', 1, null]) assert.throws(() => enGros(charge, { organisationEnGros: mauvais }), TypeError, String(mauvais));
+  });
+
+  test('avec le nom laissé en blanc, le badge porte les deux marques ; la feuille de contrôle et la liste en CSV ne changent pas', () => {
+    const charge = soiree({
+      personnes: [
+        personne(1, 'Roger', 'Galet 01', { nomNumerote: true, organisation: 'Club des Merles' }),
+        personne(2, 'Roger', 'Galet 02', { nomNumerote: true }),
+      ],
+      tables: [table(1, 1, 2)],
+      plan: [{ sieges: [[1, 2]] }],
+    });
+    const m = enGros(charge, { cacherNumero: true });
+    assert.deepEqual(
+      m.badges.map(({ participant, textes }) => [participant, textes.nomEnBlanc, textes.organisationEnGros]),
+      [
+        [1, true, true],
+        [2, true, undefined],
+      ],
+    );
+    const controle = { papier: 'A4', imposition: 'feuille', planches: 1 };
+    assert.deepEqual(textesControle(m, controle), textesControle(modele(charge, { cacherNumero: true }), controle));
+    for (const colonnes of ['parTour', 'unique']) {
+      assert.deepEqual(listeBadges(m, charge, { colonnes }), listeBadges(modele(charge), charge, { colonnes }));
+    }
   });
 });
 

@@ -6,13 +6,13 @@
   // l'application — système de fichiers, horloge, exécuteur de génération, en
   // option l'exécuteur de la vue d'ensemble de la liste, presse-papiers,
   // identifiants, langue, provenance, démonstrations, format courant, version
-  // du produit et sa forme Windows, chargement de la police embarquée,
-  // imprimante de la plateforme, chargement de la section de la qualité, et en
-  // option le chargement du solveur du plancher exact et le thème de départ
-  // — que src/main.js construit pour la machine et
-  // monterApp pour une épreuve : App ne choisit aucune plateforme, et ne lit
-  // la version que dans ses propriétés, la même au bandeau, au titre, à
-  // l'accueil et dans le bloc « À propos ».
+  // affichée du produit, chargement de la police embarquée, imprimante de la
+  // plateforme, chargement de la section de la qualité, et en option le
+  // chargement du solveur du plancher exact et le thème de départ — que
+  // src/main.js construit pour la machine et monterApp pour une épreuve : App
+  // ne choisit aucune plateforme, et ne lit la version que dans ses
+  // propriétés, la même au bandeau, au titre, à l'accueil et dans le bloc
+  // « À propos ».
   //
   // La section de la qualité forme son propre morceau dans la construction :
   // src/main.js passe une fonction qui la charge par un import différé,
@@ -32,34 +32,32 @@
   // chargerSolveur, aucun suivi : le diagnostic garde ses planchers
   // instantanés seuls.
   //
-  // À son initialisation, App crée une fois chacun la séance, sans racine,
-  // le contrôleur de génération et la façade, et les donne aux composants par
-  // le contexte de Svelte — clés 'seance', 'facade', 'generation', 'ui', 't',
-  // 'format', 'horloge', 'imprimante' et 'relireListe', et 'solveur' quand
-  // le solveur se charge —, posé de façon
-  // synchrone avant que la détermination du dossier de travail, asynchrone,
-  // ne rende. La façade pose la racine de la séance par changerRacine :
-  // aussitôt sans question, après la réponse sinon. App lit la liste du
-  // dossier de travail par la façade et la donne à l'accueil, une fois la
-  // détermination réglée — sans
+  // À son initialisation, App crée une fois chacun la séance, sans racine, le
+  // contrôleur de génération et la façade, et les donne aux composants par le
+  // contexte de Svelte — clés 'seance', 'facade', 'generation', 'ui', 't',
+  // 'format', 'horloge', 'imprimante', 'produit' — la provenance et la version
+  // que le pied d'une page imprimée reprend du bandeau — et 'relireListe', et
+  // 'solveur' quand le solveur se charge —, posé de façon synchrone avant que
+  // la détermination du dossier de travail, asynchrone, ne rende. La façade
+  // pose la racine de la séance par changerRacine : aussitôt sans question,
+  // après la réponse sinon. App lit la liste du dossier de travail par la
+  // façade et la donne à l'accueil, une fois la détermination réglée — sans
   // question au démarrage, après la réponse sinon : pret se résout quand la
-  // détermination est faite, la liste lue quand aucune question n'attend, et
-  // le premier écran — les lignes de la liste, ou la question — rendu. Les
-  // résumés des lignes n'en sont pas : ceux des aperçus se lisent ensuite,
-  // puis ceux des aperçus absents ou périmés se calculent, un événement
-  // après l'autre, par l'exécuteur de la vue d'ensemble — sur le fil sans
-  // lui —, et l'accueil montre chacun dès qu'il arrive. App termine cet
-  // exécuteur à son démontage, après avoir abandonné le flux des résumés.
+  // détermination est faite, la liste lue quand aucune question n'attend, et le
+  // premier écran — les lignes de la liste, ou la question — rendu. Les résumés
+  // des lignes n'en sont pas : ceux des aperçus se lisent ensuite, puis ceux
+  // des aperçus absents ou périmés se calculent, un événement après l'autre,
+  // par l'exécuteur de la vue d'ensemble — sur le fil sans lui —, et l'accueil
+  // montre chacun dès qu'il arrive. App termine cet exécuteur à son démontage,
+  // après avoir abandonné le flux des résumés.
   //
   // L'écran suit la séance : la liste sans événement ouvert, l'événement
-  // sinon ; le panneau « À propos » ou le panneau « Paramètres » les
-  // remplace tant qu'il est ouvert — App dit au bandeau lequel est ouvert :
-  // sa commande, bouton bascule, se montre enfoncée et le referme —, et
-  // l'aperçu avant impression remplace l'événement tant que l'état de
-  // navigation en porte un (§ 11.7). Fermer l'aperçu rend la section d'où il
-  // s'est ouvert et le focus à sa commande « Imprimer… ». Chaque ouverture
-  // d'un événement remet l'état de navigation à son départ. Le bandeau,
-  // présent sur tout écran, ne défile pas : un écran plus haut que la
+  // sinon ; le panneau « À propos » ou le panneau « Paramètres » les remplace
+  // tant qu'il est ouvert — App dit au bandeau lequel est ouvert : sa commande,
+  // bouton bascule, se montre enfoncée et le referme. L'aperçu avant impression
+  // vit dans la section de l'impression de l'événement (§ 11.7). Chaque
+  // ouverture d'un événement remet l'état de navigation à son départ. Le
+  // bandeau, présent sur tout écran, ne défile pas : un écran plus haut que la
   // fenêtre défile sous lui.
   //
   // La page porte le fond de la page ; l'écran — l'élément <main>, parent
@@ -111,7 +109,6 @@
   import { creerExecuteurSolveur } from './diagnostic/executeur_solveur.js';
   import { creerSuiviSolveur } from './diagnostic/suivi_solveur.js';
   import Evenement from './evenement/Evenement.svelte';
-  import Apercu from './impression/Apercu.svelte';
   import Activite from './primitives/Activite.svelte';
   import { activite, seanceBarree, suivreFinDeGeneration } from './activite.js';
   import { blocAPropos, provenanceVisible, versionVisible } from './apropos.js';
@@ -249,6 +246,7 @@
   setContext('format', format);
   setContext('horloge', horloge);
   setContext('imprimante', imprimante);
+  setContext('produit', Object.freeze({ provenance, version: produitVersion }));
   const suiviSolveur =
     chargerSolveur === null
       ? null
@@ -377,17 +375,6 @@
   const version = versionVisible(provenance, produitVersion, t);
   const provenanceAffichee = provenanceVisible(provenance, t);
 
-  // L'élément racine de l'application, où le focus se rend après l'aperçu.
-  let racineApp = $state(null);
-
-  // Ferme l'aperçu : l'événement revient sur la section d'origine, et le
-  // focus sur la commande « Imprimer… » de sa tête.
-  async function fermerApercu() {
-    uiApp.fermerApercu();
-    await tick();
-    racineApp?.querySelector('[data-ecran="evenement"] [data-commande="apercu"]')?.focus();
-  }
-
   // « Liste des événements » : ferme l'événement, sans question ; sous un
   // support rompu, la séance le refuse, et le refus s'affiche à côté de la
   // commande.
@@ -445,7 +432,7 @@
   <title>{titre}</title>
 </svelte:head>
 
-<div class="app" class:occupee={$activite} bind:this={racineApp}>
+<div class="app" class:occupee={$activite}>
   <Bandeau
     etat={etatSeance}
     {version}
@@ -463,8 +450,6 @@
       <Parametres fermer={() => uiApp.fermerParametres()} />
     {:else if etatSeance.evenement === null}
       <Accueil {provenance} version={produitVersion} {demonstrations} {lignes} {resumes} {refusLecture} />
-    {:else if $uiApp.apercu !== null}
-      <Apercu {provenance} version={produitVersion} fermer={fermerApercu} />
     {:else}
       <Evenement {chargeurs} />
     {/if}

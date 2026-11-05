@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le registre des commandes du mobilier — tables et leur libellé, sièges,
-// tours, réglages, objectifs des tables et leur règle par défaut, ordre des
-// priorités et mode des objectifs (§ 4, § 4.5, § 5.3, § 5.7, § 6, § 7.1,
-// § 8.2, § 8.9, § 9), que commandes.js réunit aux autres. Ses imports
-// n'atteignent jamais commandes.js : le registre réuni dépend de lui, non
-// l'inverse.
+// tours et leurs noms, réglages, objectifs des tables et leur règle par
+// défaut, ordre des priorités et mode des objectifs (§ 4, § 4.5, § 5.3,
+// § 5.7, § 6, § 7.1, § 8.2, § 8.9, § 9), que commandes.js réunit aux autres.
+// Ses imports n'atteignent jamais commandes.js : le registre réuni dépend de
+// lui, non l'inverse.
 //
 // Chaque commande suit le contrat de commandes.js : une fonction pure
 // (charge, arguments) → { charge, libelle, avertissements }, la charge reçue
@@ -21,13 +21,16 @@
 // Une table a un identifiant, tiré de prochainsIds.table, qui ne revient
 // jamais, et un numéro affiché, le plus grand plus un, qui ne se renumérote
 // pas (§ 4). creerTable crée une table, ou, avec combler, en une seule
-// entrée, les tables d'une taille donnée qui assoient chacun : le manque est
-// celui de l'avis PLACES_MANQUANTES, lu dans capaciteParTour. Les capacités
-// passent par controlerCapacite (capacite.js) ; le retenu les suit, ses
-// surnuméraires versés en réserve, et une table créée y entre, vide à chaque
-// tour : il ne gagne aucune raison de dérive. Une proposition ne se réécrit
-// jamais : elle dérive (§ 8.9, § 9). Supprimer une table et changer les tours
-// laissent propositions et retenu en dérive.
+// entrée, les tables d'une taille donnée qui assoient chacun, et les
+// animateurs à désigner qu'elles reçoivent (designerALaCreation,
+// commandes_places.js) : le manque est celui de l'avis PLACES_MANQUANTES, lu
+// dans capaciteParTour. Les capacités passent par controlerCapacite
+// (capacite.js) ; le retenu les suit, ses surnuméraires versés en réserve,
+// et une table créée y entre, vide à chaque tour : elle ne lui donne aucune
+// raison de dérive, et une désignation qui la suit pèse sur lui comme toute
+// réservation (§ 9). Une proposition ne se réécrit jamais : elle dérive
+// (§ 8.9, § 9). Supprimer une table et changer les tours laissent
+// propositions et retenu en dérive.
 import { constante } from '../geometrie/constantes.js';
 import { caseLibre, geometrieTable, listeSurTable } from '../geometrie/tables.js';
 import { CRITERES, MODES_OBJECTIFS, POIDS_MAX, seulsASonPalier, verifierPriorites } from '../moteur/criteres.js';
@@ -39,6 +42,7 @@ import {
   capacite,
   critereCoche,
   modeObjectifs,
+  nomsDesTours,
   priorites,
   regleObjectifs,
 } from '../stockage/document.js';
@@ -46,13 +50,16 @@ import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { copieDeTravail } from '../stockage/gel.js';
 import { fautes } from '../stockage/placements.js';
 import { presencesSousTours } from '../stockage/presence.js';
+import { repartitionALaCreation } from './animateurs.js';
 import { bilanChangementDefaut, capaciteParTour } from './bilans.js';
 import { controlerCapacite, lireEntier, retenuAuxCapacites } from './capacite.js';
+import { designerALaCreation } from './commandes_places.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
 import { avisDeLObjectif, avisObjectifs, etiquettesDeLEvenement, ordreDesObjectifs, recevoirEtiquettes } from './objectifs.js';
 import { nomAffiche } from './personnes.js';
 import { leverRefus } from './pose.js';
+import { estNomParDefaut } from './tours.js';
 
 const FORMES = new Set(['ronde', 'carree']);
 // La constante du seuil au-delà duquel le dessin d'une table cesse d'être
@@ -237,14 +244,43 @@ export function bilanTablesManquantes(charge, sieges) {
   return { manque, presentes, places, tables, sieges, placesApres: places + tables * sieges };
 }
 
+/**
+ * La forme que « Créer les tables » propose (§ 6.1) : celle de la table la
+ * plus récemment créée de l'événement — le plus grand identifiant, qui ne
+ * revient jamais, quels que soient son numéro et son rang dans la liste —,
+ * 'ronde' sans table. Elle se lit dans les tables : le fichier ne la porte
+ * pas.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {'ronde'|'carree'}
+ */
+export function formeParDefaut(charge) {
+  let derniere = null;
+  for (const table of charge.tables) if (derniere === null || table.id > derniere.id) derniere = table;
+  return derniere === null ? 'ronde' : derniere.forme;
+}
+
 // creerTable {forme, combler} : les tables de combler places qui
 // assoient chacun (bilanTablesManquantes), en une entrée. combler se lit
 // par lireEntier et se borne comme une capacité (PLACES_TABLE) :
 // MOINS_DE_DEUX, TROP_DE_PLACES {max}, remède null. Sans manque :
 // PLACES_SUFFISANTES {places, presentes}, remède null. Un compteur qui ne
 // suffit pas à toutes refuse COMPTEUR_SATURE, et rien ne se crée. Une
-// table à la taille du défaut le suit ; une autre est surchargée. Au-delà
-// du seuil lisible, AU_DELA_LISIBLE {seuil}, comme une saisie de places.
+// table à la taille du défaut le suit ; une autre est surchargée.
+//
+// Dans la même entrée, les personnes à désigner animatrices (aDesigner)
+// sont désignées sur les tables créées, selon repartitionALaCreation, par
+// designerALaCreation : chacune reçoit une réservation « tous les tours »
+// et son titre pressenti, ou le titre par défaut, au plus petit siège libre
+// de sa table. Le libellé compte les animateurs désignés. Une désignation
+// suit la règle du § 5.9 : l'écart des places manquantes ne bouge sous
+// aucune réservation, et le bilan reste juste. Avertissements, dans cet
+// ordre : AU_DELA_LISIBLE {seuil} au-delà du seuil lisible, comme une
+// saisie de places ; ceux des désignations ; puis ANIMATEURS_A_DESIGNER
+// {personnes: [{participant, personne, cause, tours?}]}, chaque personne
+// que la répartition laisse à désigner, nommée par son nom affiché, avec sa
+// cause et, absente, ses tours d'absence. Elles n'arrêtent pas la
+// création : la rangée « Animateurs » d'une table les désigne ensuite.
 function creerTablesManquantes(charge, forme, saisie) {
   const sieges = entierSaisi(saisie);
   if (sieges < PLACES_TABLE.min) throw refus('MOINS_DE_DEUX');
@@ -255,12 +291,25 @@ function creerTablesManquantes(charge, forme, saisie) {
   const suivante = copieDeTravail(charge);
   const dansLeRetenu = retenuLisible(suivante);
   const surcharge = sieges === charge.evenement.siegesParDefaut ? null : sieges;
+  const premierId = suivante.prochainsIds.table;
   const numeros = Array.from({ length: bilan.tables }, () => poserTable(suivante, forme, surcharge, dansLeRetenu));
+  const { affectations, restantes } = repartitionALaCreation(charge, bilan.tables, sieges);
+  const designees = designerALaCreation(
+    suivante,
+    affectations.map(({ participant, rang }) => ({ participant, table: premierId + rang })),
+  );
   const seuil = constante(SEUIL_LISIBLE.nom);
+  const avertissements = sieges > seuil ? [{ code: 'AU_DELA_LISIBLE', details: { seuil } }] : [];
+  avertissements.push(...designees.avertissements);
+  if (restantes.length > 0) {
+    const personneDe = new Map(charge.participants.map((personne) => [personne.id, personne]));
+    const personnes = restantes.map(({ participant, ...cause }) => ({ participant, personne: nomAffiche(personneDe.get(participant)), ...cause }));
+    avertissements.push({ code: 'ANIMATEURS_A_DESIGNER', details: { personnes } });
+  }
   return {
-    charge: suivante,
-    libelle: libelle('ENTREE_CREER_TABLES', { premier: numeros[0], dernier: numeros.at(-1), sieges }),
-    avertissements: sieges > seuil ? [{ code: 'AU_DELA_LISIBLE', details: { seuil } }] : [],
+    charge: designees.charge,
+    libelle: libelle('ENTREE_CREER_TABLES', { premier: numeros[0], dernier: numeros.at(-1), sieges, animateurs: affectations.length }),
+    avertissements,
   };
 }
 
@@ -270,8 +319,10 @@ function creerTablesManquantes(charge, forme, saisie) {
  * grande, posée sur la première case libre (caseLibre) de la grille des
  * démonstrations, au pas que donnent les tables posées, chacune à sa
  * capacité, et la nouvelle. Sous un retenu lisible, elle y entre avec sa
- * capacité et une liste vide à chaque tour. Avec combler, les places par
- * table saisies, les tables qui comblent le manque (creerTablesManquantes).
+ * capacité et une liste vide à chaque tour ; elle ne reçoit aucun animateur.
+ * Avec combler, les places par table saisies, les tables qui comblent le
+ * manque et les animateurs à désigner qu'elles reçoivent
+ * (creerTablesManquantes).
  */
 function creerTable(charge, { forme, combler } = {}) {
   exigerModifiable(charge);
@@ -343,6 +394,41 @@ function changerLibelleTable(charge, { id, libelle: saisie } = {}) {
   return {
     charge: suivante,
     libelle: libelle('ENTREE_CHANGER_LIBELLE_TABLE', { numero: table.numero, libelle: texte === '' ? null : texte }),
+    avertissements: [],
+  };
+}
+
+/**
+ * changerNomTour {tour, nom} (§ 4, § 8.9) : le nom saisi pour le tour, de 1
+ * à R, entre en NFC, ses blancs de bord retirés, chaque moitié de paire de
+ * substitution isolée remplacée par le caractère de remplacement ; vide, ou
+ * égal au nom par défaut du tour, « Tour 3 » (estNomParDefaut), il retire
+ * le nom, et le champ nomsTours quand plus aucun tour n'en porte. Au-delà
+ * de LIBELLE_TABLE_MAX points de code, comptés sur le texte entré :
+ * NOM_TOUR_TROP_LONG {longueur, maximum}, remède nul — la saisie se corrige
+ * dans son champ. Le moteur ne lit pas les noms : propositions et retenu
+ * restent tels quels, sans dérive. Le même nom, ou un retrait sans nom, ne
+ * change rien : l'exécution le refuse, SANS_EFFET. Un tour hors de la
+ * soirée, ou un nom qui n'est pas un texte, est une faute du code.
+ */
+function changerNomTour(charge, { tour, nom: saisie } = {}) {
+  exigerModifiable(charge);
+  if (!Number.isInteger(tour) || tour < 1 || tour > charge.evenement.tours) {
+    throw new TypeError(`tour : entier de 1 à ${charge.evenement.tours} attendu, reçu ${JSON.stringify(tour)}`);
+  }
+  if (typeof saisie !== 'string') throw new TypeError(`nom : chaîne attendue, reçu ${JSON.stringify(saisie)}`);
+  const entre = saisie.toWellFormed().normalize('NFC').trim();
+  const texte = estNomParDefaut(tour, entre) ? '' : entre;
+  const longueur = [...texte].length;
+  if (longueur > LIBELLE_TABLE_MAX) throw refus('NOM_TOUR_TROP_LONG', { longueur, maximum: LIBELLE_TABLE_MAX });
+  const noms = nomsDesTours(charge);
+  noms[tour - 1] = texte === '' ? null : texte;
+  const suivante = copieDeTravail(charge);
+  if (noms.every((nom) => nom === null)) delete suivante.evenement.nomsTours;
+  else suivante.evenement.nomsTours = noms;
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_CHANGER_NOM_TOUR', { tour, nom: noms[tour - 1] }),
     avertissements: [],
   };
 }
@@ -431,11 +517,13 @@ function presencesNonEtendues(charge, nommees) {
  * lu par lireEntier ; MOINS_D_UN_TOUR {tours} sous 1, TROP_DE_TOURS {max}
  * au-delà de TOURS_MAX, la borne que l'analyse pose aussi, remède null.
  * Retirer des tours détruit, dans la même entrée, les réservations « tour
- * désigné » et les objectifs de table de ces tours, que le libellé compte ;
- * une table qui n'en garde aucun perd son champ objectifs. La portée
- * « tous » reste, symbolique, et l'objectif de la soirée aussi. Remettre le
- * tour ne rend rien de ce qui est détruit. Propositions et retenu restent,
- * en dérive TOURS_CHANGES, jamais tronqués.
+ * désigné », les objectifs de table et les noms de ces tours, que le
+ * libellé compte ; une table qui n'en garde aucun perd son champ objectifs,
+ * et l'événement perd son champ nomsTours quand aucun tour restant n'a de
+ * nom. Un tour ajouté vient sans nom. La portée « tous » reste, symbolique,
+ * et l'objectif de la soirée aussi. Remettre le tour ne rend rien de ce qui
+ * est détruit. Propositions et retenu restent, en dérive TOURS_CHANGES,
+ * jamais tronqués.
  *
  * La présence de chacun suit (presencesSousTours) : à la baisse, chaque
  * présence se rogne aux tours qui restent, canonique, exclues comprises, et
@@ -462,6 +550,10 @@ function changerTours(charge, { tours: saisie } = {}) {
   }
   const suivante = copieDeTravail(charge);
   suivante.evenement.tours = tours;
+  const noms = nomsDesTours(suivante);
+  const nomsRetires = nomsDesTours(charge).slice(tours).filter((nom) => nom !== null).length;
+  if (noms.every((nom) => nom === null)) delete suivante.evenement.nomsTours;
+  else suivante.evenement.nomsTours = noms;
   suivante.participants = structuredClone(participants);
   suivante.reservations = suivante.reservations.filter(({ portee, tour }) => portee === 'tous' || tour <= tours);
   let objectifsRetires = 0;
@@ -479,6 +571,7 @@ function changerTours(charge, { tours: saisie } = {}) {
       retirees: charge.reservations.length - suivante.reservations.length,
       objectifsRetires,
       presencesRognees: rognees.length,
+      nomsRetires,
     }),
     avertissements: tours > charge.evenement.tours ? presencesNonEtendues(charge, nommees) : [],
   };
@@ -587,7 +680,7 @@ function poserObjectif(charge, { table: id, tour: saisi, etiquettes: texte, regl
   const suivante = avecObjectifs(sansLui, id, (objectifs) => [...objectifs, objectif]);
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_POSER_OBJECTIF', { numero: table.numero, tour, regle, etiquettes: recues.etiquettes }),
+    libelle: libelle('ENTREE_POSER_OBJECTIF', { numero: table.numero, tour, regle, etiquettes: recues.etiquettes, nomsTours: nomsDesTours(charge) }),
     avertissements: [...recues.avertissements, ...avisDeLObjectif(suivante, id, tour)],
   };
 }
@@ -606,7 +699,7 @@ function retirerObjectif(charge, { table: id, tour } = {}) {
   if (!(table.objectifs ?? []).some((objectif) => objectif.tour === tour)) throw refus('SANS_EFFET', { commande: 'retirerObjectif' });
   return {
     charge: avecObjectifs(charge, id, (objectifs) => objectifs.filter((objectif) => objectif.tour !== tour)),
-    libelle: libelle('ENTREE_RETIRER_OBJECTIF', { numero: table.numero, tour }),
+    libelle: libelle('ENTREE_RETIRER_OBJECTIF', { numero: table.numero, tour, nomsTours: nomsDesTours(charge) }),
     avertissements: [],
   };
 }
@@ -834,6 +927,7 @@ export const COMMANDES_MOBILIER = new Map([
   ['realignerTable', realignerTable],
   ['changerDefaut', changerDefaut],
   ['changerTours', changerTours],
+  ['changerNomTour', changerNomTour],
   ['modifierReglage', modifierReglage],
   ['poserObjectif', poserObjectif],
   ['retirerObjectif', retirerObjectif],

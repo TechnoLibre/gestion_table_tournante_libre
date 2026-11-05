@@ -10,7 +10,8 @@
 // qui n'écrit qu'un attribut ; le zoom sous le curseur ; l'ajustement ; le
 // plan monté caché ou trop petit ; le cadrage, écrit différé dans
 // reglages_locaux.json et restitué ; les commandes de vue qui n'écrivent
-// rien ; le plein écran ; le diagnostic du panneau latéral.
+// rien ; l'organisation dans les listes ; le plein écran ; le diagnostic du
+// panneau latéral.
 //
 // Chaque épreuve monte App par monterApp, sur le système de fichiers simulé
 // et l'horloge pilotée, au cadre de 1 366 × 700, et lit le rendu : la boîte,
@@ -23,7 +24,9 @@
 // (§ 14.8).
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { flushSync } from 'svelte';
+import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { etatPlaces } from '../../application/places.js';
+import { creerTraduction } from '../../application/traduction.js';
 import { DELAI_REGLAGES_MS } from '../../application/seance.js';
 import { FACTEUR_K_MIN, K_MAX, ajuster, bornesZoom, dessinDepuisEcran, kAjuste, transformDe, vueDepuisTransform } from '../../geometrie/vue.js';
 import { constante } from '../../geometrie/constantes.js';
@@ -33,7 +36,11 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { fixerCadre, molette } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { sousTheme, visible } from '../../../test/navigateur/rendu.js';
+import { TABLES_INTERFACE } from '../libelles.js';
+import { RETRAIT_ORGANISATION } from './modele.js';
 import { cadreDepuisRect, englobantDuTour, vueApresCadre, vueInitiale } from './vue_plan.js';
+
+const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 
 const EVENEMENT = { nom: 'Club des Merles', date: null, siegesParDefaut: 3, tours: 2 };
 const FICHIER_REGLAGES = 'reglages_locaux.json';
@@ -804,6 +811,114 @@ describe('les commandes de vue n’écrivent rien et restent vivantes (§ 8.2, �
     flushSync();
     expect(m.seance.etat().evenement.etat).toBe('bloque');
     await parcourir('bloqué');
+  });
+});
+
+describe('l’organisation dans les listes (§ 7.4, § 8.4)', () => {
+  test('« Organisation », éteinte au départ, pose l’organisation de l’occupant à droite de son nom, de l’encre secondaire ; listes masquées, elle reste offerte, inactive, et dit pourquoi ; rien ne s’écrit', async () => {
+    const m = await petite();
+    await m.seance.passerEnEcriture();
+    // Une organisation courte : la ligne entière tient dans le bloc, sans
+    // rien abréger.
+    const { id } = m.seance.etat().charge.participants[0];
+    await m.seance.executer('modifierParticipant', { id, champs: { organisation: 'Merles' } });
+    await m.seance.executer('reserver', { participant: id, table: 1, siege: 1, portee: 'tous', tour: null });
+    const personne = m.seance.etat().charge.participants[0];
+    flushSync();
+    cliquer(m, 'ajuster');
+    await deuxImages();
+    const avant = fichiers(m);
+    const bouton = dans(m, '[data-commande="organisations"]');
+    expect(bouton.textContent).toBe(t('plan.vue.organisations'));
+    expect(bouton.closest('[role="group"]').getAttribute('aria-label')).toBe(t('plan.vue.groupeAffichage'));
+    expect(bouton.getAttribute('aria-pressed')).toBe('false');
+    expect(bouton.hasAttribute('aria-disabled')).toBe(false);
+    expect(bouton.hasAttribute('title')).toBe(false);
+    const premiere = () => dans(m, '[data-liste="1"] > tspan');
+    const sans = premiere().textContent;
+    expect(sans).toContain(personne.nom);
+    expect(tous(m, '[data-liste] [data-partie="organisation"]')).toHaveLength(0);
+
+    cliquer(m, 'organisations');
+    await deuxImages();
+    expect(m.ui.etat().organisations).toBe(true);
+    expect(bouton.getAttribute('aria-pressed')).toBe('true');
+    expect(premiere().textContent).toBe(`${sans}${t('plan.ligne.avantOrganisation')}${personne.organisation}`);
+    const organisation = premiere().querySelector('[data-partie="organisation"]');
+    const nom = premiere().querySelector('[data-partie="nom"]');
+    expect(organisation.textContent).toBe(personne.organisation);
+    expect(getComputedStyle(organisation).fill).toBe(getComputedStyle(premiere().querySelector('[data-partie="avantOrganisation"]')).fill);
+    expect(getComputedStyle(organisation).fill).not.toBe(getComputedStyle(nom).fill);
+    expect(dans(m, '[data-siege="1:1"]').getAttribute('aria-label')).toBe(premiere().textContent);
+    // Chaque ligne tient dans la largeur du bloc de noms.
+    for (const ligne of tous(m, '[data-liste] > tspan')) {
+      expect(ligne.getComputedTextLength(), ligne.textContent).toBeLessThanOrEqual(constante('LARGEUR_BLOC_NOMS_CM') + 1e-6);
+    }
+
+    cliquer(m, 'listes');
+    await deuxImages();
+    expect(bouton.getAttribute('aria-disabled')).toBe('true');
+    expect(bouton.getAttribute('title')).toBe(t('plan.vue.organisationsSansListes'));
+    expect(bouton.getAttribute('aria-pressed')).toBe('true');
+    expect(getComputedStyle(bouton).outlineStyle).toBe('dashed');
+    cliquer(m, 'organisations');
+    expect(m.ui.etat().organisations, 'inactive, la bascule ne change rien').toBe(true);
+    cliquer(m, 'listes');
+    await deuxImages();
+    expect(bouton.hasAttribute('aria-disabled')).toBe(false);
+    expect(dans(m, '[data-liste="1"] [data-partie="organisation"]').textContent).toBe(personne.organisation);
+    cliquer(m, 'organisations');
+    await deuxImages();
+    expect(tous(m, '[data-liste] [data-partie="organisation"]')).toHaveLength(0);
+    expect(premiere().textContent).toBe(sans);
+    expect(fichiers(m)).toEqual(avant);
+  });
+
+  test('une organisation trop longue passe sous le nom, en retrait, repliée entre ses mots, jamais abrégée : le nom reste entier, le bloc s’allonge d’autant de rangées, au même pas', async () => {
+    const m = await petite();
+    await m.seance.passerEnEcriture();
+    const personne = m.seance.etat().charge.participants[0];
+    const longue = `Fédération ${'des jardins partagés '.repeat(8)}`.trim();
+    await m.seance.executer('modifierParticipant', { id: personne.id, champs: { organisation: longue } });
+    await m.seance.executer('reserver', { participant: personne.id, table: 1, siege: 1, portee: 'tous', tour: null });
+    flushSync();
+    cliquer(m, 'ajuster');
+    await deuxImages();
+    const rangees = () => [...dans(m, '[data-liste="1"]').children];
+    const avant = rangees().map((rangee) => ({ texte: rangee.textContent, y: Number(rangee.getAttribute('y')) }));
+    cliquer(m, 'organisations');
+    await deuxImages();
+
+    const [ligne, ...suite] = rangees();
+    const x = Number(ligne.getAttribute('x'));
+    const repliees = suite.filter((rangee) => Number(rangee.getAttribute('x')) !== x);
+    expect(ligne.textContent).toBe(avant[0].texte);
+    expect(ligne.querySelector('[data-partie="organisation"]')).toBeNull();
+    expect(ligne.querySelector('[data-partie="nom"]').textContent).toBe(`${personne.prenom} ${personne.nom}`);
+    expect(dans(m, '[data-siege="1:1"]').getAttribute('aria-label')).toBe(`${avant[0].texte}${t('plan.ligne.avantOrganisation')}${longue}`);
+    // Les rangées repliées suivent la ligne, en retrait, chacune la seule
+    // partie organisation, à l'encre secondaire ; ensemble, l'organisation
+    // entière, sans marque.
+    expect(repliees.length).toBeGreaterThanOrEqual(2);
+    expect(suite.slice(0, repliees.length)).toEqual(repliees);
+    const marque = t('plan.liste.abreviation');
+    for (const rangee of repliees) {
+      expect(Number(rangee.getAttribute('x'))).toBeCloseTo(x + RETRAIT_ORGANISATION, 9);
+      expect([...rangee.children].map((partie) => partie.dataset.partie)).toEqual(['organisation']);
+      expect(rangee.textContent.includes(marque), rangee.textContent).toBe(false);
+      expect(getComputedStyle(rangee.firstElementChild).fill).not.toBe(getComputedStyle(ligne.querySelector('[data-partie="nom"]')).fill);
+      expect(RETRAIT_ORGANISATION + rangee.getComputedTextLength(), rangee.textContent).toBeLessThanOrEqual(constante('LARGEUR_BLOC_NOMS_CM') + 1e-6);
+    }
+    expect(repliees.map((rangee) => rangee.textContent).join(' ')).toBe(longue);
+    // Le bloc s'allonge des rangées repliées : les lignes suivantes, les
+    // mêmes, descendent d'autant, et toutes les rangées gardent le pas de la
+    // hauteur de ligne, sans se chevaucher.
+    const apres = rangees();
+    expect(apres).toHaveLength(avant.length + repliees.length);
+    expect(apres.filter((rangee) => !repliees.includes(rangee)).map((rangee) => rangee.textContent)).toEqual(avant.map(({ texte }) => texte));
+    const pas = avant[1].y - avant[0].y;
+    expect(pas).toBeGreaterThan(0);
+    apres.forEach((rangee, rang) => expect(Number(rangee.getAttribute('y')), rangee.textContent).toBeCloseTo(avant[0].y + rang * pas, 9));
   });
 });
 

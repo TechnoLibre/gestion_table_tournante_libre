@@ -8,10 +8,11 @@
 // par la découpe de la saisie et réconciliée avec l'événement, le même aperçu
 // pour un texte collé et pour le même texte décodé d'un fichier, les données
 // d'épreuve de test/fixtures/csv/, chacune un CSV tel qu'un tableur l'écrit,
-// la colonne des étiquettes du fichier d'exemple des cas limites, et la
-// colonne de la présence, lue sous le nombre de tours de l'aperçu. Les
-// lettres décomposées et les blancs autres que l'espace s'écrivent par leur
-// point de code.
+// la colonne des étiquettes du fichier d'exemple des cas limites, la
+// colonne de la présence, lue sous le nombre de tours de l'aperçu, et les
+// colonnes des inclusions, lues avant de valider, chaque personne par son
+// nom affiché. Les lettres décomposées et les blancs autres que l'espace
+// s'écrivent par leur point de code.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
@@ -50,8 +51,12 @@ const existant = (id, nom, prenom, organisation) => ({
 // Champs d'une ligne valide, dans l'ordre de l'aperçu ; un champ omis vaut null.
 const champs = ({
   nom, prenom = null, organisation = null, courriel = null, titrePressenti = null, notes = null, exclu = null,
-  etiquettes = null, presence = null, conflits = null,
-}) => ({ nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence, conflits });
+  etiquettes = null, presence = null, conflits = null, animationReservee = null, inclusionsOrganisation = null,
+  inclusionsParticipant = null,
+}) => ({
+  nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence, conflits, animationReservee,
+  inclusionsOrganisation, inclusionsParticipant,
+});
 
 // Aperçu d'un texte refusé en entier : ce que la lecture a établi avant le
 // refus, aucune ligne.
@@ -77,6 +82,7 @@ const refusGlobal = (
   refusGlobal: code,
   refusGlobalLigne: ligne,
   refusGlobalOrganisation: null,
+  refusGlobalNom: null,
 });
 
 // Octets d'une donnée d'épreuve.
@@ -144,17 +150,19 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
       refusGlobal: null,
       refusGlobalLigne: null,
       refusGlobalOrganisation: null,
+      refusGlobalNom: null,
     });
   });
 
   test("les champs d'une ligne, dans l'ordre du participant, quel que soit celui des colonnes", () => {
     const [ligne] = apercevoir(
-      csv('mots-clés;notes;exclu;titre;courriel;équipe;prénom;nom', 'e;n;oui;t;c@exemple.test;a;p;Ombrelle'),
+      csv('animation réservée;mots-clés;notes;exclu;titre;courriel;équipe;prénom;nom', 'x;e;n;oui;t;c@exemple.test;a;p;Ombrelle'),
     ).lignes;
     assert.equal(
       JSON.stringify(ligne.champs),
       '{"nom":"Ombrelle","prenom":"p","organisation":"a","courriel":"c@exemple.test","titrePressenti":"t","notes":"n",' +
-        '"exclu":true,"etiquettes":["e"],"presence":null,"conflits":null}',
+        '"exclu":true,"etiquettes":["e"],"presence":null,"conflits":null,"animationReservee":true,' +
+        '"inclusionsOrganisation":null,"inclusionsParticipant":null}',
     );
   });
 
@@ -344,6 +352,33 @@ describe('apercevoir : « exclu », une liste fermée (§ 10.1)', () => {
       valeurs.map((valeur, rang) => [rang + 2, 'EXCLU_INCONNU', valeur.trim()]),
     );
     assert.equal(apercu.refusGlobal, 'AUCUNE_LIGNE_VALIDE');
+  });
+});
+
+describe('apercevoir : l’animation réservée, la liste fermée d’« exclu » (§ 10.1)', () => {
+  test('oui, o, vrai, 1 et x la posent ; non, n, faux et 0 l’écartent ; vide et colonne absente valent null', () => {
+    const cas = [['OUI', true], [' o ', true], ['Vrai', true], ['1', true], ['x', true], ['NON', false], ['n', false], ['faux', false], ['0', false], ['', null]];
+    const apercu = apercevoir(csv('nom;animation_reservee', ...cas.map(([valeur], rang) => `${PATRONYMES[rang]};${valeur}`)));
+    assert.deepEqual(apercu.refusees, []);
+    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.animationReservee), cas.map(([, lue]) => lue));
+    assert.equal(apercevoir(csv('nom', 'Ombrelle')).lignes[0].champs.animationReservee, null);
+  });
+
+  test('toute autre valeur refuse la ligne, ANIMATION_INCONNUE, la valeur nommée ; le reste s’importe', () => {
+    const apercu = apercevoir(csv('nom;animation réservée', 'Ombrelle;oui', 'Pervenche; table d’honneur ', 'Lacasse;'));
+    assert.deepEqual(apercu.lignes.map(({ ligne }) => ligne), [2, 4]);
+    assert.deepEqual(apercu.refusees, [
+      { ligne: 3, code: 'ANIMATION_INCONNUE', valeur: 'table d’honneur', brut: ['Pervenche', ' table d’honneur '] },
+    ]);
+  });
+
+  test('le refus suit celui d’« exclu » et précède celui des étiquettes', () => {
+    const apercu = apercevoir(csv(
+      'nom;exclu;animation_reservee;etiquettes',
+      'Ombrelle;peut-être;peut-être;finance',
+      `Pervenche;;peut-être;${'x'.repeat(41)}`,
+    ));
+    assert.deepEqual(apercu.refusees.map(({ ligne, code }) => [ligne, code]), [[2, 'EXCLU_INCONNU'], [3, 'ANIMATION_INCONNUE']]);
   });
 });
 
@@ -1825,5 +1860,180 @@ describe("apercevoir : la colonne des conflits d'organisation, lue avant de vali
   test('sans faute, refusGlobalOrganisation vaut null ; un refus global d\u{2019}une autre sorte aussi', () => {
     assert.equal(apercevoir(csv('nom;conflits', 'Ombrelle;')).refusGlobalOrganisation, null);
     assert.deepEqual(apercevoir(''), { ...refusGlobal('AUCUN_ENTETE') });
+  });
+});
+
+describe('apercevoir : les colonnes des inclusions, lues avant de valider (§ 10.1)', () => {
+  // Les inclusions de chaque ligne valide : [ligne, organisations, personnes].
+  const inclusionsDe = (apercu) =>
+    apercu.lignes.map(({ ligne, champs: lus }) => [ligne, lus.inclusionsOrganisation, lus.inclusionsParticipant]);
+  // Le refus global : code, rang, organisation et nom.
+  const refusDe = (apercu) => [apercu.refusGlobal, apercu.refusGlobalLigne, apercu.refusGlobalOrganisation, apercu.refusGlobalNom];
+  // Une personne incluse : existante (id) ou créée par une ligne (ligne).
+  const existante = (id, nom) => ({ id, ligne: null, nom });
+  const creee = (ligne, nom) => ({ id: null, ligne, nom });
+
+  test('les organisations se lisent comme les conflits : « ; », « | », la fin de ligne, la virgule dans le nom, la graphie de l\u{2019}événement', () => {
+    const existants = [existant(1, 'Houle', null, 'Club des Merles')];
+    const texte = csv(
+      'nom;organisation;inclusion_organisation',
+      'Ombrelle;;"CLUB DES  merles | Société Alpha, Beta\nclub des merles;; "',
+      'Pervenche;Société Alpha, Beta;',
+    );
+    for (const mode of ['ajouter', 'mettreAJour']) {
+      const apercu = apercevoir(texte, { participants: existants, mode });
+      assert.equal(apercu.refusGlobal, null, mode);
+      assert.deepEqual(inclusionsDe(apercu), [[2, ['Club des Merles', 'Société Alpha, Beta'], null], [3, null, null]], mode);
+    }
+  });
+
+  test('sans colonne, ou sous une cellule vide ou blanche, les deux listes valent null', () => {
+    assert.deepEqual(inclusionsDe(apercevoir(csv('nom;organisation', 'Ombrelle;Club des Merles'))), [[2, null, null]]);
+    const vides = apercevoir(csv("nom;inclusions d'organisation;inclusions de participant", 'Ombrelle; ; | '));
+    assert.deepEqual(vides.association.colonnes, { nom: 0, inclusion_organisation: 1, inclusion_participant: 2 });
+    assert.deepEqual(inclusionsDe(vides), [[2, null, null]]);
+  });
+
+  test("une organisation que nul ne porte refuse le texte entier : INCLUSION_ORGANISATION_INCONNUE, son rang et le nom tel qu'écrit", () => {
+    const apercu = apercevoir(csv('nom;organisation;inclusion_organisation', 'Ombrelle;Club des Merles;', 'Pervenche;;" Société  Gamma "'));
+    assert.deepEqual(refusDe(apercu), ['INCLUSION_ORGANISATION_INCONNUE', 3, 'Société  Gamma', null]);
+    assert.deepEqual([apercu.lignes, apercu.refusees, apercu.doublons, apercu.designees], [[], [], [], []]);
+    assert.equal(apercu.association.colonnes.inclusion_organisation, 2);
+  });
+
+  test('sa propre organisation refuse le texte entier : INCLUSION_ORGANISATION_PROPRE ; en mise à jour, celle de la personne désignée', () => {
+    const propre = apercevoir(csv('nom;organisation;inclusion_organisation', 'Ombrelle;Club des Merles;club des MERLES'));
+    assert.deepEqual(refusDe(propre), ['INCLUSION_ORGANISATION_PROPRE', 2, 'club des MERLES', null]);
+    const existants = [existant(1, 'Houle', 'Iris', 'Club des Merles'), existant(2, 'Galet', null, 'Atelier Ressac')];
+    const texte = csv('nom;prenom;organisation;inclusion_organisation', 'Houle;Iris;;Club des Merles');
+    assert.deepEqual(refusDe(apercevoir(texte, { participants: existants, mode: 'mettreAJour' })), [
+      'INCLUSION_ORGANISATION_PROPRE', 2, 'Club des Merles', null,
+    ]);
+    assert.equal(apercevoir(texte, { participants: existants, mode: 'ajouter' }).refusGlobal, null);
+  });
+
+  test('une personne se nomme par son prénom puis son nom, à la clé normalisée près : un existant par son identifiant, une ligne du fichier par son rang, même plus bas', () => {
+    const existants = [existant(4, 'Ombrelle', 'Iris', null), existant(9, 'Grisaille', null, null)];
+    const texte = csv(
+      'nom;prenom;inclusion_participant',
+      'Pervenche;Théo;" iris  OMBRELLE | grisaille\nondine lacasse;iris ombrelle "',
+      'Lacasse;Ondine;Théo Pervenche',
+      'Sarcelle;;',
+    );
+    const apercu = apercevoir(texte, { participants: existants });
+    assert.equal(apercu.refusGlobal, null);
+    assert.deepEqual(inclusionsDe(apercu), [
+      [2, null, [existante(4, 'Iris Ombrelle'), existante(9, 'Grisaille'), creee(3, 'Ondine Lacasse')]],
+      [3, null, [creee(2, 'Théo Pervenche')]],
+      [4, null, null],
+    ]);
+  });
+
+  test('un nom de personne qui porte « ; » ou « | » se relit entier : le plus long assemblage que l\u{2019}import connaît', () => {
+    const existants = [existant(1, 'Lune; Soleil', 'Iris', null), existant(2, 'Lune', 'Iris', null), existant(3, 'Pré | Haut', null, null)];
+    const texte = csv('nom;inclusion_participant', 'Ombrelle;"Iris Lune; Soleil|Pré | Haut;Iris Lune"');
+    const apercu = apercevoir(texte, { participants: existants });
+    assert.equal(apercu.refusGlobal, null);
+    assert.deepEqual(inclusionsDe(apercu), [
+      [2, null, [existante(1, 'Iris Lune; Soleil'), existante(3, 'Pré | Haut'), existante(2, 'Iris Lune')]],
+    ]);
+  });
+
+  test("un nom qu'aucune personne ne porte refuse le texte entier : INCLUSION_PARTICIPANT_INCONNU, son rang et le nom tel qu'écrit", () => {
+    const existants = [existant(1, 'Ombrelle', 'Iris', null)];
+    const apercu = apercevoir(csv('nom;prenom;inclusion_participant', 'Pervenche;Théo;Iris Ombrelle', 'Lacasse;;" Ombrelle "'), {
+      participants: existants,
+    });
+    assert.deepEqual(refusDe(apercu), ['INCLUSION_PARTICIPANT_INCONNU', 3, null, 'Ombrelle']);
+    assert.deepEqual([apercu.lignes, apercu.refusees], [[], []]);
+  });
+
+  test('un nom que portent plusieurs personnes refuse le texte entier : INCLUSION_PARTICIPANT_AMBIGU ; un nom numéroté ne l\u{2019}est pas', () => {
+    const existants = [existant(1, 'Galet', 'Roger', 'Club des Merles'), existant(2, 'Galet', 'Roger', 'Atelier Ressac')];
+    const ambigu = apercevoir(csv('nom;inclusion_participant', 'Ombrelle;roger galet'), { participants: existants });
+    assert.deepEqual(refusDe(ambigu), ['INCLUSION_PARTICIPANT_AMBIGU', 2, null, 'roger galet']);
+    // Une ligne du fichier et un existant de même nom affiché : ambigu aussi.
+    const avecLigne = apercevoir(csv('nom;prenom;inclusion_participant', 'Ombrelle;Iris;Roger Galet', 'Galet;Roger;'), {
+      participants: [existants[0]],
+    });
+    assert.equal(avecLigne.refusGlobal, 'INCLUSION_PARTICIPANT_AMBIGU');
+    const numerote = [existants[0], { ...existant(2, 'Galet 01', 'Roger', 'Club des Merles'), nomNumerote: true }];
+    const relu = apercevoir(csv('nom;inclusion_participant', 'Ombrelle;Roger Galet 01 | Roger Galet'), { participants: numerote });
+    assert.deepEqual(inclusionsDe(relu), [[2, null, [existante(2, 'Roger Galet 01'), existante(1, 'Roger Galet')]]]);
+  });
+
+  test('le nom renommé par « Rendre les noms uniques » est celui que la cellule nomme', () => {
+    const texte = csv('nom;prenom;inclusion_participant', 'Galet;Roger;', 'Galet;Roger;', 'Ombrelle;Iris;Roger Galet 01');
+    assert.equal(apercevoir(texte).refusGlobal, 'INCLUSION_PARTICIPANT_INCONNU');
+    const apercu = apercevoir(texte, { noms: new Map([[3, 'Galet 01']]) });
+    assert.equal(apercu.refusGlobal, null);
+    assert.deepEqual(inclusionsDe(apercu).at(-1), [4, null, [creee(3, 'Roger Galet 01')]]);
+  });
+
+  test('la personne même de la ligne refuse le texte entier : INCLUSION_PARTICIPANT_SOI ; en mise à jour, la personne désignée', () => {
+    const soi = apercevoir(csv('nom;prenom;inclusion_participant', 'Ombrelle;Iris;IRIS OMBRELLE'));
+    assert.deepEqual(refusDe(soi), ['INCLUSION_PARTICIPANT_SOI', 2, null, 'IRIS OMBRELLE']);
+    const existants = [existant(1, 'Ombrelle', 'Iris', null)];
+    const texte = csv('nom;inclusion_participant', 'Ombrelle;Iris Ombrelle');
+    assert.deepEqual(refusDe(apercevoir(texte, { participants: existants, mode: 'mettreAJour' })), [
+      'INCLUSION_PARTICIPANT_SOI', 2, null, 'Iris Ombrelle',
+    ]);
+    // Ajoutée, la même ligne crée une autre personne, du nom « Ombrelle ».
+    assert.deepEqual(inclusionsDe(apercevoir(texte, { participants: existants })), [[2, null, [existante(1, 'Iris Ombrelle')]]]);
+  });
+
+  test('en mise à jour, une personne que la ligne met à jour compte une fois, sous le nom et le prénom que la ligne lui pose', () => {
+    const existants = [existant(1, 'Houle', null, null), existant(2, 'Ombrelle', 'Iris', null)];
+    const texte = csv('nom;prenom;inclusion_participant', 'Houle;Basile;', 'Ombrelle;;Basile Houle', 'Pervenche;Théo;Iris Ombrelle');
+    const apercu = apercevoir(texte, { participants: existants, mode: 'mettreAJour' });
+    assert.equal(apercu.refusGlobal, null);
+    assert.deepEqual(inclusionsDe(apercu), [
+      [2, null, null],
+      [3, null, [existante(1, 'Basile Houle')]],
+      [4, null, [existante(2, 'Iris Ombrelle')]],
+    ]);
+    // Le nom d'avant la mise à jour ne nomme plus personne.
+    const ancien = apercevoir(csv('nom;prenom;inclusion_participant', 'Houle;Basile;', 'Pervenche;;Houle'), {
+      participants: existants,
+      mode: 'mettreAJour',
+    });
+    assert.deepEqual(refusDe(ancien), ['INCLUSION_PARTICIPANT_INCONNU', 3, null, 'Houle']);
+  });
+
+  test('ne comptent ni les existants sous remplacer, ni une ligne refusée, ni une ligne que la mise à jour refuse', () => {
+    const existants = [existant(1, 'Ombrelle', 'Iris', null), existant(2, 'Galet', null, null), existant(3, 'Galet', null, null)];
+    const texte = csv('nom;inclusion_participant', 'Pervenche;Iris Ombrelle');
+    assert.equal(apercevoir(texte, { participants: existants, mode: 'remplacer' }).refusGlobal, 'INCLUSION_PARTICIPANT_INCONNU');
+    for (const mode of ['ajouter', 'mettreAJour']) assert.equal(apercevoir(texte, { participants: existants, mode }).refusGlobal, null, mode);
+    const refusee = apercevoir(csv('nom;prenom;exclu;inclusion_participant', 'Lacasse;Ondine;peut-être;', 'Pervenche;;;Ondine Lacasse'));
+    assert.deepEqual(refusDe(refusee), ['INCLUSION_PARTICIPANT_INCONNU', 3, null, 'Ondine Lacasse']);
+    // Galet désigne deux existants : la mise à jour refuse la ligne, qui ne
+    // crée pas « Basile Galet ».
+    const plusieurs = csv('nom;prenom;inclusion_participant', 'Galet;Basile;', 'Pervenche;;Basile Galet');
+    assert.deepEqual(refusDe(apercevoir(plusieurs, { participants: existants, mode: 'mettreAJour' })), [
+      'INCLUSION_PARTICIPANT_INCONNU', 3, null, 'Basile Galet',
+    ]);
+    assert.equal(apercevoir(plusieurs, { participants: existants, mode: 'ajouter' }).refusGlobal, null);
+  });
+
+  test('les conflits se jugent d\u{2019}abord ; puis, ligne à ligne, les organisations incluses avant les personnes', () => {
+    const conflitPlusBas = csv('nom;conflits;inclusion_participant', 'Ombrelle;;Personne Inconnue', 'Pervenche;Société Gamma;');
+    assert.equal(apercevoir(conflitPlusBas).refusGlobal, 'CONFLIT_ORGANISATION_INCONNUE');
+    const memeLigne = csv('nom;inclusion_participant;inclusion_organisation', 'Ombrelle;Personne Inconnue;Société Gamma');
+    assert.deepEqual(refusDe(apercevoir(memeLigne)), ['INCLUSION_ORGANISATION_INCONNUE', 2, 'Société Gamma', null]);
+    const lignesSuivantes = csv('nom;inclusion_participant;inclusion_organisation', 'Ombrelle;Personne Inconnue;', 'Pervenche;;Société Gamma');
+    assert.deepEqual(refusDe(apercevoir(lignesSuivantes)), ['INCLUSION_PARTICIPANT_INCONNU', 2, null, 'Personne Inconnue']);
+  });
+
+  test('un collègue de sa propre organisation se nomme ; une inclusion que contredit un conflit de la personne s\u{2019}admet', () => {
+    const texte = csv(
+      'nom;prenom;organisation;conflits;inclusion_organisation;inclusion_participant',
+      'Ombrelle;Iris;Club des Merles;Atelier Ressac;Atelier Ressac;Théo Pervenche',
+      'Pervenche;Théo;Club des Merles;;;',
+      'Lacasse;Ondine;Atelier Ressac;;;',
+    );
+    const apercu = apercevoir(texte);
+    assert.equal(apercu.refusGlobal, null);
+    assert.deepEqual(inclusionsDe(apercu)[0], [2, ['Atelier Ressac'], [creee(3, 'Théo Pervenche')]]);
   });
 });

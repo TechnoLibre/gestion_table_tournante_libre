@@ -38,7 +38,7 @@ import {
   placeDe,
 } from './priorites.js';
 
-const [ECART, EXCEDENT, CUMULEES, HORS_OBJECTIF, REPETEES, ANIMATEURS, REDONDANCE, CONFLITS] = CRITERES;
+const [ECART, EXCEDENT, CUMULEES, HORS_OBJECTIF, REPETEES, ANIMATEURS, REDONDANCE, CONFLITS, INCLUSIONS] = CRITERES;
 
 // Une liste écrite palier par palier : chaque palier, ses critères et leurs
 // poids, [nom, poids] ou nom seul au poids 1.
@@ -80,7 +80,7 @@ describe('l’ordre du registre et l’ordre par défaut, lus par l’applicatio
     assert.deepEqual([...CRITERES_DU_REGISTRE], [...CRITERES]);
     assert.deepEqual(
       LISTE_PAR_DEFAUT,
-      liste([CONFLITS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [HORS_OBJECTIF], [ANIMATEURS], [REDONDANCE]),
+      liste([CONFLITS], [INCLUSIONS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [HORS_OBJECTIF], [ANIMATEURS], [REDONDANCE]),
     );
     assert.deepEqual(LISTE_PAR_DEFAUT, structuredClone(PRIORITES_PAR_DEFAUT));
     assert.deepEqual(LISTE_PAR_DEFAUT, priorites({ reglages: {} }));
@@ -113,10 +113,10 @@ describe('les quatre gestes : la liste que chacun écrit (§ 5.7, A12)', () => {
 
   test('joindre : le critère rejoint le palier du dessus, rangé dans l’ordre du registre, au poids 1 ; un palier vidé disparaît', () => {
     const l = parDefaut();
-    // La redondance rejoint les animateurs : sept paliers, le dernier rangé.
+    // La redondance rejoint les animateurs : huit paliers, le dernier rangé.
     assert.deepEqual(
       listeApres(l, 'joindrePalier', REDONDANCE),
-      liste([CONFLITS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [HORS_OBJECTIF], [ANIMATEURS, REDONDANCE]),
+      liste([CONFLITS], [INCLUSIONS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [HORS_OBJECTIF], [ANIMATEURS, REDONDANCE]),
     );
     // Un critère d'un palier partagé le quitte seul ; son ancien compagnon,
     // seul désormais, revient au poids 1.
@@ -140,18 +140,18 @@ describe('les quatre gestes : la liste que chacun écrit (§ 5.7, A12)', () => {
       listeApres(partage, 'separerPalier', CUMULEES),
       liste([ECART], [[EXCEDENT, 2], [HORS_OBJECTIF, 9]], [CUMULEES], [REPETEES], [ANIMATEURS], [REDONDANCE]),
     );
-    const deux = liste([CONFLITS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [[HORS_OBJECTIF, 2], [ANIMATEURS, 5]], [REDONDANCE]);
+    const deux = liste([CONFLITS], [INCLUSIONS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [[HORS_OBJECTIF, 2], [ANIMATEURS, 5]], [REDONDANCE]);
     assert.deepEqual(listeApres(deux, 'separerPalier', ANIMATEURS), parDefaut());
     // Séparé, le premier passe sous son ancien compagnon.
     assert.deepEqual(
       listeApres(deux, 'separerPalier', HORS_OBJECTIF),
-      liste([CONFLITS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [ANIMATEURS], [HORS_OBJECTIF], [REDONDANCE]),
+      liste([CONFLITS], [INCLUSIONS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [ANIMATEURS], [HORS_OBJECTIF], [REDONDANCE]),
     );
     assert.equal(listeApres(parDefaut(), 'separerPalier', EXCEDENT), null);
   });
 
   test('chaque liste écrite range chaque palier dans l’ordre du registre, poids 1 pour un critère seul ; la liste reçue ne change pas', () => {
-    const partage = liste([ECART], [[REDONDANCE, 6], [EXCEDENT, 2]], [CUMULEES], [HORS_OBJECTIF], [REPETEES], [ANIMATEURS], [CONFLITS]);
+    const partage = liste([ECART], [[REDONDANCE, 6], [EXCEDENT, 2]], [CUMULEES], [HORS_OBJECTIF], [REPETEES], [ANIMATEURS], [CONFLITS], [INCLUSIONS]);
     const avant = structuredClone(partage);
     for (const critere of CRITERES) {
       for (const geste of GESTES) {
@@ -194,16 +194,18 @@ describe('les gestes offerts (§ 5.7, A12, D8, D23)', () => {
       assert.ok(!gestesOfferts(l, HORS_OBJECTIF, admiseSous(mode)).includes('joindrePalier'), mode);
       // La redondance suit les animateurs, qui partagent leur palier.
       assert.ok(gestesOfferts(l, REDONDANCE, admiseSous(mode)).includes('joindrePalier'), mode);
-      // Le conflit d'organisation est seul à son palier, et l'excédent le
-      // suit : ni l'un ni l'autre ne se joint.
+      // Le conflit d'organisation et les inclusions sont seuls à leur
+      // palier, et l'excédent les suit : aucun des trois ne se joint.
       assert.ok(!gestesOfferts(l, CONFLITS, admiseSous(mode)).includes('joindrePalier'), mode);
+      assert.ok(!gestesOfferts(l, INCLUSIONS, admiseSous(mode)).includes('joindrePalier'), mode);
       assert.ok(!gestesOfferts(l, EXCEDENT, admiseSous(mode)).includes('joindrePalier'), mode);
       assert.ok(gestesOfferts(l, CONFLITS, admiseSous(mode)).includes('descendreCritere'), mode);
+      assert.ok(gestesOfferts(l, INCLUSIONS, admiseSous(mode)).includes('monterCritere'), mode);
     }
   });
 
   test('rouge : « joindre » n’est pas offert aux tours hors objectif sous « chacun » et « minimum », ni au critère qui les suit ; sous « places », il l’est', () => {
-    const l = liste([ECART], [EXCEDENT], [CUMULEES], [HORS_OBJECTIF], [ANIMATEURS], [REPETEES], [REDONDANCE], [CONFLITS]);
+    const l = liste([ECART], [EXCEDENT], [CUMULEES], [HORS_OBJECTIF], [ANIMATEURS], [REPETEES], [REDONDANCE], [CONFLITS], [INCLUSIONS]);
     for (const mode of ['chacun', 'minimum']) {
       assert.ok(!gestesOfferts(l, HORS_OBJECTIF, admiseSous(mode)).includes('joindrePalier'), mode);
       assert.ok(!gestesOfferts(l, ANIMATEURS, admiseSous(mode)).includes('joindrePalier'), mode);
@@ -354,7 +356,7 @@ describe('l’explication de chaque critère, l’infobulle de son nom (§ 5.7, 
     const noms = nomsSous('mobilier.critere.');
     assert.deepEqual(nomsSous('generation.priorites.explication.'), noms);
     assert.deepEqual(noms, [...CRITERES_DU_REGISTRE].sort());
-    assert.equal(noms.length, 8);
+    assert.equal(noms.length, 9);
   });
 
   test('chaque explication est un texte à elle, de deux phrases au moins, sans le mot que seul le libellé d’un mode porte (D22)', () => {
@@ -382,6 +384,7 @@ describe('l’explication de chaque critère, l’infobulle de son nom (§ 5.7, 
     ['animateursNonRencontres', ['animateursNonRencontres']],
     ['redondance', ['totalRedondance']],
     ['conflitsOrganisation', ['conflitsOrganisation']],
+    ['inclusionsNonSatisfaites', ['inclusionsNonSatisfaites']],
   ]);
 
   test('chaque explication nomme, entre guillemets, le libellé courant de la colonne des propositions qui montre le critère', () => {

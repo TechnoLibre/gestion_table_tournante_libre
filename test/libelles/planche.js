@@ -19,7 +19,7 @@ export const EXEMPLES = [
       remede: { geste: 'ouvrirSection', section: 'propositions' },
     },
   ],
-  ['PLANCHE_TROP_DE_TOURS', { tours: 40, remede: null }],
+  ['PLANCHE_TROP_DE_TOURS', { tours: 40, lignesLongues: false, remede: null }],
   ['PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse', remede: { geste: 'ouvrirSection', section: 'participants' } }],
   [
     'PLANCHE_NON_ECRITE',
@@ -31,9 +31,26 @@ export const EXEMPLES = [
       remede: { geste: 'enregistrerSous' },
     },
   ],
+  // L'image des badges
+  ['ENTREE_CHANGER_IMAGE_BADGES', { active: true, effet: null, position: null }],
+  ['IMAGE_BADGES_NON_ECRITE', { chemin: `logo/${'ab'.repeat(32)}.png`, dossier: 'E:\\data\\Soirée des Lucioles', cause: 'EROFS', remede: null }],
 ];
 
 export const TEXTES = [
+  // L'entrée de l'image des badges : ce qui change, dans l'ordre du champ.
+  ['ENTREE_CHANGER_IMAGE_BADGES', { active: true, effet: null, position: null }, 'Image des badges : case cochée'],
+  ['ENTREE_CHANGER_IMAGE_BADGES', { active: null, effet: 'remplace', position: null }, 'Image des badges : image remplacée'],
+  [
+    'ENTREE_CHANGER_IMAGE_BADGES',
+    { active: false, effet: 'retire', position: 'centre' },
+    'Image des badges : case décochée, image retirée, au centre',
+  ],
+  [
+    'IMAGE_BADGES_NON_ECRITE',
+    { chemin: `logo/${'ab'.repeat(32)}.png`, dossier: 'E:\\data\\Soirée des Lucioles', cause: null },
+    `L'image des badges n'a pas pu s'écrire : « logo/${'ab'.repeat(32)}.png » dans le dossier « E:\\data\\Soirée des Lucioles ». ` +
+      "Rien n'est enregistré : les badges gardent leur image d'avant, ou aucune.",
+  ],
   // Une ligne de tour : la place, « pas de table » en réserve, « absente » à
   // un tour d'absence, où ni table, ni siège, ni titre ne s'écrivent.
   ['planche.absente', {}, 'absente'],
@@ -54,6 +71,45 @@ export const TEXTES = [
     'Tour 1 \u{2014} table 5 (Terrasse), siège 3 \u{2014} animation',
   ],
   ['planche.touteLaSoiree', { table: 13, libelleTable: 'Verrière', siege: null, titre: null }, 'Toute la soirée \u{2014} table 13 (Verrière)'],
+  // La liste des badges en CSV d'une colonne par tour : la tête d'un tour
+  // sans nom, et la place seule sous elle.
+  ['planche.liste.tour', { tour: 3 }, 'Tour 3'],
+  [
+    'planche.liste.place',
+    { tour: 1, table: 5, libelleTable: 'Terrasse', siege: 3, titre: 'animation', absente: false },
+    'table 5 (Terrasse), siège 3 \u{2014} animation',
+  ],
+  ['planche.liste.place', { tour: 2, table: null, siege: null, titre: null, absente: false }, 'pas de table'],
+  ['planche.liste.place', { tour: 2, table: null, siege: null, titre: null, absente: true }, 'absente'],
+  // Des lignes de tour repliées qui débordent : le refus nomme la personne
+  // et ce qui se raccourcit, plutôt que le nombre de tours.
+  [
+    'PLANCHE_TROP_DE_TOURS',
+    {
+      tours: 8,
+      lignesLongues: true,
+      participant: 4,
+      personne: 'Iris Ombrelle',
+      remede: { geste: 'ouvrirSection', section: 'tables' },
+    },
+    'Les lignes de tour de Iris Ombrelle, repliées par un nom de tour, un libellé de table ou un titre long, ne tiennent pas ' +
+      'sur son badge, même sur deux colonnes au plus petit corps : raccourcissez ce nom, ce libellé ou ce titre. ' +
+      "La planche n'est pas produite, plutôt qu'une liste de tours tronquée.",
+  ],
+  // L'organisation en gros qui ne tient pas : le refus la nomme, et dit
+  // les deux remèdes, la raccourcir ou ne plus la mettre en gros.
+  [
+    'PLANCHE_NOM_TROP_LONG',
+    {
+      organisation: true,
+      participant: 4,
+      personne: 'Iris Ombrelle',
+      remede: { geste: 'ouvrirSection', section: 'participants' },
+    },
+    "L'organisation de Iris Ombrelle, en gros au-dessus du nom, ne tient pas sur son badge, même repliée sur trois " +
+      "lignes au plus petit corps : raccourcissez-la, ou décochez la case qui met l'organisation en gros. " +
+      'La planche ne se produit pas, plutôt que de tronquer ses tours.',
+  ],
   // L'écriture refusée nomme le fichier qui manque ; la feuille de contrôle,
   // aussi les cartes déjà déposées.
   [

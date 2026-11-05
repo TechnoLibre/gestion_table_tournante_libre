@@ -47,6 +47,13 @@
 // badge sort tel qu'il serait sans logo. La feuille de contrôle ne porte
 // aucune image.
 //
+// L'image des badges arrive de même en octets PNG, avec sa position
+// (imageBadges) : la mise en page en reçoit le rapport et la position, et
+// rend sa boîte sur chaque badge où elle trouve sa place. Elle s'embarque
+// une fois pour toute la planche, quand un badge au moins la pose, et se
+// peint comme un logo, juste après lui. Une image que pdf-lib ne décode pas
+// ne s'embarque pas : tous les badges se remettent en page sans elle.
+//
 // Les octets ne dépendent que des entrées : pdf-lib tire les suffixes de ses
 // noms de ressources d'un générateur à graine fixe, créé avec le document ;
 // la date du document vient de l'horodatage du placement, jamais d'une
@@ -89,11 +96,12 @@ import { ErreurPng, lirePng } from './png.js';
  * src/application/planche.js, que src/pdf n'importe pas.
  *
  * @typedef {Object} ModelePlanche
- * @property {Array<{textes: {nom: string, lignes: string[], abregeables?: Array<Array<{debut: number, fin: number}>>,
+ * @property {Array<{textes: {nom: string, nomEnBlanc?: boolean, organisationEnGros?: boolean, lignes: string[],
  *            organisation: string|null, pied: string[], piedReduit: string[]}, logo?: string|null}>} badges
- *           dans l'ordre de la pile ; abregeables, les textes libres de chaque
- *           ligne de tour, que la mise en page abrège au plancher ; logo, le
- *           chemin du logo de la personne, absent ou null sans logo
+ *           dans l'ordre de la pile ; nomEnBlanc, vrai pour un nom que la
+ *           mise en page mesure sans le poser ; organisationEnGros, vrai pour
+ *           une organisation que la mise en page pose à la place du nom ;
+ *           logo, le chemin du logo de la personne, absent ou null sans logo
  * @property {string|null} horodatage   l'horodatage du placement ; null : inconnu
  * @property {boolean} brouillon
  */
@@ -206,6 +214,29 @@ function logosLus(logosParticipants) {
   return lus;
 }
 
+// Les positions de l'image des badges, que la mise en page connaît.
+const POSITIONS_IMAGE = new Set(['haut', 'centre', 'bas']);
+
+// L'image des badges demandée, contrôlée : null, ou {octets, position}, les
+// octets d'un PNG bien formé et l'une des positions. Rend les octets, la
+// position et la demande que la mise en page reçoit, {rapport, position}.
+// TypeError pour une autre forme, et pour des octets que lirePng refuse.
+function imageLue(imageBadges) {
+  if (imageBadges === null) return null;
+  if (!(imageBadges?.octets instanceof Uint8Array) || !POSITIONS_IMAGE.has(imageBadges.position)) {
+    throw new TypeError('imageBadges : {octets, position} attendu, les octets d\'un PNG');
+  }
+  let dimensions;
+  try {
+    dimensions = lirePng(imageBadges.octets);
+  } catch (erreur) {
+    if (erreur instanceof ErreurPng) throw new TypeError(`imageBadges : pas un PNG, ${erreur.message}`);
+    throw erreur;
+  }
+  const { octets, position } = imageBadges;
+  return { octets, demande: { rapport: dimensions.largeur / dimensions.hauteur, position } };
+}
+
 // Le logo du participant qu'un badge demande à la mise en page : {rapport}
 // quand la carte porte son chemin, null sans logo ou pour un chemin que la
 // carte ne porte pas.
@@ -245,7 +276,9 @@ async function documentAvecPolices(polices) {
 }
 
 // Les textes d'un badge, dans l'ordre où ses absents se nomment : les siens,
-// puis celui du pied TechnoLibre demandé, que chaque badge peut porter.
+// puis celui du pied TechnoLibre demandé, que chaque badge peut porter. Un
+// nom laissé en blanc en est : la feuille de contrôle l'écrit entier dans
+// la liste d'une réédition, ses absents par leur point de code.
 const textesDuBadge = ({ textes }, promotion) => [
   textes.nom,
   ...(textes.organisation === null ? [] : [textes.organisation]),
@@ -270,49 +303,72 @@ const textesDuBadge = ({ textes }, promotion) => [
  * @param {Map<string, Uint8Array>|null} [entrees.logosParticipants]   les
  *        octets PNG des logos des participants, par chemin, celui que porte
  *        le badge ; null par défaut, aucun logo
+ * @param {{octets: Uint8Array, position: 'haut'|'centre'|'bas'}|null} [entrees.imageBadges]
+ *        l'image de tous les badges : les octets de son PNG et sa position ;
+ *        null par défaut, aucune image
  * @returns {Promise<{refus: null | {code: string, details: object, rang: number}, absents: string[],
- *   sansTechnolibre: number, logosParticipants: {poses: number, sansPlace: number}}>}
+ *   sansTechnolibre: number, logosParticipants: {poses: number, sansPlace: number},
+ *   imageBadges: null | {posees: number, sansPlace: number}}>}
  *   refus : le premier badge que la mise en page refuse, rang étant son
  *   indice dans modele.badges ; src/pdf ne connaît pas la personne, et
  *   l'appelant complète les détails. absents : les caractères sans glyphe de
  *   tous les textes des badges, celui du pied TechnoLibre demandé compris,
- *   une fois chacun, dans l'ordre de première rencontre, chaque badge lu
- *   avant le pied TechnoLibre qu'il porte. sansTechnolibre : le nombre de
- *   badges mis en page d'où le pied TechnoLibre demandé se retire, faute de
- *   place ; 0 sans pied TechnoLibre. logosParticipants : parmi les badges mis
- *   en page dont la carte porte le logo, ceux où il se pose et ceux où il ne
- *   trouve pas de place ; un badge dont la carte ne porte pas le chemin n'est
- *   compté ni l'un ni l'autre.
+ *   puis du nom de l'événement, que la feuille de contrôle écrit même quand
+ *   aucun badge ne le porte ; une fois chacun, dans l'ordre de première
+ *   rencontre, chaque badge lu avant le pied TechnoLibre qu'il porte, le nom
+ *   de l'événement en dernier. sansTechnolibre : le nombre de badges mis en
+ *   page d'où le pied TechnoLibre demandé se retire, faute de place ; 0 sans
+ *   pied TechnoLibre. logosParticipants : parmi les badges mis en page dont
+ *   la carte porte le logo, ceux où il se pose et ceux où il ne trouve pas
+ *   de place ; un badge dont la carte ne porte pas le chemin n'est compté ni
+ *   l'un ni l'autre. imageBadges : null sans image demandée ; sinon, parmi
+ *   les badges mis en page, ceux où elle se pose et ceux où elle ne trouve
+ *   pas de place.
  * @throws {TypeError} un modèle sans badges, des polices qui ne sont pas des
- *         octets, un modèle de badge inconnu, un pied TechnoLibre ou une
- *         carte de logos mal formés
+ *         octets, un modèle de badge inconnu, un pied TechnoLibre, une carte
+ *         de logos ou une image des badges mal formés
  */
-export async function analyserPlanche({ modele, polices, modeleBadge = 'a6', technolibre = null, logosParticipants = null }) {
+export async function analyserPlanche({ modele, polices, modeleBadge = 'a6', technolibre = null, logosParticipants = null, imageBadges = null }) {
   controlerModeleEtPolices(modele, polices, modeleBadge);
   const promotion = technolibreLu(technolibre);
   const logos = logosLus(logosParticipants);
+  const image = imageLue(imageBadges);
   const { metriques } = await documentAvecPolices(polices);
   let refus = null;
   let sansTechnolibre = 0;
   const comptesLogos = { poses: 0, sansPlace: 0 };
+  const comptesImage = { posees: 0, sansPlace: 0 };
   const absents = [];
   const vus = new Set();
-  modele.badges.forEach((badge, rang) => {
-    if (refus === null) {
-      const page = mettreEnPage(badge.textes, metriques, modeleBadge, promotion?.demande ?? null, logoDemande(badge, logos));
-      if (page.refus !== undefined) refus = { ...page.refus, rang };
-      else {
-        if (page.technolibre !== null && page.technolibre.corps === null) sansTechnolibre += 1;
-        if (page.logoParticipant !== null) comptesLogos[page.logoParticipant.boite === null ? 'sansPlace' : 'poses'] += 1;
-      }
-    }
-    for (const caractere of metriques.absents(textesDuBadge(badge, promotion).join(''))) {
+  // Ajoute aux absents ceux des textes donnés, une fois chacun.
+  const nommer = (textes) => {
+    for (const caractere of metriques.absents(textes.join(''))) {
       if (vus.has(caractere)) continue;
       vus.add(caractere);
       absents.push(caractere);
     }
+  };
+  modele.badges.forEach((badge, rang) => {
+    if (refus === null) {
+      const page = mettreEnPage(
+        badge.textes,
+        metriques,
+        modeleBadge,
+        promotion?.demande ?? null,
+        logoDemande(badge, logos),
+        image?.demande ?? null,
+      );
+      if (page.refus !== undefined) refus = { ...page.refus, rang };
+      else {
+        if (page.technolibre !== null && page.technolibre.corps === null) sansTechnolibre += 1;
+        if (page.logoParticipant !== null) comptesLogos[page.logoParticipant.boite === null ? 'sansPlace' : 'poses'] += 1;
+        if (page.imageBadges !== null) comptesImage[page.imageBadges.boite === null ? 'sansPlace' : 'posees'] += 1;
+      }
+    }
+    nommer(textesDuBadge(badge, promotion));
   });
-  return { refus, absents, sansTechnolibre, logosParticipants: comptesLogos };
+  nommer([modele.evenement.nom]);
+  return { refus, absents, sansTechnolibre, logosParticipants: comptesLogos, imageBadges: image === null ? null : comptesImage };
 }
 
 // Un repère : la position, en points du repère PDF (origine en bas à
@@ -593,6 +649,12 @@ function poserControle(pdf, { controle, papier, polices, metriques, filigrane, c
  * badges se mettent en page sans logo. Une planche où aucun logo ne se pose
  * a les octets de la même planche sans carte de logos.
  *
+ * L'image des badges se pose sur chaque badge où la mise en page lui
+ * trouve place, après le logo du participant et avant le filigrane ; elle
+ * s'embarque une fois. Refusée par pdf-lib, elle ne s'embarque pas, et tous
+ * les badges se mettent en page sans elle. Une planche où elle ne se pose
+ * nulle part a les octets de la même planche sans image.
+ *
  * La boîte de média est celle du papier ; ni CropBox ni UserUnit. /Info ne
  * porte que CreationDate, la date de l'horodatage du placement, décalage
  * local gardé, et n'existe pas quand l'horodatage est inconnu.
@@ -612,11 +674,14 @@ function poserControle(pdf, { controle, papier, polices, metriques, filigrane, c
  * @param {Map<string, Uint8Array>|null} [entrees.logosParticipants]   les
  *        logos des participants, comme analyserPlanche les reçoit ; null par
  *        défaut
+ * @param {{octets: Uint8Array, position: 'haut'|'centre'|'bas'}|null} [entrees.imageBadges]
+ *        l'image de tous les badges, comme analyserPlanche la reçoit ; null
+ *        par défaut
  * @returns {Promise<Uint8Array>}
  * @throws {TypeError} une entrée hors de son domaine, un papier que le
  *         modèle de badge n'admet pas, un horodatage d'une autre forme, un
- *         brouillon sans le mot de son filigrane, un pied TechnoLibre ou une
- *         carte de logos mal formés
+ *         brouillon sans le mot de son filigrane, un pied TechnoLibre, une
+ *         carte de logos ou une image des badges mal formés
  * @throws {RangeError} un badge que la mise en page refuse : analyserPlanche
  *         le dit avant de produire
  */
@@ -630,19 +695,34 @@ export async function produirePlanche({
   modeleBadge = 'a6',
   technolibre = null,
   logosParticipants = null,
+  imageBadges = null,
 }) {
   const date = controlerDocument({ modele, papier, polices, controle, filigrane, modeleBadge });
   if (!IMPOSITIONS.has(imposition)) throw new TypeError(`imposition inconnue : ${JSON.stringify(imposition)}`);
   const promotion = technolibreLu(technolibre);
   const logos = logosLus(logosParticipants);
+  const image = imageLue(imageBadges);
 
   const { pdf, regulier, gras, metriques } = await documentAvecPolices(polices);
+  // L'image des badges que la mise en page reçoit, null quand pdf-lib la
+  // refuse : ses badges se remettent alors en page sans elle.
+  let demandeImage = image?.demande ?? null;
   const mettre = (badge, rang, logo) => {
-    const mise = mettreEnPage(badge.textes, metriques, modeleBadge, promotion?.demande ?? null, logo);
+    const mise = mettreEnPage(badge.textes, metriques, modeleBadge, promotion?.demande ?? null, logo, demandeImage);
     if (mise.refus !== undefined) throw new RangeError(`badge ${rang} refusé par la mise en page : ${mise.refus.code}`);
     return mise;
   };
   let mises = modele.badges.map((badge, rang) => mettre(badge, rang, logoDemande(badge, logos)));
+  // L'image des badges, embarquée une fois, quand un badge au moins la pose.
+  let imageEmbarquee = null;
+  if (mises.some((mise) => (mise.imageBadges?.boite ?? null) !== null)) {
+    try {
+      imageEmbarquee = await pdf.embedPng(image.octets);
+    } catch {
+      demandeImage = null;
+      mises = modele.badges.map((badge, rang) => mettre(badge, rang, logoDemande(badge, logos)));
+    }
+  }
   // Les images des logos posés, embarquées une fois chacune, au premier
   // badge de la pile qui les pose. pdf-lib décode l'image en l'embarquant :
   // une image qu'il refuse ne s'embarque pas, et ses badges se remettent en
@@ -692,6 +772,8 @@ export async function produirePlanche({
       if (logo !== null) poserLogo(page, promotion.logo, logo, versLaPage);
       const boite = mises[indice].logoParticipant?.boite ?? null;
       if (boite !== null) poserImage(page, images.get(modele.badges[indice].logo), boite, versLaPage, repere);
+      const boiteImage = mises[indice].imageBadges?.boite ?? null;
+      if (boiteImage !== null) poserImage(page, imageEmbarquee, boiteImage, versLaPage, repere);
       if (marque !== null) poserFiligrane(page, { ...marque, metriques }, cadreDroit, repere);
     });
   }

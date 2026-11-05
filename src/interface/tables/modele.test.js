@@ -28,6 +28,7 @@ import {
   enonceDefaut,
   etatTable,
   groupesParOrganisation,
+  lireNomTour,
   personnesPourAnimation,
   placesLibresPourAnimer,
   refusDeCommande,
@@ -242,6 +243,30 @@ describe('ce que nomment les fenêtres (§ 6.1, § 6.2, § 2.1 étape 5)', () =>
       t('tables.touchee.proposition', { id: 2 }),
       t('tables.touchee.retenu'),
     ]);
+  });
+
+  test('elementsTours, sous des tours nommés : la réservation nomme son tour, et le nom d’un tour retiré s’annonce, même seul', () => {
+    const charge = chargeDe({ tables: [{ id: 1, numero: 1 }, { id: 2, numero: 5 }], n: 4, tours: 4, reservations: [resa(1, 2, null, 4)] });
+    charge.evenement.nomsTours = [null, null, 'Fromages', 'Dessert'];
+    const textes = elementsTours(charge, bilanTours(charge, 2)).map(({ cle, details }) => t(cle, details));
+    assert.deepEqual(textes, [
+      'Iris Ombrelle : réservation à la table 5 au tour 4 (Dessert), détruite',
+      'Tour 3 : nom « Fromages », retiré',
+      'Tour 4 : nom « Dessert », retiré',
+    ]);
+    // Rien d'autre ne se perd que le nom : la baisse s'annonce quand même.
+    const seul = chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 });
+    seul.evenement.nomsTours = [null, null, 'Dessert'];
+    assert.equal(annonceTours(bilanTours(seul, 2), 3, 2), true);
+  });
+
+  test('lireNomTour : en NFC, sans blancs de bord ; le nom par défaut du tour se lit comme le champ vide', () => {
+    assert.deepEqual(lireNomTour(2)('  Entre\u{0301}e '), { valeur: 'Entr\u{00E9}e' });
+    assert.deepEqual(lireNomTour(2)(' Tour 2 '), { valeur: '' });
+    assert.deepEqual(lireNomTour(3)('Tour 2'), { valeur: 'Tour 2' });
+    assert.deepEqual(lireNomTour(1)(''), { valeur: '' });
+    assert.equal(t('tables.tours.nomParDefaut', { tour: 3 }), 'Tour 3');
+    assert.equal(t('tables.tours.nom', { tour: 3 }), 'Nom du tour 3');
   });
 
   test('annonceTours : rien à annoncer sans réservation détruite ni placement touché', () => {
@@ -587,7 +612,7 @@ describe('les animateurs d’une table et la fenêtre d’ajout (§ 2.1 étape 6
     charge.participants[6].presence = [1, 2];
     const de = (id) => personnesPourAnimation(charge, 1, '').find(({ participant }) => participant === id);
     // Ondine, réservée au tour 2, absente aux tours 1 et 3.
-    assert.deepEqual(de(3).statut, { cle: 'tables.animateurs.statut.absente', details: { tours: [1, 3] } });
+    assert.deepEqual(de(3).statut, { cle: 'tables.animateurs.statut.absente', details: { tours: [1, 3], nomsTours: [null, null, null] } });
     assert.equal(t(de(3).statut.cle, de(3).statut.details), 'Absence aux tours 1 et 3');
     assert.equal(t(de(6).statut.cle, de(6).statut.details), 'Absence au tour 3');
     assert.deepEqual([de(3).choisissable, de(6).choisissable, de(6).anime], [false, false, false]);
@@ -672,12 +697,31 @@ describe('les animateurs d’une table et la fenêtre d’ajout (§ 2.1 étape 6
     assert.equal(t('tables.animateurs.fenetre', { numero: 5 }), 'Ajouter des animateurs à la table 5');
     assert.equal(t('tables.animateurs.recherche'), 'Rechercher (nom, prénom, organisation)');
     assert.equal(t('tables.animateurs.grouper'), 'Grouper par organisation');
-    assert.equal(t('tables.animateurs.libelle'), 'Titre');
+    assert.equal(t('tables.animateurs.libelle'), 'Titre pour les personnes sans titre pressenti');
     assert.equal(t('tables.animateurs.confirmer'), 'Ajouter');
     assert.equal(t('tables.animateurs.annuler'), 'Annuler');
     assert.equal(t('tables.animateurs.aucunePersonne'), 'Aucune personne ne correspond à la recherche.');
     assert.equal(t('tables.animateurs.compte', { choisies: 2, libres: 3 }), '2 choisies \u{00B7} 3 places libres à cette table');
     assert.equal(t('tables.animateurs.compte', { choisies: 1, libres: 1 }), '1 choisie \u{00B7} 1 place libre à cette table');
     assert.equal(t('tables.animateurs.compte', { choisies: 0, libres: 0 }), '0 choisie \u{00B7} 0 place libre à cette table');
+  });
+
+  test('les phrases des animateurs à la création des tables, mot pour mot', () => {
+    assert.equal(
+      t('tables.manque.animateurs', { designees: 2, restantes: 0 }),
+      "2 personnes à l'animation réservée y seront désignées animatrices.",
+    );
+    assert.equal(
+      t('tables.manque.animateurs', { designees: 1, restantes: 3 }),
+      "1 personne à l'animation réservée y sera désignée animatrice ; 3 resteront à désigner.",
+    );
+    assert.equal(
+      t('tables.manque.animateurs', { designees: 0, restantes: 1 }),
+      "Aucune personne à l'animation réservée n'y sera désignée ; 1 restera à désigner.",
+    );
+    assert.equal(t('tables.manque.fait', { premier: 3, dernier: 5 }), 'Tables 3 à 5 ajoutées.');
+    assert.equal(t('tables.manque.fait', { premier: 3, dernier: 5, animateurs: 0 }), 'Tables 3 à 5 ajoutées.');
+    assert.equal(t('tables.manque.fait', { premier: 3, dernier: 4, animateurs: 2 }), 'Tables 3 et 4 ajoutées, 2 animateurs désignés.');
+    assert.equal(t('tables.manque.fait', { premier: 7, dernier: 7, animateurs: 1 }), 'Table 7 ajoutée, 1 animateur désigné.');
   });
 });

@@ -8,13 +8,13 @@
 // demi-seconde, et retirée à la fin, réussie ou non. Son apparition est une
 // animation d'opacité en un seul pas, son signe tourne, sauf sous la
 // préférence de mouvement réduit. Montée par App, elle est là quand une
-// opération longue part — ouvrir un événement, charger une démonstration,
-// défaire ou refaire, au clavier comme au clic, revenir à un instant,
-// appliquer un import, le bilan de « Remplacer », l'aperçu, la planche de
-// badges, écrire ailleurs, la fin d'une génération —, et jamais pour un
-// geste ordinaire du plan. Le
-// curseur d'attente couvre l'application tant qu'elle est là, et un geste
-// fait pendant l'attente de sa peinture atteint la séance après
+// opération longue part — ouvrir un événement ou une version de secours,
+// charger une démonstration, défaire ou refaire, au clavier comme au clic,
+// revenir à un instant, appliquer un import, le bilan de « Remplacer »,
+// l'ouverture de la section de l'impression, la planche de badges, écrire
+// ailleurs, la fin d'une génération —, et jamais pour un geste ordinaire du
+// plan. Le curseur d'attente couvre l'application tant qu'elle est là, et
+// un geste fait pendant l'attente de sa peinture atteint la séance après
 // l'opération qui l'attend.
 //
 // Le projet navigateur emploie expect, et test et describe de Vitest
@@ -33,6 +33,7 @@ import {
   attendre,
   chargeBloquee,
   chargePrincipale,
+  chargeRetenuAjuste,
   chargerResumes,
   cliquer,
   creerContexte,
@@ -351,6 +352,40 @@ describe('la pastille d’activité dans l’application : les opérations longu
     expect(m.racine.querySelector('[data-ecran="evenement"]')).toBeNull();
   });
 
+  test('ouvrir la version précédente depuis la récupération : la pastille est peinte quand la séance ouvre le secours, puis retirée sur l’écran de l’événement', async () => {
+    contexte = creerContexte();
+    const sain = fichierEtat(chargePrincipale());
+    const tronque = { ...sain, texte: sain.texte.slice(0, Math.floor(sain.texte.length / 2)) };
+    const m = await contexte.monter({ fichiers: [tronque, { ...sain, chemin: `${BASE}/${BASE}${SUFFIXES.precedent}` }] });
+    await chargerResumes(m);
+    await cliquer(m, `[data-evenement="${BASE}/${BASE}"] [data-commande="ouvrir"]`);
+    await attendre('la récupération', () => m.racine.querySelector('[data-ecran="recuperation"]'));
+    await attendre('le retrait de la pastille', () => m.racine.querySelector('[data-activite]') === null);
+    const releves = guetter(m, m.seance, 'ouvrirSecours');
+    await cliquer(m, '[data-secours="precedent"] [data-commande]');
+    await attendre('l’écran de l’événement', () => releves.fini && m.racine.querySelector('[data-ecran="evenement"]'));
+    expect(releves.vues).toEqual([PEINTE]);
+    await attendre('le retrait de la pastille', () => m.racine.querySelector('[data-activite]') === null);
+  });
+
+  test('le remède « Ouvrir la version précédente » d’un retenu fautif : la pastille est peinte quand la séance ouvre le secours', async () => {
+    contexte = creerContexte();
+    const retenue = chargeRetenuAjuste();
+    const sain = fichierEtat(retenue);
+    retenue.retenu.placement.pop();
+    const fichiers = [fichierEtat(retenue), { ...sain, chemin: `${BASE}/${BASE}${SUFFIXES.precedent}` }];
+    const m = await contexte.monter({ fichiers });
+    await chargerResumes(m);
+    await cliquer(m, `[data-evenement="${BASE}/${BASE}"] [data-commande="ouvrir"]`);
+    const remede = await attendre('le remède', () => m.racine.querySelector('[data-avertissement="RETENU_FAUTIF"] [data-commande="ouvrirSecours"]'));
+    await attendre('le retrait de la pastille', () => m.racine.querySelector('[data-activite]') === null);
+    const releves = guetter(m, m.seance, 'ouvrirSecours');
+    remede.click();
+    await attendre('la fin de l’ouverture', () => releves.fini);
+    expect(releves.vues).toEqual([PEINTE]);
+    await attendre('le retrait de la pastille', () => m.racine.querySelector('[data-activite]') === null);
+  });
+
   test('charger une démonstration : la pastille est peinte quand la façade charge', async () => {
     contexte = creerContexte();
     const m = await contexte.monter();
@@ -478,12 +513,12 @@ describe('la pastille d’activité dans l’application : les opérations longu
     expect(refaits.vues).toEqual([PEINTE]);
   });
 
-  test('« Imprimer… » : la pastille est peinte quand l’aperçu s’ouvre', async () => {
+  test('l’onglet « Impression » : la pastille est peinte quand la section s’ouvre, l’aperçu monté sous elle', async () => {
     contexte = creerContexte();
     const m = await ouvrirEvenement(contexte, chargePrincipale(), { section: 'tables', options: { fichiers: [fichierReglages('A4')] } });
-    const releves = guetter(m, m.ui, 'ouvrirApercu');
-    clic(m, '[data-ecran="evenement"] [data-commande="apercu"]');
-    await attendre('l’aperçu', () => releves.fini && m.racine.querySelector('[data-ecran="apercu"]'));
+    const releves = guetter(m, m.ui, 'allerA');
+    clic(m, '[data-ecran="evenement"] [data-commande="section"][data-cible="badges"]');
+    await attendre('l’aperçu', () => releves.fini && m.racine.querySelector('[data-apercu-impression]'));
     expect(releves.vues).toEqual([PEINTE]);
     await attendre('le retrait de la pastille', () => m.racine.querySelector('[data-activite]') === null);
   });

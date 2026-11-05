@@ -21,7 +21,7 @@
 // abandonné, l'instant nommé par le panneau —, puis 22 et 23, l'aperçu avant
 // impression d'une proposition et du retenu, puis 24 et 25, la feuille de
 // contrôle à part et la première feuille de cartes Avery 5392, les deux PDF
-// que la section Badges produit sur une machine qui n'a pas choisi de
+// que la section Impression produit sur une machine qui n'a pas choisi de
 // modèle, tramées sous node (§ 19.6) —, ces sorties en lecture puis sur un
 // plan bloqué, qui n'écrivent que la planche, sa feuille de contrôle et
 // reglages_locaux.json (§ 11.6), puis
@@ -534,27 +534,33 @@ async function choisirAuClavier(choix, valeur) {
   expect(choix.value, `le choix ${valeur}`).toBe(valeur);
 }
 
-// Fait défiler le premier ancêtre défilant des éléments jusqu'à centrer la
-// réunion de leurs boîtes, qui doit tenir dans sa hauteur visible : l'image
+// Fait défiler chaque ancêtre défilant des éléments, du plus proche au plus
+// lointain, jusqu'à centrer la réunion de leurs boîtes, qui doit tenir dans
+// la hauteur de chacun : un cadre imbriqué, comme le tableau des lignes de
+// l'aperçu d'import, peut se tenir hors de la fenêtre, et seul le plus
+// lointain, la surface, se mesure à sa part visible dans la fenêtre. L'image
 // les montre ensemble. Sans ancêtre défilant, la fenêtre défile.
 async function cadrerDansLaSurface(elements) {
-  const boites = elements.map((element) => element.getBoundingClientRect());
-  const haut = Math.min(...boites.map((b) => b.top));
-  const bas = Math.max(...boites.map((b) => b.bottom));
-  let porteur = elements[0].parentElement;
-  while (porteur !== null && !(porteur.scrollHeight > porteur.clientHeight && /auto|scroll/.test(getComputedStyle(porteur).overflowY))) {
-    porteur = porteur.parentElement;
+  const porteurs = [];
+  for (let porteur = elements[0].parentElement; porteur !== null; porteur = porteur.parentElement) {
+    if (porteur.scrollHeight > porteur.clientHeight && /auto|scroll/.test(getComputedStyle(porteur).overflowY)) porteurs.push(porteur);
   }
-  if (porteur === null) {
+  if (porteurs.length === 0) {
     await cadrerSur(elements);
     return;
   }
-  const cadre = porteur.getBoundingClientRect();
-  const visibleHaut = Math.max(cadre.top + porteur.clientTop, 0);
-  const visibleBas = Math.min(cadre.top + porteur.clientTop + porteur.clientHeight, innerHeight);
-  expect(bas - haut, 'les éléments à montrer tiennent dans la hauteur visible de leur surface').toBeLessThanOrEqual(visibleBas - visibleHaut);
-  porteur.scrollTop += Math.round((haut + bas - visibleHaut - visibleBas) / 2);
-  await images(2);
+  for (const [rang, porteur] of porteurs.entries()) {
+    const boites = elements.map((element) => element.getBoundingClientRect());
+    const haut = Math.min(...boites.map((b) => b.top));
+    const bas = Math.max(...boites.map((b) => b.bottom));
+    const debut = porteur.getBoundingClientRect().top + porteur.clientTop;
+    const surface = rang === porteurs.length - 1;
+    const visibleHaut = surface ? Math.max(debut, 0) : debut;
+    const visibleBas = surface ? Math.min(debut + porteur.clientHeight, innerHeight) : debut + porteur.clientHeight;
+    expect(bas - haut, 'les éléments à montrer tiennent dans la hauteur visible de leur surface').toBeLessThanOrEqual(visibleBas - visibleHaut);
+    porteur.scrollTop += Math.round((haut + bas - visibleHaut - visibleBas) / 2);
+    await images(2);
+  }
 }
 
 // Fait défiler le premier ancêtre défilant de l'élément jusqu'à poser son
@@ -897,16 +903,26 @@ async function cadrerSur(elements) {
   await images(2);
 }
 
-// La barre de l'aperçu — l'enfant de [data-ecran="apercu"] qui porte sa
-// commande fermerApercu — est hors de l'image : son bas au bord haut de la
-// fenêtre ou au-dessus (§ 19.3, 22 et 23). Une barre collante resterait
-// dans la fenêtre au défilement de la feuille.
+// La barre de l'aperçu — l'enfant de [data-apercu-impression] qui porte sa
+// commande « Imprimer » — est hors de l'image : son bas au bord haut de la
+// surface qui la fait défiler, ou au-dessus (§ 19.3, 22 et 23). Une barre
+// collante resterait dans la surface au défilement de la feuille.
 function barreHorsDeLImage() {
-  const ecran = dans('[data-ecran="apercu"]');
-  let barre = ecran.querySelector('[data-commande="fermerApercu"]');
-  expect(barre, 'la commande fermerApercu de l’aperçu').not.toBeNull();
-  while (barre.parentElement !== ecran) barre = barre.parentElement;
-  expect(barre.getBoundingClientRect().bottom, 'le bas de la barre de l’aperçu, au-dessus de la fenêtre').toBeLessThanOrEqual(0);
+  const apercu = dans('[data-apercu-impression]');
+  let barre = apercu.querySelector('[data-commande="imprimer"]');
+  expect(barre, 'la commande « Imprimer » de l’aperçu').not.toBeNull();
+  while (barre.parentElement !== apercu) barre = barre.parentElement;
+  expect(barre.getBoundingClientRect().bottom, 'le bas de la barre de l’aperçu, au-dessus de la surface').toBeLessThanOrEqual(
+    Math.max(0, surfaceDeLApercu().getBoundingClientRect().top),
+  );
+}
+
+// La zone qui fait défiler l'aperçu, la surface de l'événement : son
+// premier ancêtre défilant.
+function surfaceDeLApercu() {
+  let porteur = dans('[data-apercu-impression]').parentElement;
+  while (porteur !== null && !/auto|scroll/.test(getComputedStyle(porteur).overflowY)) porteur = porteur.parentElement;
+  return porteur ?? document.documentElement;
 }
 
 // --- La planche de badges photographiée (§ 19.6) --------------------------------------
@@ -1033,32 +1049,32 @@ async function photographierPdf(octets, { page, fichier }, conditions) {
 
 // --- Sortir sans modifier (§ 11.6, § 8.4) ------------------------------------------
 
-// Les sorties d'un événement ouvert : l'aperçu de chaque vue, envoyé à
-// l'imprimante d'épreuve ; le papier de la machine changé, puis rendu ;
-// la planche de badges produite par la section Badges, ses cartes Avery
-// 5392 et sa feuille de contrôle à part. Le parcours reprend sur le plan.
-// Rend les noms des deux PDF écrits.
+// Les sorties d'un événement ouvert, depuis la section de l'impression :
+// l'aperçu de chaque vue, envoyé à l'imprimante d'épreuve ; le papier de la
+// machine changé, puis rendu ; la planche de badges, ses cartes Avery 5392
+// et sa feuille de contrôle à part. Le parcours reprend sur le plan. Rend
+// les noms des deux PDF écrits.
 async function sortir() {
   const impressions = m.imprimante.appels().length;
   const rang = m.trace.length;
   await ouvrirSection('plan');
-  await cliquer('[data-ecran="evenement"] [data-commande="apercu"]');
+  await ouvrirSection('badges');
   await attendre('le document imprimé', () => dans('[data-impression] [data-feuille]'));
   for (const vue of ['plan', 'accueil', 'tables']) {
-    await cliquer(`[data-ecran="apercu"] [data-commande="vue"][data-cible="${vue}"]`);
+    await cliquer(`[data-apercu-impression] [data-commande="vue"][data-cible="${vue}"]`);
     await attendre(`la vue ${vue}`, () => dans(`[data-impression][data-vue-impression="${vue}"] [data-feuille]`));
-    await cliquer('[data-ecran="apercu"] [data-commande="imprimer"]');
+    await cliquer('[data-apercu-impression] [data-commande="imprimer"]');
   }
   await attendre('trois impressions', () => m.imprimante.appels().length === impressions + 3);
   for (const papier of ['Lettre', 'A4']) {
-    await cliquer('[data-ecran="apercu"] [data-papier="choisi"] [data-commande="changerPapier"]');
-    await attendre('la question du papier', () => dans('[data-ecran="apercu"] [data-papier="question"]'));
-    await cliquer(`[data-papier="question"] [data-cible="${papier}"] [data-commande="choisirPapier"]`);
-    await attendre(`le papier ${papier}`, () => etat().papier === papier && dans('[data-papier="choisi"]') && dans('[data-impression] [data-feuille]'));
+    await cliquer('[data-apercu-impression] [data-papier="choisi"] [data-commande="changerPapier"]');
+    await attendre('la question du papier', () => dans('[data-apercu-impression] [data-papier="question"]'));
+    await cliquer(`[data-apercu-impression] [data-papier="question"] [data-cible="${papier}"] [data-commande="choisirPapier"]`);
+    await attendre(
+      `le papier ${papier}`,
+      () => etat().papier === papier && dans('[data-apercu-impression] [data-papier="choisi"]') && dans('[data-impression] [data-feuille]'),
+    );
   }
-  await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
-  await attendre('l’événement, de retour', () => dans('[data-ecran="evenement"]'));
-  await ouvrirSection('badges');
   await cliquer('[data-section="badges"] [data-commande="produirePlanche"]');
   await attendre('la planche produite', () => dans('[data-section="badges"] [data-chemin-controle]'), IMAGES_PLANCHE);
   const planches = cheminsEcrits(rang).filter((chemin) => chemin.endsWith('.pdf'));
@@ -1188,6 +1204,9 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(apercu.querySelectorAll('[data-refusees] [data-ligne]').length).toBeGreaterThanOrEqual(1);
     expect(apercu.querySelector('[data-commande="importer"]')).not.toBeNull();
     await rienEcrit(avant, 'l’aperçu');
+    // L'image montre l'aperçu depuis son haut : la carte de l'import, que le
+    // guide replié allonge, ne le pousse pas sous la fenêtre.
+    await cadrerAuBord(apercu, 'haut');
     await photographier(m, '02-import-apercu', { condition: ['[data-apercu] [data-encodage]', '[data-apercu] [data-separateur]'] });
   });
 
@@ -1209,6 +1228,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(montrees.length, accentuees.join(' | ')).toBeGreaterThan(0);
     expect(apercu.textContent).not.toMatch(/\u{FFFD}|\u{C3}[\u{80}-\u{BF}]/u);
     await rienEcrit(avant, 'l’aperçu en windows-1252');
+    await cadrerAuBord(apercu, 'haut');
     await photographier(m, '02b-import-cp1252', { condition: ['[data-apercu] [data-encodage]', '[data-apercu] [data-fichier]'] });
   });
 
@@ -1892,6 +1912,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     });
     const reglee = [
       [{ critere: 'conflitsOrganisation', poids: 1 }],
+      [{ critere: 'inclusionsNonSatisfaites', poids: 1 }],
       [{ critere: 'excedentCollisions', poids: 1 }, { critere: 'toursHorsObjectif', poids: 3 }],
       [{ critere: 'rencontresRepetees', poids: 1 }],
       [{ critere: 'collisionsCumulees', poids: 1 }],
@@ -1924,19 +1945,20 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(appliques).toEqual(reglee.map((palier) => palier.filter(({ critere }) => compte.has(critere))).filter((palier) => palier.length > 0));
     memoire.paliersRegles = appliques;
 
-    // L'image montre le numéro du palier partagé, le deuxième, sous celui du
-    // conflit d'organisation, ses deux critères et leurs poids, et la ligne
-    // des animateurs qui dit « décoché » ; le choix du mode, au-dessus, et
-    // « Rétablir l'ordre par défaut », au-dessous, n'entrent pas dans la
-    // même fenêtre qu'eux. Le pointeur s'écarte une fois l'éditeur cadré : un
-    // nom de critère arrivé sous lui ouvrirait son infobulle sur l'image.
+    // L'image montre le numéro du palier partagé, le troisième, sous ceux du
+    // conflit d'organisation et des inclusions, ses deux critères et leurs
+    // poids, et la ligne des animateurs qui dit « décoché » ; le choix du mode,
+    // au-dessus, et « Rétablir l'ordre par défaut », au-dessous, n'entrent pas
+    // dans la même fenêtre qu'eux. Le pointeur s'écarte une fois l'éditeur
+    // cadré : un nom de critère arrivé sous lui ouvrirait son infobulle sur
+    // l'image.
     document.activeElement?.blur();
-    const numero = editeur().querySelector(':scope > [data-palier="1"] > p');
+    const numero = editeur().querySelector(':scope > [data-palier="2"] > p');
     await cadrerDansLaSurface([numero, critere('animateursNonRencontres').querySelector('.etat')]);
     await ecarterLePointeur();
     await photographier(m, '10a-ordre-priorites', {
       condition: [
-        '[data-priorites] > [data-palier="1"] > p',
+        '[data-priorites] > [data-palier="2"] > p',
         '[data-priorites] [data-priorite="excedentCollisions"]',
         '[data-priorites] input[data-champ="poids.excedentCollisions"]',
         '[data-priorites] [data-priorite="toursHorsObjectif"]',
@@ -2272,13 +2294,13 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await ouvrirSection('propositions');
     await cliquerAction(`[data-proposition="${proposition}"]`, 'voir');
     await attendre('la proposition montrée au plan', () => m.ui.etat().proposition === proposition && dans('[data-section="plan"]'));
-    await cliquer('[data-ecran="evenement"] [data-commande="apercu"]');
+    await ouvrirSection('badges');
     // Le premier aperçu de la machine pose la question du papier, avant tout
     // document (§ 8.5).
-    await attendre('la question du papier', () => dans('[data-ecran="apercu"] [data-papier="question"]'));
+    await attendre('la question du papier', () => dans('[data-apercu-impression] [data-papier="question"]'));
     expect(dans('[data-impression]')).toBeNull();
-    await cliquer('[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]');
-    await attendre('le document imprimé', () => dans('[data-impression] [data-feuille]') && dans('[data-papier="choisi"]'));
+    await cliquer('[data-apercu-impression] [data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]');
+    await attendre('le document imprimé', () => dans('[data-impression] [data-feuille]') && dans('[data-apercu-impression] [data-papier="choisi"]'));
     expect(etat().papier).toBe('A4');
     expect(m.ui.etat().apercu).toMatchObject({ vue: 'plan', tour: 1 });
 
@@ -2295,33 +2317,40 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(cheminsEcrits(rang)).toEqual(['reglages_locaux.json']);
     await rienEcrit(avant, 'l’aperçu d’une proposition');
 
-    // Le cadrage : le filigrane et le pied de la première feuille, ensemble
-    // dans la fenêtre.
-    const filigrane = dans('[data-impression] [data-feuille] [data-filigrane] [data-marque="filigrane"]');
-    await cadrerSur([filigrane, dans('[data-impression] [data-feuille] [data-pied]')]);
-    memoire.cadrage = window.scrollY;
+    // Le cadrage : le haut du dessin de la première feuille au bord haut de
+    // la surface de l'événement, qui fait défiler la section : les tables
+    // entières, et, en dessous, le centre du filigrane couché sur la
+    // diagonale de la feuille, que le relevé des marques mesure. Le bas de
+    // la feuille — cartouche, échelle graphique, pied — suit tant que la
+    // surface le laisse voir : seul ce qui tient entier dans sa hauteur
+    // visible devient condition de la capture, et 23 reprend les mêmes.
+    const feuille = dans('[data-impression] [data-feuille]');
+    await cadrerAuBord(feuille.querySelector('svg:not([data-filigrane])'), 'haut');
+    const surface = surfaceDeLApercu();
+    const cadre = surface.getBoundingClientRect();
+    const haut = Math.max(cadre.top + surface.clientTop, 0);
+    const bas = Math.min(cadre.top + surface.clientTop + surface.clientHeight, innerHeight);
+    const boite = feuille.querySelector('[data-filigrane] [data-marque="filigrane"]').getBoundingClientRect();
+    const centre = (boite.top + boite.bottom) / 2;
+    expect(centre, 'le centre du filigrane, sous le haut de la surface').toBeGreaterThan(haut);
+    expect(centre, 'le centre du filigrane, au-dessus du bas de la surface').toBeLessThan(bas);
+    memoire.conditionsFeuille = CONDITIONS_FEUILLE.filter((selecteur) => dans(selecteur).getBoundingClientRect().bottom <= bas);
+    memoire.cadrage = surface.scrollTop;
     barreHorsDeLImage();
-    await photographier(m, '22-plan-brouillon', {
-      condition: [
-        '[data-impression] [data-feuille] [data-filigrane] [data-marque="filigrane"]',
-        ...CONDITIONS_FEUILLE,
-      ],
-      graine: GRAINE,
-    });
+    await photographier(m, '22-plan-brouillon', { condition: memoire.conditionsFeuille, graine: GRAINE });
   });
 
   test('23 l’aperçu du retenu : le papier gardé, aucun filigrane, le pied du retenu ; rien d’écrit', async () => {
-    await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
-    await attendre('le plan, de retour', () => dans('[data-ecran="evenement"] [data-section="plan"]'));
+    await ouvrirSection('plan');
     await cliquer('[data-commande="quitterProposition"]');
     await attendre('le retenu montré', () => m.ui.etat().proposition === null);
     const avant = fichiers();
     const rang = m.trace.length;
-    await cliquer('[data-ecran="evenement"] [data-commande="apercu"]');
+    await ouvrirSection('badges');
     await attendre('le document imprimé', () => dans('[data-impression] [data-feuille]'));
     // Le papier choisi au premier aperçu n'est pas redemandé.
-    expect(dans('[data-papier="question"]')).toBeNull();
-    expect(dans('[data-papier="choisi"]')).not.toBeNull();
+    expect(dans('[data-apercu-impression] [data-papier="question"]')).toBeNull();
+    expect(dans('[data-apercu-impression] [data-papier="choisi"]')).not.toBeNull();
 
     const sortie = { source: 'retenu', proposition: null, tour: 1 };
     expect(estBrouillon(charge(), sortie)).toBe(false);
@@ -2333,25 +2362,26 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(cheminsEcrits(rang)).toEqual([]);
     await rienEcrit(avant, 'l’aperçu du retenu');
 
-    // Le cadrage de 22 : la même position de défilement, le placement
-    // retenu à la place de la proposition.
-    window.scrollTo(0, memoire.cadrage);
+    // Le cadrage de 22 : la même position de défilement de la surface, le
+    // placement retenu à la place de la proposition. Sans le cadrage de 22,
+    // l'étape échoue ici, en le nommant.
+    expect(memoire.cadrage, 'le cadrage de 22').toBeGreaterThan(0);
+    surfaceDeLApercu().scrollTop = memoire.cadrage;
     await images(2);
-    expect(window.scrollY).toBe(memoire.cadrage);
+    expect(surfaceDeLApercu().scrollTop).toBe(memoire.cadrage);
     barreHorsDeLImage();
-    await photographier(m, '23-plan-retenu', { condition: CONDITIONS_FEUILLE, graine: GRAINE });
+    await photographier(m, '23-plan-retenu', { condition: memoire.conditionsFeuille, graine: GRAINE });
   });
 
-  // La planche du retenu, produite par la section Badges sous Avery 5392, le
-  // modèle d'une machine qui n'en a pas choisi, sur Lettre quel que soit le
-  // papier que 22 a choisi, puis tramée sous node (§ 19.6) : la feuille de
-  // contrôle à part, puis la première feuille de cartes. Produire n'écrit
-  // que les deux PDF ; deux productions sous l'horloge pilotée donnent les
-  // mêmes octets, que l'empreinte du manifeste suit.
-  test('24 la planche du retenu par la section Badges : seuls les deux PDF s’écrivent, deux productions identiques ; la feuille de contrôle à part', async () => {
-    // L'aperçu de 23 se ferme : le plan revient, en haut.
-    await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
-    await attendre('le plan, de retour', () => dans('[data-ecran="evenement"] [data-section="plan"]'));
+  // La planche du retenu, produite par la section Impression sous Avery
+  // 5392, le modèle d'une machine qui n'en a pas choisi, sur Lettre quel que
+  // soit le papier que 22 a choisi, puis tramée sous node (§ 19.6) : la
+  // feuille de contrôle à part, puis la première feuille de cartes. Produire
+  // n'écrit que les deux PDF ; deux productions sous l'horloge pilotée
+  // donnent les mêmes octets, que l'empreinte du manifeste suit.
+  test('24 la planche du retenu par la section Impression : seuls les deux PDF s’écrivent, deux productions identiques ; la feuille de contrôle à part', async () => {
+    // La section de 23 se quitte : le plan revient, en haut.
+    await ouvrirSection('plan');
     window.scrollTo(0, 0);
     await images(2);
     expect(charge().evenement.etat).toBe('retenu');
@@ -2437,7 +2467,14 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       // Des cartes prédécoupées : aucun trait sur la feuille (§ 11.3).
       expect(lue.segments).toEqual([]);
       const texte = texteDePage(lue);
-      for (const nomBadge of premiers) expect(texte, nomBadge).toContain(plat(nomBadge));
+      // Les six noms, dans l'ordre de la feuille : chacun se cherche après
+      // celui qui le précède.
+      let depuis = 0;
+      for (const nomBadge of premiers) {
+        const position = texte.indexOf(plat(nomBadge), depuis);
+        expect(position, `${nomBadge}, après le nom qui le précède`).toBeGreaterThanOrEqual(0);
+        depuis = position + plat(nomBadge).length;
+      }
       // La table libellée se lit avec son libellé, entre parenthèses après
       // son numéro (§ 11.4).
       const libellee = charge().tables.find(({ libelle: texteLibelle }) => texteLibelle === LIBELLE_TABLE);
@@ -2482,15 +2519,11 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     }
   });
 
-  // Un échec de 22 aux sorties en lecture laisse l'aperçu ouvert, la
-  // proposition montrée, la section Badges ouverte, la fenêtre défilée, le
-  // plan bloqué ou en lecture : l'état est rendu ici, pour que les épreuves
-  // suivantes jugent leurs propres gardes et non ce reste.
+  // Un échec de 22 aux sorties en lecture laisse la section de l'impression
+  // ouverte, la proposition montrée, la fenêtre défilée, le plan bloqué ou
+  // en lecture : l'état est rendu ici, pour que les épreuves suivantes
+  // jugent leurs propres gardes et non ce reste.
   afterAll(async () => {
-    if (dans('[data-ecran="apercu"] [data-commande="fermerApercu"]') !== null) {
-      await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
-      await attendre('le plan, de retour', () => dans('[data-ecran="evenement"]'));
-    }
     if (etat().mode === 'lecture' && dans('[data-place-fixe] [data-commande="modifier"]') !== null) {
       await cliquer('[data-place-fixe] [data-commande="modifier"]');
       await attendre('l’écriture', () => etat().mode === 'ecriture');
@@ -3396,11 +3429,16 @@ function minimumDe(id) {
 }
 
 // La ligne de la proposition id au tableau des propositions : une Map
-// colonne → texte de sa cellule.
+// colonne → chiffre de sa cellule, sans les lignes écrites dessous.
 async function ligneAuTableau(id) {
   await ouvrirSection('propositions');
   const ligne = await attendre('la ligne de la proposition', () => dans(`[data-section="propositions"] tr[data-proposition="${id}"]`));
-  return new Map([...ligne.querySelectorAll('td[data-colonne]')].map((cellule) => [cellule.dataset.colonne, texteDe(cellule)]));
+  const chiffreDe = (cellule) => {
+    const copie = cellule.cloneNode(true);
+    for (const sous of copie.querySelectorAll('[data-sous]')) sous.remove();
+    return texteDe(copie);
+  };
+  return new Map([...ligne.querySelectorAll('td[data-colonne]')].map((cellule) => [cellule.dataset.colonne, chiffreDe(cellule)]));
 }
 
 // La page de qualité d'une proposition déjà au plan, rouverte par la
@@ -3839,7 +3877,13 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     const { bulle, cellule } = await pointerLeRang1(comptes);
     expect(cellule('qualite.profil.colonne.nom')).toBe(plat(nomAffiche(seule)));
     expect(cellule('qualite.profil.colonne.plafondRealise')).toBe('0');
-    expect(cellule('qualite.profil.colonne.marque')).toBe(plat(t('qualite.profil.marque.plafondNul')));
+    // Sa marque renvoie à son écart d'itinéraire, le plafond a priori moins un
+    // plafond réalisé nul. La table 1, entièrement ancrée, ne lui laisse que
+    // la table 2, où personne d'autre n'est mobile : son plafond a priori est
+    // nul, son écart aussi.
+    const ecart = Number(cellule('qualite.profil.colonne.plafondAPriori'));
+    expect(ecart).toBe(0);
+    expect(cellule('qualite.profil.colonne.marque')).toBe(plat(t('qualite.profil.marqueLigne.plafondNul', { ecart })));
     expect(texteDe(bulle.querySelector('[data-pourcentage]'))).toBe(t('format.vide'));
     // Au second graphique, aucun point au rang 1 : la série commence après
     // son signe, posé au pied de l'axe.
@@ -4400,20 +4444,33 @@ describe('la dérivée et la comparaison (§ 5.7, § 12.10.6, C26)', { timeout: 
       const cellule = tete.querySelector(`tr[data-colonne="manqueMax"] td[data-colonne-comparaison="${cote}"]`);
       expect([...cellule.querySelectorAll('.secondaire')].map(texteDe), `n° ${id}`).toContain(plat(t('qualite.tuile.effectifAuManqueMax', { effectif: auMaximum })));
     }
+    // Les animateurs, réservés à leur table, sont des ancrés : chacun des
+    // trois chiffres du manque porte, dans chaque colonne, ses deux lignes
+    // secondaires sur une ligne (§ 5.4, § 12.10.4).
+    for (const nom of ['manqueMax', 'effectifManque', 'ecartItineraireMax']) {
+      for (const cote of ['a', 'b']) {
+        const cellule = tete.querySelector(`tr[data-colonne="${nom}"] td[data-colonne-comparaison="${cote}"]`);
+        const secondaires = [...cellule.querySelectorAll('.secondaire')].map(texteDe).filter((ligne) => ligne.startsWith('mobiles '));
+        expect(secondaires, `${nom} ${cote}`).toHaveLength(1);
+      }
+    }
     await rienEcrit(avant, 'relire les colonnes');
 
-    // L'image : de la ligne des placements jusqu'à « Tous les indicateurs »
-    // replié, les deux colonnes entre eux, l'infobulle fermée, sans focus.
-    // L'intitulé de la vue et sa question, juste au-dessus, ne tiennent pas
-    // avec eux dans la surface : 17 les affirme sans l'image.
+    // L'image : des en-têtes des deux colonnes, qui nomment les placements,
+    // jusqu'à « Tous les indicateurs » replié, l'infobulle fermée, sans
+    // focus. La ligne des placements, l'intitulé de la vue et sa question,
+    // juste au-dessus, ne tiennent pas avec eux dans la surface, les lignes
+    // secondaires des trois chiffres du manque comprises : aucune image ne
+    // les montre, et 17 les affirme par l'épreuve.
     await ecarterLePointeur();
     document.activeElement?.blur();
     await images(2);
     expect(tous('[data-section="qualite"] [role="tooltip"]').every((bulle) => bulle.hidden)).toBe(true);
-    await cadrerDansLaSurface([vue.querySelector('[data-placements-compares]'), repli]);
+    await cadrerDansLaSurface([tete.querySelector('thead'), repli]);
     await photographier(m, '17a-comparaison-colonnes', {
       condition: [
-        '[data-vue-qualite="comparaison"] [data-placements-compares]',
+        '[data-vue-qualite="comparaison"] thead th[data-colonne-comparaison="a"]',
+        '[data-vue-qualite="comparaison"] thead th[data-colonne-comparaison="b"]',
         '[data-vue-qualite="comparaison"] tr[data-colonne="rencontresTous"] td[data-colonne-comparaison="a"] [data-compte-pire]',
         '[data-vue-qualite="comparaison"] tr[data-colonne="rencontresTous"] td[data-colonne-comparaison="b"] [data-compte-pire]',
         '[data-vue-qualite="comparaison"] [data-tous-les-indicateurs]',
@@ -4563,10 +4620,13 @@ describe('la présence par tour (§ 4, § 5.8)', { timeout: DUREE }, () => {
     // Le modèle, plus une ligne qui désigne une personne inscrite par son nom
     // et son prénom seuls, sa présence vide : l'import la met à jour, quand
     // il crée les quatre personnes inventées du modèle. La présence est la
-    // neuvième colonne, que suivent les conflits d'organisation.
+    // neuvième colonne, que suivent les conflits d'organisation, l'animation
+    // réservée et les deux colonnes des inclusions.
     const [entete, ...lignes] = decouper(decoder(octets).texte, ';').enregistrements;
     const colonne = entete.indexOf('presence');
-    expect(entete.slice(colonne)).toEqual(['presence', 'conflit_organisation']);
+    expect(entete.slice(colonne)).toEqual([
+      'presence', 'conflit_organisation', 'animation_reservee', 'inclusion_organisation', 'inclusion_participant',
+    ]);
     const inscrite = personneDe(PRESENCE.groupe);
     expect(inscrite.organisation, 'une organisation : la ligne qui la désigne n’est pas un doublon').not.toBeNull();
     const designe = entete.map((champ) => ({ nom: inscrite.nom, prenom: inscrite.prenom ?? '' })[champ] ?? '');

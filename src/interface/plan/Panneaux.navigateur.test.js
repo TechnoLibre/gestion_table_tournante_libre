@@ -30,6 +30,7 @@ import { appliquerCommande } from '../../application/commandes.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { nomAffiche } from '../../application/personnes.js';
 import { etatPlaces } from '../../application/places.js';
+import { INACTIVITE_MS } from '../../application/seance.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { constante } from '../../geometrie/constantes.js';
 import { surLeSol } from '../../geometrie/designation.js';
@@ -668,7 +669,7 @@ describe('l’infobulle nomme l’organisation d’une paire réunie ; la légen
     expect(groupes.map((g) => g.getAttribute('aria-label'))).toEqual([t('plan.vue.groupeZoom'), t('plan.vue.groupeAffichage')]);
     expect(groupes.map((g) => [...g.querySelectorAll('[data-commande]')].map((b) => b.dataset.commande))).toEqual([
       ['zoomer', 'dezoomer', 'ajuster'],
-      ['listes', 'legende', 'pleinEcran'],
+      ['listes', 'organisations', 'legende', 'pleinEcran'],
     ]);
   });
 
@@ -1571,6 +1572,87 @@ describe('réserver, titrer, désigner depuis le panneau (§ 4, § 2.1 étape 6)
   });
 });
 
+// --- Le libellé tapé suspend le compte d'inactivité (§ 8.4) -------------------
+
+describe('un libellé tapé et non appliqué est une saisie en cours (§ 8.4)', () => {
+  // Tape texte dans le champ du libellé du panneau du genre donné.
+  function taperLibelle(m, genre, texte) {
+    const champ = panneau(m, genre).querySelector('input[data-champ="libelle"]');
+    champ.value = texte;
+    champ.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    return champ;
+  }
+
+  // L'horloge passe le délai d'inactivité ; la file de la séance vidée.
+  async function laisserPasser(m) {
+    m.horloge.avancer(INACTIVITE_MS + 1);
+    await m.seance.attendre();
+    flushSync();
+  }
+
+  test('panneau de la place : le libellé tapé tient la séance en écriture ; « Donner un titre » l’applique et rend le compte, qui ramène en lecture', async () => {
+    const m = await ouvrir(sansProposition({ attribuer: true }));
+    await cliquerChaise(m, 5, 2);
+    expect(m.seance.gesteEnCours).toBe(false);
+    taperLibelle(m, 'place', 'hôte');
+    expect(m.seance.gesteEnCours).toBe(true);
+    await laisserPasser(m);
+    expect(m.seance.etat().mode).toBe('ecriture');
+    const r = fichiers(m).revision;
+    await cliquer(actionPlace(m, 'donnerTitre'));
+    await uneEntree(m, r);
+    await attendre(() => expect(m.seance.gesteEnCours).toBe(false));
+    expect(panneau(m, 'place').querySelector('input[data-champ="libelle"]').value).toBe('hôte');
+    await laisserPasser(m);
+    expect(m.seance.etat().mode).toBe('lecture');
+  });
+
+  test('panneau de la place : un libellé refusé reste une saisie en cours ; une autre place sélectionnée la rend', async () => {
+    const m = await ouvrir(sansProposition({ attribuer: true }));
+    await cliquerChaise(m, 5, 2);
+    taperLibelle(m, 'place', '   ');
+    await cliquer(actionPlace(m, 'donnerTitre'));
+    await attendre(() => expect(panneau(m, 'place').querySelector('[data-refus="LIBELLE_VIDE"]')).not.toBeNull());
+    expect(m.seance.gesteEnCours).toBe(true);
+    await cliquerChaise(m, 4, 1);
+    await attendre(() => expect(m.ui.etat().selection).toEqual({ table: 4, siege: 1 }));
+    expect(m.seance.gesteEnCours).toBe(false);
+    await laisserPasser(m);
+    expect(m.seance.etat().mode).toBe('lecture');
+  });
+
+  test('panneau de la table : le libellé tapé tient la séance en écriture ; Échap referme le panneau et rend le compte', async () => {
+    const m = await ouvrir(sansProposition());
+    await cliquerPoint(pointTable(m, 2));
+    await attendre(() => expect(panneau(m, 'table')).not.toBeNull());
+    const champ = taperLibelle(m, 'table', 'secrétaire');
+    expect(m.seance.gesteEnCours).toBe(true);
+    await laisserPasser(m);
+    expect(m.seance.etat().mode).toBe('ecriture');
+    champ.focus();
+    await touche('Escape');
+    await attendre(() => expect(panneau(m, 'table')).toBeNull());
+    expect(m.seance.gesteEnCours).toBe(false);
+    await laisserPasser(m);
+    expect(m.seance.etat().mode).toBe('lecture');
+  });
+
+  test('panneau de la table : « Donner un titre » applique le libellé tapé et rend le compte ; une nouvelle frappe le reprend', async () => {
+    const m = await ouvrir(sansProposition());
+    await cliquerPoint(pointTable(m, 2));
+    await attendre(() => expect(panneau(m, 'table')).not.toBeNull());
+    taperLibelle(m, 'table', 'secrétaire');
+    const r = fichiers(m).revision;
+    await cliquer(panneau(m, 'table').querySelector('[data-commande="donnerTitre"]'));
+    await uneEntree(m, r);
+    expect(charge(m).titres.map(({ table, libelle }) => [table, libelle])).toEqual([[2, 'secrétaire']]);
+    await attendre(() => expect(m.seance.gesteEnCours).toBe(false));
+    taperLibelle(m, 'table', 'hôte');
+    expect(m.seance.gesteEnCours).toBe(true);
+  });
+});
+
 // --- Le titre reste, le mode table, la capacité (§ 4.1, § 2.1 étape 6, § 5.9) ---
 
 describe('le titre appartient à la place (§ 4.1, § 2.1 étape 6, § 5.9)', () => {
@@ -1991,9 +2073,13 @@ describe('la mise en évidence d’une personne : posée et ôtée par un geste,
     const personne = etatMontre(m).tables[1].chaises[0].occupant;
     expect(personne).not.toBeNull();
     expect(chaiseMarquee(m)).toBeNull();
+    const vueAvant = dans(m, '[data-vue]').getAttribute('transform');
     await cliquer(dans(m, `[data-menu="${personne}"] [data-commande="mettreEnEvidence"]`));
     await attendre(() => expect(chaiseMarquee(m)).toBe('2:1'));
     expect(dans(m, `[data-menu="${personne}"] [data-commande="mettreEnEvidence"]`)).toBeNull();
+    // Le menu d'une personne déjà sous les yeux ne déplace pas la vue.
+    expect(m.ui.etat().centrerEvidence).toBe(false);
+    expect(dans(m, '[data-vue]').getAttribute('transform')).toBe(vueAvant);
     // La barre de vue nomme la personne mise en évidence.
     const barre = dans(m, '[data-evidence]');
     expect(barre).not.toBeNull();

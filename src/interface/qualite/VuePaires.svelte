@@ -18,8 +18,8 @@
   // mène au plan au premier tour où la paire se revoit, la première
   // personne mise en évidence, et chaque tour de la paire, avec sa table,
   // est une commande sœur vers le plan à ce tour, la même personne mise en
-  // évidence. Chaque commande se nomme par son libellé suivi de la paire,
-  // l'identifiant d'un homonyme compris.
+  // évidence ; le plan centre sa chaise. Chaque commande se nomme par son
+  // libellé suivi de la paire, l'identifiant d'un homonyme compris.
   // Les commandes de ligne sont des boutons simples, sans refus possible :
   // une ligne coûte une quinzaine de nœuds, cent lignes par page.
   // Le tableau se pagine comme celui des propositions, par pages de cent,
@@ -35,7 +35,11 @@
   // du seuil. L'une et l'autre renvoient à la fiche de chaque personne.
   //
   // Regarder n'écrit rien : la vue vit en lecture et sur un plan bloqué.
+  //
+  // Les tours se nomment par les noms que leur donne la charge de la séance
+  // (nomsDesTours), sinon par « Tour 3 ».
   import { getContext, tick } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import { constante } from '../../geometrie/constantes.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
@@ -48,6 +52,8 @@
   const t = getContext('t');
   const format = getContext('format');
   const ui = getContext('ui');
+  const seance = getContext('seance');
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
 
   const cas = $derived(detail === null ? null : casDesPaires(detail));
   const lignes = $derived(cas === 'tableau' ? lignesDesPaires(detail) : null);
@@ -74,10 +80,10 @@
   const nomAccessible = (p) => nomDistinct(p, t);
 
   // Montre la paire au plan au tour donné, à partir de 1, sa première
-  // personne mise en évidence.
+  // personne mise en évidence, sa chaise au centre de la vue (§ 7.1).
   function voir(paire, tour) {
     ui.montrerTour(tour);
-    ui.mettreEnEvidence(paire.a.id);
+    ui.mettreEnEvidence(paire.a.id, { centrer: true });
     ui.allerA('plan');
   }
 </script>
@@ -115,15 +121,15 @@
               type="button"
               class="premiere"
               data-commande="allerAuTour"
-              aria-label={t('qualite.paires.premierTourNom', { tour: paire.repetition, ...noms })}
-              onclick={() => voir(paire, paire.repetition)}>{t('qualite.paires.premierTour', { tour: paire.repetition })}</button
+              aria-label={t('qualite.paires.premierTourNom', { tour: paire.repetition, ...noms, nomsTours })}
+              onclick={() => voir(paire, paire.repetition)}>{t('qualite.paires.premierTour', { tour: paire.repetition, nomsTours })}</button
             >
             {#each paire.tours as { tour, table: numero } (tour)}
               <button
                 type="button"
                 data-commande="allerAuTour"
-                aria-label={t('qualite.paires.tourNom', { tour, table: numero, ...noms })}
-                onclick={() => voir(paire, tour)}>{t('qualite.paires.tour', { tour, table: numero })}</button
+                aria-label={t('qualite.paires.tourNom', { tour, table: numero, ...noms, nomsTours })}
+                onclick={() => voir(paire, tour)}>{t('qualite.paires.tour', { tour, table: numero, nomsTours })}</button
               >
             {/each}
           </td>

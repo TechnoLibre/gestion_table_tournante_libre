@@ -75,6 +75,9 @@ const participantDe = (charge, id) => charge.participants.find((personne) => per
 const autreOrganisation = (charge, id) =>
   charge.participants.find(({ organisation }) => organisation !== null && organisation !== participantDe(charge, id).organisation)
     .organisation;
+// La première personne de la charge, dans l'ordre des personnes, qui n'est
+// pas la personne id.
+const autrePersonne = (charge, id) => charge.participants.find((personne) => personne.id !== id).id;
 const tableDe = (charge, id) => charge.tables.find((table) => table.id === id);
 const derniereTable = (charge) => Math.max(...charge.tables.map(({ id }) => id));
 const croissant = (a, b) => a - b;
@@ -127,12 +130,15 @@ const REMEDE_NUL_ADMIS = new Map([
   ['ETIQUETTE_INVALIDE', 'la saisie se corrige dans le champ même, dont le texte dit la forme attendue'],
   ['ETIQUETTES_EN_TROP', 'la saisie se corrige dans le champ même, dont le texte dit le nombre admis'],
   ['LIBELLE_TABLE_TROP_LONG', 'la saisie se corrige dans le champ même, dont le texte dit la longueur admise'],
+  ['NOM_TOUR_TROP_LONG', 'la saisie se corrige dans le champ même, dont le texte dit la longueur admise'],
   ['OBJECTIF_HORS_SOIREE', 'le tour se choisit dans le champ même, parmi ceux de la soirée'],
   ['OBJECTIF_SANS_ETIQUETTE', "sur un couple sans objectif, rien à retirer : la saisie se corrige dans le champ même"],
   ['TABLE_DISPARUE', 'une table supprimée entre-temps : aucun geste ne la rend'],
   ['PRIORITES_INVALIDES', "l'éditeur n'offre que des listes valides : le texte nomme le palier et le critère en cause"],
   ['ORGANISATION_INCONNUE', "une organisation que plus personne ne porte : aucun geste ne la rend, et la liste n'offre que celles qui existent"],
   ['CONFLIT_PROPRE_ORGANISATION', "l'organisation se choisit dans le champ même, parmi celles des autres"],
+  ['INCLUSION_PROPRE_ORGANISATION', "l'organisation se choisit dans le champ même, parmi celles des autres"],
+  ['INCLUSION_DE_SOI', 'la personne se choisit dans le champ même, parmi les autres'],
   ['POIDS_HORS_DOMAINE', 'la valeur se corrige dans le champ même, dont le texte dit la valeur attendue'],
   [
     'PRESENCE_VIDE',
@@ -160,13 +166,13 @@ const IMPORTER_FINANCE_A_LA_TABLE_2 = (charge) => ({
 });
 
 // L'ordre des priorités par défaut, chaque critère seul à son palier ; un
-// ordre réglé, où l'excédent et les collisions cumulées partagent le
-// deuxième palier ; et le geste qui joint les tours hors objectif à
-// l'excédent.
+// ordre réglé, où l'excédent et les collisions cumulées partagent un
+// palier ; et le geste qui joint les tours hors objectif à l'excédent.
 const PRIORITES_DEFAUT = PRIORITES_PAR_DEFAUT.map((palier) => palier.map((entree) => ({ ...entree })));
 const seul = (critere) => [{ critere, poids: 1 }];
 const COLLISIONS_JOINTES = [
   seul('conflitsOrganisation'),
+  seul('inclusionsNonSatisfaites'),
   seul('rencontresRepetees'),
   [{ critere: 'excedentCollisions', poids: 2 }, { critere: 'collisionsCumulees', poids: 3 }],
   seul('ecartAuPlafondAPrioriMax'),
@@ -179,6 +185,7 @@ const JOINDRE_LES_TOURS_HORS_OBJECTIF = [
   {
     paliers: [
       seul('conflitsOrganisation'),
+      seul('inclusionsNonSatisfaites'),
       seul('rencontresRepetees'),
       [{ critere: 'excedentCollisions', poids: 1 }, { critere: 'toursHorsObjectif', poids: 3 }],
       seul('collisionsCumulees'),
@@ -452,6 +459,14 @@ const EXEMPLES = new Map([
     },
   ],
   [
+    'changerNomTour',
+    {
+      accepte: { args: { tour: 2, nom: 'Plat principal' } },
+      refuse: { args: { tour: 2, nom: 'x'.repeat(61) }, code: 'NOM_TOUR_TROP_LONG', remede: null },
+      sansEffet: { args: { tour: 2, nom: 'Tour 2' } },
+    },
+  ],
+  [
     'modifierReglage',
     {
       accepte: { args: { cle: 'nouveauxVoisins', valeur: false } },
@@ -506,12 +521,57 @@ const EXEMPLES = new Map([
     },
   ],
   [
+    'changerInclusionsOrganisation',
+    {
+      accepte: { args: (charge) => ({ id: 2, organisations: [autreOrganisation(charge, 2)] }) },
+      personne: () => 2,
+      refuse: {
+        args: (charge) => ({ id: 2, organisations: [participantDe(charge, 2).organisation] }),
+        code: 'INCLUSION_PROPRE_ORGANISATION',
+        remede: null,
+      },
+      sansEffet: { args: { id: 2, organisations: [] } },
+    },
+  ],
+  [
+    'changerInclusionsParticipant',
+    {
+      accepte: { args: (charge) => ({ id: 2, participants: [autrePersonne(charge, 2)] }) },
+      personne: () => 2,
+      refuse: { args: { id: 2, participants: [2] }, code: 'INCLUSION_DE_SOI', remede: null },
+      sansEffet: { args: { id: 2, participants: [] } },
+    },
+  ],
+  [
+    'changerInclusions',
+    {
+      accepte: {
+        args: (charge) => ({ id: 2, organisations: [autreOrganisation(charge, 2)], participants: [autrePersonne(charge, 2)] }),
+      },
+      personne: () => 2,
+      refuse: {
+        args: (charge) => ({ id: 2, organisations: [], participants: [participantDe(charge, 2).id] }),
+        code: 'INCLUSION_DE_SOI',
+        remede: null,
+      },
+      sansEffet: { args: { id: 2, organisations: [], participants: [] } },
+    },
+  ],
+  [
     'changerLogo',
     {
       accepte: { args: { id: 2, chemin: LOGO } },
       personne: () => 2,
       refuse: { args: { id: 999, chemin: LOGO }, code: 'PARTICIPANT_INCONNU' },
       sansEffet: { avant: [['changerLogo', { id: 2, chemin: LOGO }]], args: { id: 2, chemin: LOGO } },
+    },
+  ],
+  [
+    'changerImageBadges',
+    {
+      accepte: { args: { active: true, chemin: LOGO, position: 'centre' } },
+      refuse: "l'image des badges ne refuse que la lecture et le plan bloqué, communs à toute écriture",
+      sansEffet: { avant: [['changerImageBadges', { active: true }]], args: { active: true, position: 'haut' } },
     },
   ],
   [
@@ -1043,8 +1103,10 @@ describe('registre : en écriture, un exemple accepté écrit une entrée, et d�
       assert.equal(serialiserCharge(reconstruire(journal, derniere.revision)), serialiserCharge(ecrite));
       assert.equal(seance.mode, 'ecriture');
 
-      // Aucune commande ne répartit : les réservations ajoutées tiennent à
-      // une seule place (§ 5.8, § 17 point 3).
+      // Les exemples du registre ne répartissent pas : les réservations
+      // ajoutées tiennent à une seule place (§ 5.8, § 17 point 3). La
+      // répartition à la création des tables s'éprouve dans
+      // commandes_mobilier.test.js.
       const connues = new Set(avant.reservations.map((r) => JSON.stringify(r)));
       const ajoutees = ecrite.reservations.filter((r) => !connues.has(JSON.stringify(r)));
       assert.ok(new Set(ajoutees.map(({ table, siege }) => `${table}:${siege}`)).size <= 1, JSON.stringify(ajoutees));
@@ -1106,6 +1168,36 @@ describe('registre : designerAnimateurs en lot, une entrée que défaire rend en
     assert.equal(journalDe(ouvert).entrees.length, entrees + 2);
     const rendue = seance.charge;
     assert.equal(serialiserCharge(rendue), serialiserCharge({ ...avant, prochainsIds: rendue.prochainsIds }));
+  });
+});
+
+describe('registre : supprimer une personne incluse, une entrée que défaire et refaire rejouent (§ 4, § 8.2, § 8.3)', () => {
+  test('ses identifiants quittent chaque liste qui la nomme dans l’entrée de la suppression ; défaire rend les listes, refaire les retire', async () => {
+    const ouvert = await ouvrirCopie((await departsPrets()).temoin, { ecriture: true });
+    const { seance } = ouvert;
+    const [source, autre, cible] = seance.charge.participants.map(({ id }) => id);
+    await seance.executer('changerInclusionsParticipant', { id: source, participants: [cible, autre] });
+    await seance.executer('changerInclusionsParticipant', { id: autre, participants: [cible] });
+    const avant = structuredClone(seance.charge);
+    const nom = nomAffiche(participantDe(avant, cible));
+    const entrees = journalDe(ouvert).entrees.length;
+
+    const rendu = await seance.executer('supprimerParticipant', { id: cible });
+    assert.ok(rendu.libelle.startsWith(`Supprimé ${nom}`), rendu.libelle);
+    assert.ok(rendu.libelle.endsWith("retirée de 2 listes d'inclusions"), rendu.libelle);
+    assert.equal(journalDe(ouvert).entrees.length, entrees + 1, 'une entrée exactement');
+    const supprimee = chargeEcrite(ouvert);
+    assert.deepEqual(participantDe(supprimee, source).inclusionsParticipant, [autre].sort(croissant));
+    assert.equal(participantDe(supprimee, autre).inclusionsParticipant, undefined);
+
+    await seance.defaire();
+    const defaite = chargeEcrite(ouvert);
+    assert.deepEqual(participantDe(defaite, source).inclusionsParticipant, [cible, autre].sort(croissant));
+    assert.deepEqual(participantDe(defaite, autre).inclusionsParticipant, [cible]);
+    assert.equal(serialiserCharge(defaite), serialiserCharge({ ...avant, prochainsIds: defaite.prochainsIds }));
+
+    await seance.refaire();
+    assert.equal(serialiserCharge(chargeEcrite(ouvert)), serialiserCharge(supprimee));
   });
 });
 

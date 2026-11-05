@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Empreintes de référence du moteur, série node-long (§ 5.7, § 14.10,
-// § 15.5) : la grande démonstration et sa variante sans exception, sous les
-// trois graines et le compte réduit de test/empreintes_moteur.js. Chaque plan
-// rendu par rechercher se compare, empreinte et grandeurs nommées, au fichier
-// versionné test/fixtures/moteur/empreintes_defaut.json, que seule
+// § 15.5) : la grande démonstration et sa variante sans exception, puis la
+// grande portant les inclusions de
+// test/fixtures/moteur/inclusions_grande.json, sous les trois graines et le
+// compte réduit de test/empreintes_moteur.js. Chaque plan rendu par
+// rechercher se compare, empreinte et grandeurs nommées, au fichier versionné
+// test/fixtures/moteur/empreintes_defaut.json, que seule
 // src/moteur/empreintes.test.js récrit, sous GTT_EMPREINTES=ecrire : cette
 // épreuve-ci ne fait que relire, et refuse de se jouer sous ce mode, où elle
 // pourrait lire un fichier en cours d'écriture.
@@ -15,6 +17,7 @@ import {
   ARRET,
   GRAINES,
   differences,
+  empreintesDesInclusions,
   empreintesDesPlans,
   exigerVerification,
   lireEmpreintes,
@@ -36,4 +39,10 @@ describe('empreintes de référence : la grande démonstration et sa variante sa
       assert.deepEqual(calcule, REFERENCE.plans[cle], cle);
     });
   }
+
+  test(`grande portant les inclusions de la fixture : les plans des graines ${GRAINES.join(', ')}, à ${ARRET} mouvements, et leurs inclusions non satisfaites, sont ceux de la référence`, () => {
+    const calcule = empreintesDesInclusions();
+    assert.deepEqual(differences('inclusions', calcule, REFERENCE.inclusions), []);
+    assert.deepEqual(calcule, REFERENCE.inclusions);
+  });
 });

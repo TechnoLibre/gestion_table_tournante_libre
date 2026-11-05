@@ -5,5 +5,4 @@
 export const VERSION = Object.freeze({
   affichee: '2026.10.05.01',
   technique: '2026.1005.1',
-  windows: '2026.1005.1.0',
 });

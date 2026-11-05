@@ -3,7 +3,8 @@
 
 // Le modèle des informations de la fiche d'une personne (§ 4, § 10.2), pur :
 // InformationsFiche.svelte le câble. Le formulaire part des six champs de
-// texte de la personne, préremplis ; « Enregistrer » pose une seule commande,
+// texte de la personne, préremplis, et de la case de l'animation réservée,
+// cochée sous la marque ; « Enregistrer » pose une seule commande,
 // modifierParticipant, des seuls champs que la saisie change depuis
 // l'ouverture et qui diffèrent encore de la personne courante, chacun lu
 // comme la commande le lit — NFC, blancs de bord retirés, vide valant null
@@ -17,9 +18,9 @@
 // compte pas, si bien que la seule à porter une organisation en change la
 // casse. Les refus restent ceux de la commande et de la séance : NOM_REQUIS
 // se pose contre le nom, tout autre contre « Enregistrer ». Ce que les listes
-// de conflits ont suivi (§ 4) se lit entre la charge d'avant et celle
-// d'après, par la règle même de la commande (suivreOrganisations). Aucune
-// fonction ne modifie ce qu'elle reçoit.
+// de conflits et d'inclusions d'organisation ont suivi (§ 4) se lit entre la
+// charge d'avant et celle d'après, par la règle même de la commande
+// (suivreOrganisations). Aucune fonction ne modifie ce qu'elle reçoit.
 
 import { rienASuivre, suivreOrganisations } from '../../application/conflits_organisation.js';
 import { orthographeExistante } from './grille.js';
@@ -27,6 +28,14 @@ import { orthographeExistante } from './grille.js';
 /** Les champs du formulaire, dans l'ordre des colonnes de la grille : ceux
  *  de texte que modifierParticipant reçoit. */
 export const CHAMPS_INFORMATIONS = Object.freeze(['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes']);
+
+/** La case du formulaire, après les champs de texte : la marque de
+ *  l'animation réservée, que modifierParticipant reçoit en booléen. */
+export const CASE_ANIMATION = 'animationReservee';
+
+// La case lue d'une saisie ou d'une personne : vraie sous la marque, fausse
+// sans elle.
+const cochee = (source) => source[CASE_ANIMATION] === true;
 
 // La commande que pose « Enregistrer ».
 const COMMANDE = 'modifierParticipant';
@@ -43,42 +52,49 @@ function lue(texte) {
 
 /**
  * La saisie du formulaire à l'ouverture : chaque champ de la personne, une
- * valeur absente rendue en chaîne vide.
+ * valeur absente rendue en chaîne vide, puis la case de l'animation
+ * réservée, cochée sous la marque.
  *
  * @param {Object} participant
- * @returns {Record<string, string>}
+ * @returns {Record<string, string|boolean>}
  */
 export function saisieDesInformations(participant) {
-  return Object.fromEntries(CHAMPS_INFORMATIONS.map((champ) => [champ, participant[champ] ?? '']));
+  return {
+    ...Object.fromEntries(CHAMPS_INFORMATIONS.map((champ) => [champ, participant[champ] ?? ''])),
+    [CASE_ANIMATION]: cochee(participant),
+  };
 }
 
 /**
  * Vrai quand un champ de la saisie, lu comme la commande le lit, diffère de
  * celui de initiale — la saisie de l'ouverture, ou la personne elle-même —,
- * lu de même : le brouillon tient alors le geste ouvert. Une écriture venue
- * d'ailleurs pendant la saisie ne change pas initiale, et ne tient rien.
+ * lu de même, ou que la case de l'animation réservée diffère de la sienne :
+ * le brouillon tient alors le geste ouvert. Une écriture venue d'ailleurs
+ * pendant la saisie ne change pas initiale, et ne tient rien.
  *
  * @param {Object} initiale
- * @param {Record<string, string>} saisie
+ * @param {Record<string, string|boolean>} saisie
  * @returns {boolean}
  */
 export function informationsModifiees(initiale, saisie) {
-  return CHAMPS_INFORMATIONS.some((champ) => lue(saisie[champ]) !== lue(initiale[champ]));
+  return CHAMPS_INFORMATIONS.some((champ) => lue(saisie[champ]) !== lue(initiale[champ])) || cochee(saisie) !== cochee(initiale);
 }
 
 /**
  * Ce que pose « Enregistrer » : {action: 'aucune'} quand aucun champ ne
  * change ; sinon la commande modifierParticipant de la personne, ses champs
- * changés, lus, dans l'ordre de CHAMPS_INFORMATIONS, et orthographe,
- * {saisie, retenue} quand l'organisation saisie a pris celle d'une autre
- * personne et change, null sinon. Un champ part quand la saisie le change
- * par rapport à initiale, la saisie de l'ouverture, et que sa valeur —
- * l'orthographe retenue pour l'organisation — diffère de celle de
- * participant, la personne courante ; un champ que la saisie ne touche pas
- * ne part jamais. Sans initiale, la saisie de participant en tient lieu.
+ * changés, lus, dans l'ordre de CHAMPS_INFORMATIONS, puis la case de
+ * l'animation réservée, un booléen, qui part sous la même règle, et
+ * orthographe, {saisie, retenue} quand l'organisation saisie a pris celle
+ * d'une autre personne et change, null sinon. Un champ part quand la
+ * saisie le change par rapport à initiale, la saisie de l'ouverture, et que
+ * sa valeur — l'orthographe retenue pour l'organisation — diffère de celle
+ * de participant, la personne courante ; un champ que la saisie ne touche
+ * pas ne part jamais. Sans initiale, la saisie de participant en tient
+ * lieu.
  *
  * @param {Object} participant
- * @param {Record<string, string>} saisie
+ * @param {Record<string, string|boolean>} saisie
  * @param {Array<{id: number, organisation: string|null}>} participants   ceux de l'événement
  * @param {(texte: string) => string} cleNormalisee
  * @param {Record<string, string>} [initiale]
@@ -98,6 +114,7 @@ export function commandeDesInformations(participant, saisie, participants, cleNo
     }
     if (valeur !== participant[champ]) champs[champ] = valeur;
   }
+  if (cochee(saisie) !== cochee(initiale) && cochee(saisie) !== cochee(participant)) champs[CASE_ANIMATION] = cochee(saisie);
   if (Object.keys(champs).length === 0) return { action: 'aucune' };
   return { action: 'executer', nom: COMMANDE, args: { id: participant.id, champs }, orthographe };
 }
@@ -124,32 +141,42 @@ export function suggestionsOrganisation(organisations, cleNormalisee) {
   return [...organisations].sort((a, b) => comparerTextes(cles.get(a), cles.get(b)) || comparerTextes(a, b));
 }
 
+// Les listes d'organisations d'un participant que suivreOrganisations fait
+// suivre.
+const LISTES_SUIVIES = ['conflits', 'inclusionsOrganisation'];
+
 /**
- * Ce que les listes de conflits ont suivi quand modifierParticipant a changé
- * la personne id, lu entre la charge d'avant et celle d'après : null quand
- * rien n'a suivi, sinon ce que suivreOrganisations rend — renommee, {de,
- * vers} ; retirees, rangées ; propres, un compte. La règle reste celle de
- * suivreOrganisations, rejouée sur les participants d'après, chacun avec la
- * liste qu'il portait avant, sous le renommage que la commande en déduit :
- * l'organisation de la personne changée d'une valeur en une autre. Aucune
- * des deux charges reçues ne change.
+ * Ce que les listes de conflits et d'inclusions d'organisation ont suivi
+ * quand modifierParticipant a changé la personne id, lu entre la charge
+ * d'avant et celle d'après : pour chaque sorte de listes, conflits et
+ * inclusions, null quand rien n'a suivi, sinon ce que suivreOrganisations
+ * rend pour elle — renommee, {de, vers} ; retirees, rangées ; propres, un
+ * compte. La règle reste celle de suivreOrganisations, rejouée sur les
+ * participants d'après, chacun avec les listes qu'il portait avant, sous le
+ * renommage que la commande en déduit : l'organisation de la personne
+ * changée d'une valeur en une autre. Aucune des deux charges reçues ne
+ * change.
  *
  * @param {{participants: Array<Object>}} avant
  * @param {{participants: Array<Object>}} apres
  * @param {number} id
- * @returns {{renommee: {de: string, vers: string}|null, retirees: string[], propres: number}|null}
+ * @returns {{conflits: import('../../application/conflits_organisation.js').Suivi|null,
+ *            inclusions: import('../../application/conflits_organisation.js').Suivi|null}}
  */
-export function suiviDesConflits(avant, apres, id) {
+export function suiviDesListes(avant, apres, id) {
   const anciens = new Map(avant.participants.map((participant) => [participant.id, participant]));
   const participants = apres.participants.map((participant) => {
     const copie = { ...participant };
-    delete copie.conflits;
-    const listeAvant = anciens.get(participant.id)?.conflits;
-    return listeAvant === undefined ? copie : { ...copie, conflits: listeAvant };
+    for (const champ of LISTES_SUIVIES) {
+      delete copie[champ];
+      const listeAvant = anciens.get(participant.id)?.[champ];
+      if (listeAvant !== undefined) copie[champ] = listeAvant;
+    }
+    return copie;
   });
   const de = anciens.get(id)?.organisation ?? null;
   const vers = apres.participants.find((participant) => participant.id === id)?.organisation ?? null;
   const renommage = de !== null && vers !== null && de !== vers ? { de, vers } : null;
-  const suivi = suivreOrganisations(avant, { participants }, renommage);
-  return rienASuivre(suivi) ? null : suivi;
+  const { conflits, inclusions } = suivreOrganisations(avant, { participants }, renommage);
+  return { conflits: rienASuivre(conflits) ? null : conflits, inclusions: rienASuivre(inclusions) ? null : inclusions };
 }

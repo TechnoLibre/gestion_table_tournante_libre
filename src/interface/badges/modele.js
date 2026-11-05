@@ -1,8 +1,8 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Le modèle de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8, Q3),
-// pur : SectionBadges.svelte et Reedition.svelte le câblent.
+// Le modèle des badges de la section de l'impression (§ 11.2, § 11.5, § 11.6,
+// § 11.8, Q3), pur : SectionBadges.svelte et Reedition.svelte le câblent.
 //
 // Une planche se tire du placement retenu, ou d'une proposition — celle que
 // la section des propositions a demandée au plan —, toujours BROUILLON (Q3).
@@ -15,7 +15,9 @@
 // la section l'offre, Avery 5392 d'abord. Un modèle qui impose son papier
 // n'offre ni imposition ni papier. La case du pied TechnoLibre en est un
 // autre (EtatSeance.piedTechnolibre), et l'annonce nomme les badges d'où il
-// se retire.
+// se retire ; la case qui laisse en blanc le nom des doublons aussi
+// (EtatSeance.cacherNumero), comme celle qui met l'organisation en gros
+// (EtatSeance.organisationEnGros).
 //
 // La liste des badges en CSV se tire du même placement que la planche : un
 // refus du placement la bloque comme la planche, un refus de la mise en
@@ -60,21 +62,29 @@ export function modeleImposeSonPapier(modele) {
 }
 
 /**
- * Vrai quand l'annonce reçue est celle du modèle, du papier et de la case
- * du pied TechnoLibre de la machine : son modèle est celui de la séance,
- * son papier celui que ce modèle prend (papierDesBadges), sa case celle de
- * la séance. Une annonce sans modèle est celle de l'A6 ; une annonce ou une
- * machine sans case vaut décochée.
+ * Vrai quand l'annonce reçue est celle du modèle, du papier, de la case du
+ * pied TechnoLibre, de celle du nom des doublons et de celle de
+ * l'organisation en gros de la machine : son modèle est celui de la séance,
+ * son papier celui que ce modèle prend (papierDesBadges), chaque case celle
+ * de la séance. Une annonce sans modèle est celle de l'A6 ; une case que
+ * l'annonce ou la machine ne porte pas vaut décochée.
  *
  * @param {import('../../application/planche_seance.js').Annonce} annonce
- * @param {{modeleBadge: string, papier: string|null, piedTechnolibre?: boolean}} machine   EtatSeance
+ * @param {{modeleBadge: string, papier: string|null, piedTechnolibre?: boolean, cacherNumero?: boolean,
+ *          organisationEnGros?: boolean}} machine
+ *        EtatSeance
  */
-export function annonceDeLaMachine(annonce, { modeleBadge, papier, piedTechnolibre = false }) {
+export function annonceDeLaMachine(
+  annonce,
+  { modeleBadge, papier, piedTechnolibre = false, cacherNumero = false, organisationEnGros = false },
+) {
   const modele = annonce.modeleBadge ?? 'a6';
   return (
     modele === modeleBadge &&
     annonce.papier === papierDesBadges(modeleBadge, papier) &&
-    (annonce.piedTechnolibre ?? false) === piedTechnolibre
+    (annonce.piedTechnolibre ?? false) === piedTechnolibre &&
+    (annonce.cacherNumero ?? false) === cacherNumero &&
+    (annonce.organisationEnGros ?? false) === organisationEnGros
   );
 }
 /** La source que désigne une demande sans source offerte : le retenu, que
@@ -178,15 +188,17 @@ const pointDeCode = (caractere) => `U+${caractere.codePointAt(0).toString(16).to
  * réédition ; le nombre de planches sur chaque papier de PAPIERS, le papier
  * utilisé marqué — pour Avery 5392, le nombre de feuilles de cartes ; chaque
  * groupe d'homonymes ; les caractères absents de la police avec leur point de
- * code ; les personnes dont le logo manque au dossier de l'événement, puis
- * celles dont il ne se lit pas, dans l'ordre de la pile, et le nombre de
- * badges où il ne trouve pas de place, quand il y en a — un avertissement,
- * jamais un refus ; le nombre de badges d'où le pied TechnoLibre se retire,
- * quand il y en a ; la mention BROUILLON, de la source ; le nom du fichier —
- * pour Avery 5392, ceux des cartes et de la feuille de contrôle à part. Une
- * annonce sans modèle est celle de l'A6. Sous un refus du placement, seule
- * la source se dit : comptes, planches et nom manquent à l'annonce.
- * L'annonce reçue n'est pas modifiée.
+ * code ; l'image des badges, sa case cochée, quand aucune n'est choisie,
+ * qu'elle manque au dossier de l'événement ou ne se lit pas, ou le nombre de
+ * badges où elle ne trouve pas de place ; les personnes dont le logo manque
+ * au dossier de l'événement, puis celles dont il ne se lit pas, dans l'ordre
+ * de la pile, et le nombre de badges où il ne trouve pas de place, quand il y
+ * en a — des avertissements, jamais un refus ; le nombre de badges d'où le
+ * pied TechnoLibre se retire, quand il y en a ; la mention BROUILLON, de la
+ * source ; le nom du fichier — pour Avery 5392, ceux des cartes et de la
+ * feuille de contrôle à part. Une annonce sans modèle est celle de l'A6. Sous
+ * un refus du placement, seule la source se dit : comptes, planches et nom
+ * manquent à l'annonce. L'annonce reçue n'est pas modifiée.
  *
  * @param {import('../../application/planche_seance.js').Annonce} annonce
  * @param {{source?: 'retenu'|'proposition', proposition?: number|null, selection?: number[]|null}} [demande]
@@ -218,6 +230,13 @@ export function phrasesAnnonce(annonce, { source = 'retenu', proposition = null,
   if (annonce.absents.length > 0) {
     const caracteres = annonce.absents.map((caractere) => ({ caractere, point: pointDeCode(caractere) }));
     phrases.push({ cle: 'badges.annonce.absents', details: { caracteres } });
+  }
+  const image = annonce.imageBadges ?? null;
+  if (image !== null) {
+    if (image.chemin === null) phrases.push({ cle: 'badges.annonce.imageAucune', details: {} });
+    else if (image.introuvable === 'ABSENT') phrases.push({ cle: 'badges.annonce.imageIntrouvable', details: {} });
+    else if (image.introuvable === 'ILLISIBLE') phrases.push({ cle: 'badges.annonce.imageIllisible', details: {} });
+    else if (image.sansPlace > 0) phrases.push({ cle: 'badges.annonce.imageSansPlace', details: { n: image.sansPlace } });
   }
   const logos = annonce.logos ?? null;
   if (logos !== null) {

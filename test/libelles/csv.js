@@ -24,6 +24,7 @@ export const EXEMPLES = [
   ['CHAMPS_EN_TROP', { ligne: 4, valeur: null }],
   ['NOM_ABSENT', { ligne: 5, valeur: null }],
   ['EXCLU_INCONNU', { ligne: 6, valeur: 'peut-être' }],
+  ['ANIMATION_INCONNUE', { ligne: 7, valeur: 'Table d’honneur' }],
   ['ETIQUETTE_MAL_FORMEE', { ligne: 6, valeur: 'ressources\thumaines', raison: 'controle' }],
   ['ETIQUETTES_TROP_NOMBREUSES', { ligne: 6, valeur: null, nombre: 21 }],
   ['PRESENCE_ILLISIBLE', { ligne: 6, valeur: '01-mars', raison: 'date' }],
@@ -35,6 +36,11 @@ export const EXEMPLES = [
   ['AMBIGUITE', { champs: ['organisation', 'courriel'] }],
   ['CONFLIT_ORGANISATION_INCONNUE', { ligne: 4, organisation: 'Société Gamma' }],
   ['CONFLIT_ORGANISATION_PROPRE', { ligne: 5, organisation: 'Club des Merles' }],
+  ['INCLUSION_ORGANISATION_INCONNUE', { ligne: 4, organisation: 'Société Gamma' }],
+  ['INCLUSION_ORGANISATION_PROPRE', { ligne: 5, organisation: 'Club des Merles' }],
+  ['INCLUSION_PARTICIPANT_INCONNU', { ligne: 6, nom: 'Iris Ombrel' }],
+  ['INCLUSION_PARTICIPANT_AMBIGU', { ligne: 7, nom: 'Théo Pervenche' }],
+  ['INCLUSION_PARTICIPANT_SOI', { ligne: 8, nom: 'Ondine Lacasse' }],
   // Le CSV des objectifs de table (§ 10.4)
   ['TABLE_NON_ASSOCIEE', {}],
   ['OBJECTIF_NON_ASSOCIE', {}],
@@ -65,6 +71,36 @@ export const TEXTES = [
     { ligne: 5, organisation: 'Club des Merles' },
     "L'organisation « Club des Merles » est celle de la personne (ligne 5, colonne des conflits) : " +
       "une personne ne nomme pas la sienne en conflit. Rien n'est importé.",
+  ],
+  [
+    'INCLUSION_ORGANISATION_INCONNUE',
+    { ligne: 4, organisation: 'Société Gamma' },
+    "L'organisation « Société Gamma » n'existe pas (ligne 4, colonne des inclusions d'organisation). " +
+      "Rien n'est importé.",
+  ],
+  [
+    'INCLUSION_ORGANISATION_PROPRE',
+    { ligne: 5, organisation: 'Club des Merles' },
+    "L'organisation « Club des Merles » est celle de la personne (ligne 5, colonne des inclusions " +
+      "d'organisation) : une inclusion nomme une autre organisation que la sienne. Rien n'est importé.",
+  ],
+  [
+    'INCLUSION_PARTICIPANT_INCONNU',
+    { ligne: 6, nom: 'Iris Ombrel' },
+    "Aucune personne ne s'appelle « Iris Ombrel » (ligne 6, colonne des inclusions de participant) : " +
+      "une inclusion nomme une personne par son prénom et son nom. Rien n'est importé.",
+  ],
+  [
+    'INCLUSION_PARTICIPANT_AMBIGU',
+    { ligne: 7, nom: 'Théo Pervenche' },
+    "Plusieurs personnes s'appellent « Théo Pervenche » (ligne 7, colonne des inclusions de participant) : " +
+      "le nom ne dit pas laquelle rencontrer. Rien n'est importé.",
+  ],
+  [
+    'INCLUSION_PARTICIPANT_SOI',
+    { ligne: 8, nom: 'Ondine Lacasse' },
+    "« Ondine Lacasse » est la personne de la ligne 8 elle-même (colonne des inclusions de participant) : " +
+      "une inclusion nomme une autre personne. Rien n'est importé.",
   ],
   [
     'PRESENCE_ILLISIBLE',

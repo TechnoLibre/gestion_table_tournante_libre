@@ -55,8 +55,11 @@ const PERSONNES = [
 // ce tour : une organisation et une étiquette, moins qu'Iris Ombrelle sur sa
 // soirée, de sorte que le moins varié et le plus varié diffèrent dans chaque
 // colonne. organisations : false pour une seule organisation ; etiquettes :
-// false pour aucune ; titres : false pour aucun animateur.
-function chargeAnimateurs({ organisations = true, etiquettes = true, titres = true } = {}) {
+// false pour aucune ; titres : false pour aucun animateur ; seul : true
+// pour un seul titre, celui de la table 1, qu'Iris Ombrelle tient au seul
+// tour 1, où elle seule est présente, les huit autres ne venant qu'aux
+// tours 2 et 3 — elle anime, et personne n'est concerné.
+function chargeAnimateurs({ organisations = true, etiquettes = true, titres = true, seul = false } = {}) {
   const charge = creerCharge({ id: 'evt-animateurs', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 3 });
   charge.participants = PERSONNES.map(([nom, prenom, organisation, liste], rang) => ({
     id: rang + 1,
@@ -78,6 +81,11 @@ function chargeAnimateurs({ organisations = true, etiquettes = true, titres = tr
       { participant: 3, table: 2, siege: null, portee: 'tour', tour: 2 },
       { participant: 9, table: 2, siege: null, portee: 'tour', tour: 2 },
     ];
+  }
+  if (seul) {
+    charge.titres = [{ table: 1, siege: 1, libelle: 'Animation' }];
+    charge.reservations = [{ participant: 1, table: 1, siege: null, portee: 'tour', tour: 1 }];
+    for (const participant of charge.participants) participant.presence = participant.id === 1 ? [1] : [2, 3];
   }
   charge.reglages.rencontrerAnimateurs = true;
   charge.prochainsIds = { participant: 10, table: 4, proposition: 1 };
@@ -163,6 +171,12 @@ describe('animateurs rencontrés : le profil (§ 12.13, D37)', () => {
 
   test('sans animateur : la phrase, aucun graphique', async () => {
     const vue = await monter(VueAnimateurs, detailDe({ titres: false }));
+    expect(texteDe(vue.querySelector('[data-phrase-qualite="animateurs.aucun"]'))).toBe(t('qualite.animateurs.aucun'));
+    expect(vue.querySelector('svg')).toBeNull();
+  });
+
+  test('un animateur seul présent au tour qu’il anime : personne n’est concerné, la phrase, aucun graphique', async () => {
+    const vue = await monter(VueAnimateurs, detailDe({ seul: true }));
     expect(texteDe(vue.querySelector('[data-phrase-qualite="animateurs.aucun"]'))).toBe(t('qualite.animateurs.aucun'));
     expect(vue.querySelector('svg')).toBeNull();
   });
@@ -280,7 +294,17 @@ describe('diversité par animateur (§ 12.13, D38)', () => {
 
   test('sans animateur : la phrase seule', async () => {
     const vue = await monter(VueDiversite, detailDe({ titres: false }));
-    expect(vue.querySelector('[data-phrase-qualite="diversite.aucunAnimateur"]')).not.toBeNull();
+    expect(texteDe(vue.querySelector('[data-phrase-qualite="diversite.aucun"]'))).toBe(t('qualite.diversite.aucun'));
+    expect(vue.querySelector('[data-commande="ouvrirJumeau"]')).toBeNull();
+  });
+
+  test('un animateur seul présent au tour qu’il anime : personne n’est concerné, la phrase seule, comme la vue des rencontres', async () => {
+    const detail = detailDe({ seul: true });
+    expect(detail.animateurs.diversite.lignes.length).toBe(1);
+    const vue = await monter(VueDiversite, detail);
+    expect(texteDe(vue.querySelector('[data-phrase-qualite="diversite.aucun"]'))).toBe(t('qualite.diversite.aucun'));
+    expect(vue.querySelector('svg')).toBeNull();
+    expect(vue.querySelector('[data-equite]')).toBeNull();
     expect(vue.querySelector('[data-commande="ouvrirJumeau"]')).toBeNull();
   });
 });

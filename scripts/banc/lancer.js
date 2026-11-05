@@ -214,9 +214,9 @@ export function regionConstantes({ releve = releveCommite(), constantes = CONSTA
 const avecUnite = (valeur, unite) => (valeur === null ? 'aucune valeur' : `${nombre(valeur)} ${unite}`);
 
 // Ce qu'un passage imprime après l'écriture du relevé : le tableau, chaque
-// constante du banc face à sa valeur proposée — égale, à adopter, ou
-// relevée sans adoption —, chaque garde, puis l'accord du registre avec le
-// relevé.
+// constante du banc face à sa valeur proposée — égale, à adopter, relevée
+// sans adoption, ou rien à adopter faute de valeur —, chaque garde, puis
+// l'accord du registre avec le relevé.
 function imprimer(releve, sortie) {
   sortie('');
   sortie(regionConstantes({ releve }));
@@ -227,6 +227,8 @@ function imprimer(releve, sortie) {
     const mesure = releve.mesures.find((m) => m.nom === constante.nom);
     let suite = mesure.valeurProposee === constante.valeur ? 'égale' : 'à adopter';
     if (RELEVEES_SANS_ADOPTION.includes(constante.nom)) suite = 'relevé, non adopté : défaut de travail sous la machine de référence';
+    // Sans valeur relevée, le banc ne propose rien : aucune adoption.
+    if (mesure.valeurProposee === null) suite = 'rien à adopter';
     sortie(
       `- ${constante.nom} : registre ${avecUnite(constante.valeur, constante.unite)}, ` +
         `relevé ${avecUnite(mesure.valeurProposee, constante.unite)} — ${suite}`,

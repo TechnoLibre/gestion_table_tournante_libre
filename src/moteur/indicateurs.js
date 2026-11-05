@@ -33,6 +33,11 @@
 // réservations n'assied personne ailleurs ; un plan édité qui en déplace
 // une garde ainsi s(p) ≤ P(p) et m(p) ≤ B(p), que verifierIndicateurs
 // éprouve.
+//
+// Une inclusion se juge satisfaite sur ces mêmes lectures, par
+// inclusionSatisfaite seule, à n'importe quel tour. Un plan valide garde
+// les lignes satisfaites de chacun sous ses inclusions atteignables
+// (inclusions.js), que verifierIndicateurs éprouve aussi.
 import {
   LIBRE,
   RESERVE,
@@ -41,6 +46,7 @@ import {
   exigerPlanIndexe,
   replierParPopulation,
 } from './configuration.js';
+import { ciblesDesInclusions } from './inclusions.js';
 
 /**
  * @typedef {Object} Agregat
@@ -70,6 +76,27 @@ import {
  * @property {number} nonRencontres      Σ (B(p) − m(p)) sur toutes les personnes
  * @property {number} concernes          personnes dont B(p) > 0
  * @property {TroisAgregats} agregat     m(p) sur les concernés
+ *
+ * @typedef {Object} MesuresInclusions   null sans ligne active (§ 5.4)
+ * @property {number} cible             unités qui font les avis
+ *                                      (inclusions.js) : rencontres demandées
+ *                                      par les lignes actives des personnes
+ *                                      qui ne sont pas au-delà du plafond,
+ *                                      une paire comptant une fois
+ * @property {number} satisfaites       unités satisfaites
+ * @property {number} avis              cible − satisfaites
+ * @property {Array<{p: number, cible: number,
+ *                   reciproque: boolean}>} nonSatisfaites
+ *           une par unité non satisfaite, par rang de ligne : la source, la
+ *           cible codée comme instance.inclusionCible, et reciproque quand
+ *           les deux personnes de la paire la demandent
+ * @property {Array<{p: number, actives: number, besoin: number,
+ *                   plafond: number, atteignables: number,
+ *                   satisfaites: number,
+ *                   auDelaDuPlafond: boolean}>} parPersonne
+ *           chaque personne qui porte une ligne active, par index croissant :
+ *           k°(p), b(p), K(p), I(p), ses lignes satisfaites, et
+ *           auDelaDuPlafond quand b(p) > K(p)
  *
  * @typedef {Object} Mesures
  * @property {number[]} rencontres          |met(p)|, ordre canonique
@@ -112,6 +139,7 @@ import {
  *           ordre de instance.groupes
  * @property {MesuresObjectifs|null} objectifs
  * @property {MesuresAnimateurs|null} animateurs
+ * @property {MesuresInclusions|null} inclusions
  */
 
 // Plus grand compte que tient un Uint16Array.
@@ -301,9 +329,10 @@ export function parcourirTours(instance, tableDe) {
 // Lecture des paires réunies (reunies de parcourirTours), leurs comptes dans
 // parPaire : une paire jamais réunie ne change aucun chiffre, et l'ordre de
 // lecture n'en change aucun non plus. Par personne : |met(p)|, |F(p)| et
-// A(p), vu[p * G + g] notant que p a déjà croisé un affilié du groupe g. Sur
-// toutes les paires : les paires réunies deux fois au moins, et le plus
-// grand compte. O(paires réunies), et non O(N²).
+// A(p), vu[p * G + g] notant que p a déjà croisé un affilié du groupe g,
+// rendu pour les inclusions d'organisation. Sur toutes les paires : les
+// paires réunies deux fois au moins, et le plus grand compte. O(paires
+// réunies), et non O(N²).
 function lirePaires({ N, groupe, groupes }, parPaire, reunies) {
   const G = groupes.length;
   const rencontres = new Int32Array(N);
@@ -336,7 +365,72 @@ function lirePaires({ N, groupe, groupes }, parPaire, reunies) {
     if (n > maxRencontresPaire) maxRencontresPaire = n;
     if (n >= 2) repetees += 1;
   }
-  return { rencontres, affilies, vues, repetees, maxRencontresPaire };
+  return { rencontres, affilies, vues, vu, repetees, maxRencontresPaire };
+}
+
+/**
+ * La seule fonction qui décide qu'une inclusion est satisfaite (§ 13.2) :
+ * pour une personne cible q, la paire (p, q) est réunie à un tour au moins,
+ * parPaire ≥ 1 ; pour une organisation, codée −1 − g, p a rencontré un
+ * affilié du groupe g, vu[p × G + g] = 1. Le tour n'importe pas, et une
+ * deuxième rencontre n'ajoute rien.
+ *
+ * @param {import('./types.js').Instance} instance  N et groupes sont lus
+ * @param {{parPaire: ArrayLike<number>, vu: ArrayLike<number>}} lectures
+ *        parPaire de parcourirTours, vu de la lecture des paires
+ * @param {number} p      index de la source
+ * @param {number} cible  index d'une personne, ou −1 − g
+ * @returns {boolean}
+ */
+export function inclusionSatisfaite({ N, groupes }, { parPaire, vu }, p, cible) {
+  if (cible < 0) return vu[p * groupes.length - 1 - cible] === 1;
+  return parPaire[p < cible ? rangPaire(N, p, cible) : rangPaire(N, cible, p)] >= 1;
+}
+
+// Les inclusions mesurées (§ 5.4) : null sans ligne active. Chaque ligne
+// active se juge une fois par inclusionSatisfaite ; une personne compte ses
+// lignes satisfaites, et chaque unité (inclusions.js) non satisfaite fait un
+// avis.
+function lireInclusions(instance, lectures) {
+  const { N, inclusionsActives, inclusionDebut, inclusionCible } = instance;
+  if (inclusionsActives === 0) return null;
+  const cibles = ciblesDesInclusions(instance);
+  const satisfaite = new Uint8Array(inclusionsActives);
+  const parPersonne = [];
+  for (let p = 0; p < N; p += 1) {
+    const debut = inclusionDebut[p];
+    const fin = inclusionDebut[p + 1];
+    if (debut === fin) continue;
+    let satisfaites = 0;
+    for (let i = debut; i < fin; i += 1) {
+      if (!inclusionSatisfaite(instance, lectures, p, inclusionCible[i])) continue;
+      satisfaite[i] = 1;
+      satisfaites += 1;
+    }
+    parPersonne.push({
+      p,
+      actives: cibles.actives[p],
+      besoin: cibles.besoin[p],
+      plafond: cibles.plafond[p],
+      atteignables: cibles.atteignables[p],
+      satisfaites,
+      auDelaDuPlafond: cibles.auDela[p] === 1,
+    });
+  }
+  const nonSatisfaites = [];
+  const { uniteLigne, uniteSource, uniteReciproque } = cibles;
+  for (let u = 0; u < uniteLigne.length; u += 1) {
+    const i = uniteLigne[u];
+    if (satisfaite[i] === 1) continue;
+    nonSatisfaites.push({ p: uniteSource[u], cible: inclusionCible[i], reciproque: uniteReciproque[u] === 1 });
+  }
+  return {
+    cible: uniteLigne.length,
+    satisfaites: uniteLigne.length - nonSatisfaites.length,
+    avis: nonSatisfaites.length,
+    nonSatisfaites,
+    parPersonne,
+  };
 }
 
 // Lecture des listes de parcourirTours. Une paire de collègues réunie n fois
@@ -548,6 +642,7 @@ export function mesurer(instance, tableDe) {
     parGroupe,
     objectifs: lireObjectifs(instance, servis),
     animateurs: lireAnimateurs(instance, rencontresAnimateurs),
+    inclusions: lireInclusions(instance, { parPaire, vu: paires.vu }),
   };
 }
 

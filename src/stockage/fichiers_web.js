@@ -70,7 +70,10 @@
 // null. Un genre restreint le champ par accept, et sa taille, connue avant
 // la lecture, se compare au plafond du genre. enregistrerSous passe par un
 // lien de téléchargement : le navigateur range le fichier sans dire où ni si
-// l'opérateur y renonce, et la primitive rend le nom proposé.
+// l'opérateur y renonce, et la primitive rend le nom proposé. L'adresse du
+// contenu se libère à une minuterie de l'horloge que le système reçoit à sa
+// création, celle de l'application (§ 19.4) : le stockage n'arme aucune
+// minuterie du moteur d'exécution.
 import { ErreurStockage } from './erreurs.js';
 import { exigerCheminRelatif, exigerDepuis, exigerOctets, genreAImporter } from './systeme_fichiers.js';
 
@@ -390,11 +393,16 @@ function choisirFichier(genre) {
 
 /**
  * Système de fichiers de la plateforme web, sur l'OPFS. Chaque appel rend un
- * système neuf ; tous partagent l'OPFS de l'origine.
+ * système neuf ; tous partagent l'OPFS de l'origine. horloge est celle de
+ * l'application, dont il n'appelle que planifier.
  *
+ * @param {{planifier: (fn: () => void, ms: number) => unknown}} horloge
  * @returns {import('./systeme_fichiers.js').SystemeFichiers}
+ * @throws {TypeError} une horloge sans planifier
  */
-export function creerFichiersWeb() {
+export function creerFichiersWeb(horloge) {
+  if (typeof horloge?.planifier !== 'function') throw new TypeError("l'horloge n'a pas de planifier");
+  const { planifier } = horloge;
   return {
     nature: 'web',
     renommageAtomique: false,
@@ -576,7 +584,7 @@ export function creerFichiersWeb() {
     choisirFichierAImporter: async (options) => choisirFichier(genreAImporter(options)),
 
     // Le clic remet au navigateur l'adresse du contenu, qui se libère à la
-    // tâche suivante.
+    // minuterie de délai nul que l'horloge arme.
     enregistrerSous: async (nomPropose, octets) => {
       if (typeof nomPropose !== 'string' || nomPropose === '') {
         throw new TypeError("le nom proposé n'est pas une chaîne non vide");
@@ -587,7 +595,7 @@ export function creerFichiersWeb() {
       lien.href = adresse;
       lien.download = nomPropose;
       lien.click();
-      setTimeout(() => URL.revokeObjectURL(adresse), 0);
+      planifier(() => URL.revokeObjectURL(adresse), 0);
       return nomPropose;
     },
   };

@@ -137,6 +137,13 @@ const EXEMPLES_ECRAN = [
   ['diagnostic.concretement.collisionsAuMoins', { toursALimite: [3] }],
   ['diagnostic.concretement.collisionsAuMoins', { toursALimite: [] }],
   ['diagnostic.solveur.enCours', { tour: 2, tours: 4 }],
+  // Les inclusions : une raison se lit par sa clé
+  ['diagnostic.inclusionHorsAtteinte', { personne: 'Iris Ombrelle', cible: 'Théo Pervenche', raison: 'sansTourCommun' }],
+  ['qualite.inclusions.parce', { raison: 'qualite.inclusions.raison.conflit' }],
+  ['qualite.inclusions.synthese', { avis: 0, cible: 1 }],
+  ['qualite.inclusions.synthese', { avis: 0, cible: 0 }],
+  ['qualite.inclusions.auDela.ligne', { satisfaites: 1, actives: 3, atteignables: 1, possibles: 0 }],
+  ['participants.fiche.inclusionsPlacement.auDela', { atteignables: 1, possibles: 0 }],
   // La génération
   ['generation.avancement.texte', { fait: 1500, total: 20_000 }],
   ['generation.coeurs.disponibles', { disponibles: 8 }],
@@ -181,10 +188,17 @@ const EXEMPLES_ECRAN = [
   ['participants.conflit.regle.nouvelleTableNumero', { tables: [2, 5] }],
   ['participants.conflit.reglesDuTour', { textes: ['même organisation', 'revient à la table 5'] }],
   ['participants.presence.tours', { tours: [2, 3, 4] }],
+  ['participants.animation.tables', { numeros: [3] }],
+  ['participants.animation.tables', { numeros: [3, 5] }],
   [
     'participants.informations.conflitsSuivis',
     { renommee: { de: 'Atelier Ressac', vers: 'Atelier Embrun' }, retirees: ['Club des Merles', 'Fonds Grisaille'], propres: 2 },
   ],
+  [
+    'participants.informations.inclusionsSuivies',
+    { renommee: { de: 'Atelier Ressac', vers: 'Atelier Embrun' }, retirees: ['Club des Merles', 'Fonds Grisaille'], propres: 2 },
+  ],
+  ['participants.inclusions.cible', { nom: 'Iris Ombrelle', id: 4, homonyme: true, exclue: true }],
   [
     'participants.fiche.rencontres.toursListe',
     {

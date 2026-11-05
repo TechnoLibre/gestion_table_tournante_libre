@@ -35,7 +35,11 @@
 //   que la redondance, et la bascule ne change pas l'ordre d'acceptation ;
 // - classements : pour chaque charge de CLASSEMENT.cles, le classement
 //   qu'evaluer rend sous les quatre cases cochées, plafond a priori calculé
-//   (connu) puis inconnu, et les grandeurs nommées de chaque proposition.
+//   (connu) puis inconnu, et les grandeurs nommées de chaque proposition ;
+// - inclusions : la grande démonstration portant les listes de
+//   test/fixtures/moteur/inclusions_grande.json, sous chaque graine de
+//   GRAINES, à ARRET mouvements, une proposition, l'empreinte et les
+//   grandeurs nommées de son plan, et ses inclusions non satisfaites.
 //
 // GTT_EMPREINTES choisit le mode, sur le modèle de GTT_CAPTURES : verifier
 // par défaut ; ecrire récrit le fichier, par la seule épreuve
@@ -65,6 +69,7 @@ import { plafondsAPriori } from '../src/moteur/plafond.js';
 import { HISTORIQUE_PAR_DEFAUT, rechercher } from '../src/moteur/recherche.js';
 import { analyser, configurationDepuisCharge } from '../src/stockage/document.js';
 import { VERSION } from '../src/version.genere.js';
+import { grandeAvecInclusions } from './inclusions_grande.js';
 
 /** Le fichier des empreintes de référence. */
 export const CHEMIN_EMPREINTES = fileURLToPath(new URL('./fixtures/moteur/empreintes_defaut.json', import.meta.url));
@@ -273,6 +278,26 @@ export function empreintesDeLaBascule(cle, mode = 'places') {
 }
 
 /**
+ * Les empreintes de la section inclusions : les plans de la grande
+ * démonstration portant les listes de la fixture, une par graine de GRAINES,
+ * à ARRET mouvements, chacune avec ses inclusions non satisfaites, que les
+ * grandeurs nommées ne portent pas.
+ *
+ * @returns {Record<string, {empreinte: string, grandeurs: object, inclusionsNonSatisfaites: number}>}
+ */
+export function empreintesDesInclusions() {
+  const configuration = grandeAvecInclusions();
+  const instance = normaliser(configuration);
+  return Object.fromEntries(
+    GRAINES.map((graine) => {
+      const [{ plan }] = rechercher(configuration, { graine, arret: ARRET, nombre: 1 });
+      const { inclusions } = mesurer(instance, indexerPlan(instance, plan));
+      return [String(graine), { ...empreinteDuPlan(instance, plan), inclusionsNonSatisfaites: inclusions.avis }];
+    }),
+  );
+}
+
+/**
  * Les seize combinaisons des quatre cases, la première toutes cochées, la
  * dernière aucune, chacune nommée par ses cases cochées jointes par « + »,
  * ou « aucune ».
@@ -397,6 +422,7 @@ export function calculerEmpreintes() {
     combinaisons: empreintesDesCombinaisons(),
     bascule: Object.fromEntries(BASCULE.cles.map((cle) => [cle, empreintesDeLaBascule(cle)])),
     classements: Object.fromEntries(CLASSEMENT.cles.map((cle) => [cle, empreintesDuClassement(cle)])),
+    inclusions: empreintesDesInclusions(),
   };
 }
 

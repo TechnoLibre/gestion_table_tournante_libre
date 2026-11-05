@@ -9,14 +9,12 @@
   // lecture, ecriture ou bloque. La barre porte, de gauche à droite, la
   // place fixe, le libellé de mode, puis « Défaire », « Refaire » et
   // « Historique… » (§ 8.3), puis les outils, outils — la suite des états
-  // du plan —, et les actions, actions — « Imprimer… », calée à droite —,
-  // quand ils sont donnés. Outils et actions suivent la place fixe et ne la
-  // déplacent donc jamais : un refus posé à côté de la place fixe les
+  // du plan —, quand ils sont donnés. Les outils suivent la place fixe et
+  // ne la déplacent donc jamais : un refus posé à côté de la place fixe les
   // repousse sur la ligne suivante, à côté du libellé, sans ligne de plus.
-  // Une barre de moins de 80rem — la fenêtre de 1 366 px lui en donne
-  // davantage — passe les outils sous les commandes et les actions, sur une
-  // ligne à eux : la barre garde deux lignes là où, dans l'ordre du
-  // document, elle en prendrait trois.
+  // Dans une barre de moins de 80rem — la fenêtre de 1 366 px lui en donne
+  // davantage —, les outils passent sous les commandes et n'y prennent que
+  // leur propre hauteur, non celle d'une cible principale.
   //
   // Sous la barre vient la tête, tete, quand elle est donnée — l'en-tête de
   // l'événement et la navigation des sections —, puis les annonces,
@@ -74,8 +72,12 @@
   // panneau ouvert. L'ouverture est un état de ce composant, que l'écran de
   // l'événement garde d'une section à l'autre, et qui ne s'écrit nulle part.
   // Dans une barre de moins de 30rem — celle d'un téléphone —, le bouton ne
-  // montre que son icône, son libellé lu hors de la vue le nommant : la
-  // barre n'y prend pas de ligne de plus.
+  // montre que son icône, son libellé lu hors de la vue le nommant : il
+  // reste sur la ligne de « Défaire », et le groupe garde la hauteur d'une
+  // cible principale. La barre, elle, peut y prendre une ligne de plus
+  // que sans le bouton : en écriture, la place fixe, le libellé et
+  // « Défaire » seul remplissent sa première ligne, et le groupe passe
+  // alors entier sur la suivante.
   //
   // Les raccourcis de l'écran de l'événement (raccourcis.js, contexte
   // 'evenement') : un écouteur keydown sur le document, monté avec le
@@ -126,7 +128,7 @@
   import Historique from './Historique.svelte';
   import { bandeDeMode, commandeFixe, repriseOfferte } from './modele.js';
 
-  let { children, tete = null, annonces = null, outils = null, actions = null } = $props();
+  let { children, tete = null, annonces = null, outils = null } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -297,11 +299,6 @@
           {@render outils()}
         </div>
       {/if}
-      {#if actions !== null}
-        <div class="actions">
-          {@render actions()}
-        </div>
-      {/if}
     </div>
     {#if verrou !== null}
       <div class="verrou" data-verrou>
@@ -385,10 +382,8 @@
     gap: var(--espace-2) var(--espace-3);
   }
 
-  /* Les outils et les actions, centrés sur la hauteur d'une cible
-     principale ; les actions calées à droite de leur ligne. */
-  .outils,
-  .actions {
+  /* Les outils, centrés sur la hauteur d'une cible principale. */
+  .outils {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -396,13 +391,8 @@
     gap: var(--espace-2);
   }
 
-  .actions {
-    margin-left: auto;
-  }
-
   @container barre (max-width: 80rem) {
     .outils {
-      order: 1;
       min-height: 0;
     }
   }
@@ -563,7 +553,7 @@
      section ouverte, en gras, change la largeur de la navigation. Sa part,
      32 %, laisse au contenu 886 px dans une fenêtre de 1 366 px : les neuf
      onglets et les blancs entre les phases y tiennent sur une ligne, quelle
-     que soit la section ouverte, la plus large en demandant 885. Une tête
+     que soit la section ouverte, la plus large en demandant 876. Une tête
      de moins de 70rem — celle d'une fenêtre de 1 024 px — passe la place
      à la ligne, sous le contenu, sur toute sa largeur, où un avertissement
      d'une phrase tient en deux lignes, son action à côté. La tête est pour

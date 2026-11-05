@@ -34,8 +34,9 @@ const plancherExact = ({ plancher, tours, parTour }) =>
   "tant qu'aucun conflit ne se produit, les tables imposent au moins " +
   `${compte(plancher, 'collision cumulée', 'collisions cumulées')} ${surLesTours(tours)}${parTourEntreParentheses(parTour)}`;
 
-// « au tour 3 » ou « aux tours 2 et 3 » ; rien pour une liste vide.
-const auxToursListes = (tours) => (tours.length === 0 ? '' : ` ${auxToursNommes(tours)}`);
+// « au tour 3 » ou « aux tours 2 et 3 » ; rien pour une liste vide. Les
+// tours se nomment sous nomsTours (aides.js).
+const auxToursListes = (tours, nomsTours) => (tours.length === 0 ? '' : ` ${auxToursNommes(tours, nomsTours)}`);
 
 // « au tour » ou « aux R tours ».
 const auxTours = (tours) => (tours === 1 ? 'au tour' : `aux ${tours} tours`);
@@ -70,11 +71,11 @@ const placesQuiManquent = (n) => (n === 1 ? '1 place manque' : `${n} places manq
 // Le manque de chaque tour où il est positif, [{tour, manque}] croissants :
 // les tours d'un même manque se nomment ensemble, les manques dans l'ordre
 // de leur premier tour. La Map ne sert qu'à retrouver un manque déjà
-// rencontré.
-function manquesParTour(tours) {
+// rencontré. Les tours se nomment sous nomsTours (aides.js).
+function manquesParTour(tours, nomsTours) {
   const toursDe = new Map();
   for (const { tour, manque } of tours) toursDe.set(manque, [...(toursDe.get(manque) ?? []), tour]);
-  return enumeration([...toursDe].map(([manque, siens]) => `${placesQuiManquent(manque)} ${auxToursNommes(siens)}`));
+  return enumeration([...toursDe].map(([manque, siens]) => `${placesQuiManquent(manque)} ${auxToursNommes(siens, nomsTours)}`));
 }
 
 export const TABLE = new Map([
@@ -83,10 +84,11 @@ export const TABLE = new Map([
   ['diagnostic.nonCalcule', 'La configuration ne se normalise pas : le diagnostic ne se calcule pas.'],
   // Les intitulés des cartes que ne nomme pas une organisation
   // (cartesDiagnostic) : la séparation vidée de son sens, les conflits en
-  // étoile, puis le reste.
+  // étoile, le reste, puis les inclusions.
   ['diagnostic.carte.separation', 'Séparation des organisations'],
   ['diagnostic.carte.conflits', 'Organisations en conflit'],
   ['diagnostic.carte.ensemble', "Tout l'événement"],
+  ['diagnostic.carte.inclusions', 'Inclusions'],
   // La ligne du calcul exact sous les cartes de la section (Diagnostic.svelte)
   // : ce qui se calcule, au tour près, et pourquoi, puis la commande qui
   // l'arrête ; après l'arrêt, ce que le diagnostic garde.
@@ -147,7 +149,7 @@ export const TABLE = new Map([
   // ceux que la limite de temps a arrêtés.
   [
     'diagnostic.conflitsInevitables',
-    ({ toursSansIssue }) => `aucun plan ne peut éviter tout conflit d'organisation ${auxToursNommes(toursSansIssue)}`,
+    ({ toursSansIssue, nomsTours }) => `aucun plan ne peut éviter tout conflit d'organisation ${auxToursNommes(toursSansIssue, nomsTours)}`,
   ],
   ['diagnostic.collisionsExactes', (details) => `${plancherExact(details)} : c'est le minimum exact, qu'au moins un plan sans conflit atteint`],
   ['diagnostic.collisionsAuMoins', (details) => plancherExact(details)],
@@ -185,8 +187,8 @@ export const TABLE = new Map([
   // chaque tour où il est positif, quand il varie d'un tour à l'autre.
   [
     'diagnostic.placesManquantes',
-    ({ placesManquantes, tours }) =>
-      tours === undefined ? `${placesQuiManquent(placesManquantes)} à chaque tour` : manquesParTour(tours),
+    ({ placesManquantes, tours, nomsTours }) =>
+      tours === undefined ? `${placesQuiManquent(placesManquantes)} à chaque tour` : manquesParTour(tours, nomsTours),
   ],
   // Une personne au moins manque un tour : le plancher de l'écart
   // d'itinéraire ne se prouve plus, et chaque mesure ne compte que les
@@ -240,6 +242,22 @@ export const TABLE = new Map([
     'diagnostic.conflitsImposes',
     ({ conflits }) =>
       `${compte(conflits, "conflit d'organisation imposé", "conflits d'organisation imposés")} par les réservations`,
+  ],
+
+  // --- Les inclusions qu'aucun plan ne satisfait (§ 5.6) ---------------------
+  // Ces deux énoncés nomment leurs personnes, l'inclusion hors d'atteinte sa
+  // cible aussi, et la raison par son texte (qualite.inclusions.raison.*).
+  [
+    'diagnostic.inclusionHorsAtteinte',
+    ({ personne, cible, raison }, texte) =>
+      `inclusion hors d'atteinte : ${personne} \u{2192} ${cible}, ${texte(`qualite.inclusions.raison.${raison}`)}`,
+  ],
+  [
+    'diagnostic.inclusionsAuDela',
+    ({ personne, actives, besoin, plafond, atteignables }) =>
+      `${personne} : ${compte(actives, 'inclusion demande', 'inclusions demandent')} ${compte(besoin, 'personne', 'personnes')} ; ` +
+      `la soirée lui en fait rencontrer au plus ${plafond}, donc au plus ${compte(atteignables, 'satisfaite', 'satisfaites')}, et ` +
+      `${compte(actives - atteignables, 'reste', 'restent')} hors de portée`,
   ],
 
   // --- Les explications (§ 5.6) ------------------------------------------------
@@ -297,9 +315,9 @@ export const TABLE = new Map([
   ],
   [
     'diagnostic.concretement.conflitsInevitables',
-    ({ toursSansIssue }) =>
+    ({ toursSansIssue, nomsTours }) =>
       'les places des tables, une fois les réservations assises, ne suffisent pas à séparer les organisations en conflit ' +
-      `${auxToursNommes(toursSansIssue)}.`,
+      `${auxToursNommes(toursSansIssue, nomsTours)}.`,
   ],
   [
     'diagnostic.concretement.collisionsExactes',
@@ -308,8 +326,8 @@ export const TABLE = new Map([
   ],
   [
     'diagnostic.concretement.collisionsAuMoins',
-    ({ toursALimite }) =>
-      `le calcul exact a atteint sa limite de temps${auxToursListes(toursALimite)} : ce nombre est prouvé, mais peut-être pas atteignable.`,
+    ({ toursALimite, nomsTours }) =>
+      `le calcul exact a atteint sa limite de temps${auxToursListes(toursALimite, nomsTours)} : ce nombre est prouvé, mais peut-être pas atteignable.`,
   ],
   // moins et plus : le plus petit et le plus grand nombre de présents d'un
   // tour.
@@ -455,6 +473,18 @@ export const TABLE = new Map([
       "des personnes en conflit d'organisation sont réservées à une même table : chaque tour où une telle paire s'y retrouve " +
       `compte un conflit, ${conflits} en tout, et aucun placement qui honore les réservations ne les évite.`,
   ],
+  [
+    'diagnostic.concretement.inclusionHorsAtteinte',
+    "aucun placement ne peut la satisfaire : elle ne compte ni parmi les inclusions satisfaites, ni parmi les non satisfaites, et n'est pas un avis.",
+  ],
+  [
+    'diagnostic.concretement.inclusionsAuDela',
+    ({ actives, atteignables }) =>
+      "sa liste demande plus de personnes qu'elle n'en peut rencontrer : " +
+      `ne pas satisfaire ${actives <= 1 ? 'son inclusion' : `ses ${actives} inclusions`} n'est pas une erreur, ` +
+      `et aucune ne fait d'avis. Un placement lui en satisfait au plus ${atteignables} ; la page de qualité dit combien il en laisse ` +
+      'encore possibles sans les atteindre.',
+  ],
   ['diagnostic.levier.plafond', 'des tables plus grandes, ou un tour de plus.'],
 
   // --- La proposition choisie, expliquée (proposition.js) --------------------
@@ -519,6 +549,27 @@ export const TABLE = new Map([
   [
     'diagnostic.proposition.conflits.inevitables',
     "Aucun plan n'évite tous les conflits d'organisation : une relance ne les fera pas tomber à zéro.",
+  ],
+  // Les inclusions : les rencontres demandées qui ne se font pas, puis les
+  // listes qui dépassent ce que leurs personnes peuvent rencontrer, dont les
+  // inclusions encore possibles et non atteintes ne sont pas des avis.
+  ['diagnostic.proposition.inclusions.aucune', 'Chaque rencontre demandée par une inclusion se fait.'],
+  [
+    'diagnostic.proposition.inclusions',
+    ({ avis, cible }) =>
+      `${compte(avis, 'rencontre demandée', 'rencontres demandées')} par les inclusions sur ${cible} ` +
+      `${avis <= 1 ? 'ne se fait pas' : 'ne se font pas'} : ce sont les inclusions non satisfaites.`,
+  ],
+  [
+    'diagnostic.proposition.inclusions.auDela',
+    ({ personnes, possibles }) =>
+      (personnes === 1
+        ? "Une personne a une liste d'inclusions qui dépasse ce qu'elle peut rencontrer : "
+        : `${personnes} personnes ont une liste d'inclusions qui dépasse ce qu'elles peuvent rencontrer : `) +
+      (possibles === 0
+        ? 'toutes les inclusions encore possibles sont atteintes.'
+        : `${compte(possibles, "inclusion encore possible n'est pas atteinte", 'inclusions encore possibles ne sont pas atteintes')}, ` +
+          'sans que ce soit un avis.'),
   ],
   // Les collisions égalent le plancher renforcé par les conflits en étoile,
   // sans aucun conflit : seul un conflit les abaisserait.
@@ -648,7 +699,8 @@ export const TABLE = new Map([
       `Hors d'atteinte, et c'est prouvé : quel que soit le placement, au moins ${compte(mobiles, 'mobile finit', 'mobiles finissent')} ` +
       `sous ${mobiles <= 1 ? 'son' : 'leur'} plafond a priori ; aucun placement n'atteint le plafond a priori de chacun.`,
   ],
-  // Ce qu'on peut tenter. arret : le compte d'arrêt réglé.
+  // Ce qu'on peut tenter. arret : pour « Repartir d'elle », le compte d'arrêt
+  // qui a produit la proposition ; pour « Générer », le compte d'arrêt réglé.
   [
     'diagnostic.proposition.tenter.repartir',
     ({ proposition, arret }, texte) =>
@@ -721,4 +773,16 @@ export const TABLE = new Map([
     'diagnostic.remede.conflitsImposes',
     'des personnes en conflit sont réservées à une même table ; déplacer ou retirer l’une de ces réservations les sépare',
   ],
+  // Le remède d'une inclusion hors d'atteinte, par sa raison ; sans présent
+  // de l'organisation, un constat.
+  ['diagnostic.remede.inclusion.exclue', "réintégrer la personne incluse rend l'inclusion atteignable"],
+  ['diagnostic.remede.inclusion.sansPresent', "l'inclusion attend qu'un membre de l'organisation soit présent"],
+  ['diagnostic.remede.inclusion.conflit', "retirer le conflit d'organisation, ou l'inclusion"],
+  ['diagnostic.remede.inclusion.sansTourCommun', 'rendre les deux personnes présentes à un même tour'],
+  [
+    'diagnostic.remede.inclusion.tablesImposees',
+    'déplacer ou retirer une réservation, pour que les deux puissent partager une table à un tour commun',
+  ],
+  ['diagnostic.remede.inclusion.pleine', "libérer un siège, ou ajouter une table où les deux peuvent s'asseoir"],
+  ['diagnostic.remede.inclusionsAuDela', 'raccourcir sa liste, ou lui faire rencontrer plus de monde : des tables plus grandes, un tour de plus'],
 ]);

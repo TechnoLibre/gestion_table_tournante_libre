@@ -2,12 +2,18 @@
      SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
-  // La section des badges (§ 2.1 étape 12, § 11.2, § 11.6, § 11.8, Q1, Q3) :
-  // la planche de badges, un PDF à imprimer et à couper, et la liste des
-  // mêmes badges en CSV. Produire n'est pas modifier (§ 8.4, § 11.6) : la
-  // section vit en lecture comme sur un plan bloqué, et la séance n'écrit
-  // que le PDF, le CSV et, pour le papier et le modèle,
-  // reglages_locaux.json — ni l'état ni le journal.
+  // La section de l'impression (§ 2.1 étape 12, § 11.2, § 11.6, § 11.7,
+  // § 11.8, Q1, Q3), que la navigation nomme « Impression », en deux
+  // parties titrées. Sous « Badges », la planche de badges, un PDF à
+  // imprimer et à couper, la liste des mêmes badges en CSV, et la
+  // réédition ; sous « Plan », l'aperçu avant impression du plan, de la
+  // liste d'accueil et de la feuille par table (Apercu.svelte), le seul
+  // endroit d'où l'on imprime. Produire n'est pas modifier (§ 8.4, § 11.6) :
+  // la section vit en lecture comme sur un plan bloqué, et la séance
+  // n'écrit que le PDF, le CSV et, pour le papier, le modèle, les cases et
+  // les colonnes de la liste, reglages_locaux.json — ni l'état ni le
+  // journal, sauf l'image des badges, réglage de l'événement, dont chaque
+  // geste est une entrée.
   //
   // Le modèle de badge est un réglage de la machine (EtatSeance.modeleBadge,
   // seance.choisirModeleBadge), Avery 5392 tant que l'opérateur n'en a pas
@@ -26,17 +32,18 @@
   // la machine ne retient pas vaut pour la séance, et une annonce le dit
   // sous les réglages tant qu'elle est celle de la séance, comme le modèle.
   //
-  // Sous la case, un champ de quelques lignes porte le texte de ce pied,
-  // autre réglage de la machine (EtatSeance.textePiedTechnolibre,
+  // Sous la case, un champ de quelques lignes porte le texte de ce pied, autre
+  // réglage de la machine (EtatSeance.textePiedTechnolibre,
   // seance.choisirTextePiedTechnolibre), prérempli de la phrase d'origine
-  // (TEXTE_PIED_TECHNOLIBRE_DEFAUT) ; la case décochée le désactive. La
-  // frappe ne vit que dans le champ, en brouillon ; le texte s'écrit quand
-  // le champ se quitte — l'événement change —, normalisé, et seulement
-  // quand il diffère de celui de la séance. « Texte par défaut » remet la
-  // phrase d'origine ; il est désactivé quand le champ la porte déjà, à la
-  // normalisation près, ou que la case est décochée. Un texte que la
-  // machine ne retient pas s'annonce tant qu'il est celui de la séance,
-  // comme la case.
+  // (TEXTE_PIED_TECHNOLIBRE_DEFAUT) ; la case décochée le désactive. La frappe
+  // ne vit que dans le champ, en brouillon ; le texte s'écrit quand le champ se
+  // quitte — l'événement change —, normalisé, et seulement quand il diffère de
+  // celui de la séance. Le brouillon est une saisie non validée : un geste
+  // ouvert (geste.js), qui suspend le compte d'inactivité de la séance (§ 8.4).
+  // « Texte par défaut » remet la phrase d'origine ; il est désactivé quand le
+  // champ la porte déjà, à la normalisation près, ou que la case est décochée.
+  // Un texte que la machine ne retient pas s'annonce tant qu'il est celui de la
+  // séance, comme la case.
   //
   // À côté d'elle, dans le même groupe, cinq cases de la machine disent ce
   // que le badge imprime en plus du nom et des tours, une par donnée de
@@ -46,6 +53,28 @@
   // jusqu'à ce qu'un choix de CETTE case soit retenu, quoi qu'il advienne
   // des autres, et l'annonce le dit tant qu'une case non retenue garde dans
   // la séance la valeur choisie.
+  //
+  // Sous elles, la case « Organisation en gros, au-dessus du nom », autre
+  // réglage de la machine (EtatSeance.organisationEnGros,
+  // seance.choisirOrganisationEnGros), cochée tant que l'opérateur ne l'a
+  // pas décochée : le badge d'une personne qui a une organisation la pose en
+  // gros, et le nom en petit sous elle. Elle est désactivée tant que la case
+  // « Organisation » est décochée, aucune organisation ne s'imprimant. Une
+  // case que la machine ne retient pas s'annonce tant qu'elle est celle de
+  // la séance, comme celle du pied.
+  //
+  // Juste avant la case du pied TechnoLibre, la case « Laisser le nom des
+  // doublons en blanc », autre réglage de la machine (EtatSeance.cacherNumero,
+  // seance.choisirCacherNumero), cochée tant que l'opérateur ne l'a pas
+  // décochée : le badge d'une personne que l'import a numérotée garde la
+  // place de son nom, vide, pour l'écrire à la main, ce que dit la note
+  // sous la case. Une case que la machine ne retient pas s'annonce tant
+  // qu'elle est celle de la séance, comme celle du pied.
+  //
+  // Sous le groupe des cases, l'image sur tous les badges
+  // (ImageBadges.svelte), un réglage de l'événement et non du poste : sa
+  // case, son image et sa position s'écrivent dans le fichier d'état, en
+  // écriture seulement, et la charge qui change retire l'annonce montrée.
   //
   // Les réglages d'une demande : la source — le retenu s'il existe, sinon la
   // proposition demandée au plan depuis les propositions, choisie quand les
@@ -77,6 +106,13 @@
   // choisis — pour Avery 5392, celui de la feuille de contrôle aussi —
   // remplacent ceux de la planche.
   //
+  // Les colonnes de la liste des badges en CSV sont un autre réglage de la
+  // machine (EtatSeance.colonnesListe, seance.choisirColonnesListe), choisi
+  // parmi les réglages : une colonne par tour tant que l'opérateur n'a pas
+  // choisi « Une seule colonne ». La planche ne les lit pas : l'annonce
+  // montrée reste. Un choix que la machine ne retient pas s'annonce tant
+  // qu'il est celui de la séance, comme le modèle.
+  //
   // « Produire la liste (CSV) » dépose la liste de la demande courante
   // (produireListeBadges) et nomme son chemin, ou son nom sous web. Elle ne
   // prépare pas l'annonce : seuls les refus du placement la gardent, levés
@@ -92,20 +128,24 @@
   // d'activité (activite.js) : l'annonce, la planche et la liste se
   // calculent sur le fil du rendu.
   //
-  // Habillage : les réglages, le papier, les commandes, l'annonce et les
-  // fichiers produits vivent dans la carte de la planche ; « Produire la
-  // planche (PDF) » en est l'action principale. L'annonce se pose sur le
-  // fond sourd de la carte, les fichiers produits sur le fond de
-  // l'information. La réédition est une carte à elle.
-  import { getContext } from 'svelte';
-  import { DONNEES_BADGE, TEXTE_PIED_TECHNOLIBRE_DEFAUT, normaliserTextePied } from '../../application/seance.js';
+  // Habillage : chaque partie est une région nommée par son titre. Les
+  // réglages, le papier, les commandes, l'annonce et les fichiers produits
+  // vivent dans la carte de la planche ; « Produire la planche (PDF) » en
+  // est l'action principale. L'annonce se pose sur le fond sourd de la
+  // carte, les fichiers produits sur le fond de l'information. La réédition
+  // est une carte à elle.
+  import { getContext, onDestroy } from 'svelte';
+  import { COLONNES_LISTE_BADGES, DONNEES_BADGE, TEXTE_PIED_TECHNOLIBRE_DEFAUT, normaliserTextePied } from '../../application/seance.js';
   import { PAPIER_BADGES_DEFAUT } from '../../geometrie/papiers.js';
   import Message from '../accueil/Message.svelte';
   import { suivre } from '../activite.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
+  import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
+  import Apercu from '../impression/Apercu.svelte';
   import Papier from '../sorties/Papier.svelte';
+  import ImageBadges from './ImageBadges.svelte';
   import Reedition from './Reedition.svelte';
   import {
     IMPOSITIONS_OFFERTES,
@@ -137,6 +177,9 @@
   const piedTechnolibre = $derived($seance.piedTechnolibre);
   const textePiedTechnolibre = $derived($seance.textePiedTechnolibre);
   const donneesBadge = $derived($seance.donneesBadge);
+  const cacherNumero = $derived($seance.cacherNumero);
+  const organisationEnGros = $derived($seance.organisationEnGros);
+  const colonnesListe = $derived($seance.colonnesListe);
   const cartes = $derived(modeleImposeSonPapier(modeleBadge));
   const offertes = $derived(charge === null ? [] : sourcesOffertes(charge, $ui.proposition));
 
@@ -190,9 +233,14 @@
   let liste = $state(null);
   let derniereListe = null;
   // Le dernier modèle choisi que la machine n'a pas retenu, ou null ; de
-  // même, la dernière valeur de la case du pied TechnoLibre.
+  // même, la dernière valeur de la case du pied TechnoLibre, celle de la
+  // case du nom des doublons, celle de l'organisation en gros, et les
+  // dernières colonnes de la liste.
   let modeleNonRetenu = $state(null);
   let piedNonRetenu = $state(null);
+  let cacherNonRetenu = $state(null);
+  let enGrosNonRetenu = $state(null);
+  let colonnesNonRetenues = $state(null);
   // Les cases que la machine n'a pas retenues, chacune avec la valeur de son
   // dernier choix : une donnée y entre quand son choix n'est pas retenu, en
   // sort quand un choix d'elle l'est. Vide tant que tout est retenu.
@@ -204,6 +252,9 @@
   // null : le champ montre alors le texte de la séance.
   let brouillon = $state(null);
   const texteMontre = $derived(brouillon ?? textePiedTechnolibre);
+  const gesteTexte = creerGeste(seance);
+  $effect(() => gesteTexte.tenir(brouillon !== null));
+  onDestroy(() => gesteTexte.liberer());
   const texteDejaDefaut = $derived(normaliserTextePied(texteMontre) === TEXTE_PIED_TECHNOLIBRE_DEFAUT);
   // Vrai quand une case non retenue garde, dans la séance, la valeur choisie.
   const annoncerDonnees = $derived(
@@ -309,6 +360,26 @@
     piedNonRetenu = retenu ? null : coche;
   }
 
+  // La case du nom des doublons s'écrit sur la machine, comme celle du
+  // pied TechnoLibre.
+  async function choisirCacher(coche) {
+    const { retenu } = await seance.choisirCacherNumero(coche);
+    cacherNonRetenu = retenu ? null : coche;
+  }
+
+  // La case de l'organisation en gros s'écrit sur la machine, comme celle
+  // du pied TechnoLibre.
+  async function choisirEnGros(coche) {
+    const { retenu } = await seance.choisirOrganisationEnGros(coche);
+    enGrosNonRetenu = retenu ? null : coche;
+  }
+
+  // Les colonnes de la liste s'écrivent sur la machine, comme le modèle.
+  async function choisirColonnes(colonnes) {
+    const { retenu } = await seance.choisirColonnesListe(colonnes);
+    colonnesNonRetenues = retenu ? null : colonnes;
+  }
+
   // Le texte quitté s'écrit sur la machine, comme la case, quand sa forme
   // normalisée diffère de celui de la séance ; le champ montre ensuite le
   // texte de la séance, normalisé. Quitter le champ sans changement — une
@@ -333,199 +404,253 @@
 
 <section data-section="badges">
   <h2>{t('coquille.section.badges')}</h2>
-  <p>{t('badges.introduction')}</p>
 
-  {#if charge !== null}
-    <Carte titre={t('badges.planche.titre')} niveau={3}>
-      <div class="planche">
-        <div class="reglages">
-          <label class="reglage">
-            <span>{t('badges.modele.titre')}</span>
-            <select data-champ="modeleBadge" value={modeleBadge} onchange={(evenement) => choisirModele(evenement.currentTarget.value)}>
-              {#each MODELES_OFFERTS as valeur (valeur)}
-                <option value={valeur}>{t(cleModele(valeur))}</option>
-              {/each}
-            </select>
-          </label>
-          {#if offertes.length > 1}
+  <section class="partie" data-partie-impression="badges" aria-labelledby={`${uid}-partie-badges`}>
+    <h3 id={`${uid}-partie-badges`}>{t('badges.partie.badges')}</h3>
+    <p>{t('badges.introduction')}</p>
+
+    {#if charge !== null}
+      <Carte titre={t('badges.planche.titre')} niveau={4}>
+        <div class="planche">
+          <div class="reglages">
             <label class="reglage">
-              <span>{t('badges.source.titre')}</span>
-              <select data-champ="source" value={cleSource(source)} onchange={(evenement) => (cleChoisie = evenement.currentTarget.value)}>
-                {#each offertes as offerte (cleSource(offerte))}
-                  <option value={cleSource(offerte)}>{t(libelleSource(offerte).cle, libelleSource(offerte).details)}</option>
+              <span>{t('badges.modele.titre')}</span>
+              <select data-champ="modeleBadge" value={modeleBadge} onchange={(evenement) => choisirModele(evenement.currentTarget.value)}>
+                {#each MODELES_OFFERTS as valeur (valeur)}
+                  <option value={valeur}>{t(cleModele(valeur))}</option>
                 {/each}
               </select>
             </label>
-          {/if}
-          {#if !cartes}
+            {#if offertes.length > 1}
+              <label class="reglage">
+                <span>{t('badges.source.titre')}</span>
+                <select data-champ="source" value={cleSource(source)} onchange={(evenement) => (cleChoisie = evenement.currentTarget.value)}>
+                  {#each offertes as offerte (cleSource(offerte))}
+                    <option value={cleSource(offerte)}>{t(libelleSource(offerte).cle, libelleSource(offerte).details)}</option>
+                  {/each}
+                </select>
+              </label>
+            {/if}
+            {#if !cartes}
+              <label class="reglage">
+                <span>{t('badges.imposition.titre')}</span>
+                <select data-champ="imposition" value={imposition} onchange={(evenement) => (imposition = evenement.currentTarget.value)}>
+                  {#each IMPOSITIONS_OFFERTES as valeur (valeur)}
+                    <option value={valeur}>{t(cleImposition(valeur))}</option>
+                  {/each}
+                </select>
+              </label>
+            {/if}
             <label class="reglage">
-              <span>{t('badges.imposition.titre')}</span>
-              <select data-champ="imposition" value={imposition} onchange={(evenement) => (imposition = evenement.currentTarget.value)}>
-                {#each IMPOSITIONS_OFFERTES as valeur (valeur)}
-                  <option value={valeur}>{t(cleImposition(valeur))}</option>
+              <span>{t('badges.ordre.titre')}</span>
+              <select data-champ="ordre" value={ordre} onchange={(evenement) => (ordre = evenement.currentTarget.value)}>
+                {#each ORDRES_OFFERTS as valeur (valeur)}
+                  <option value={valeur}>{t(cleOrdre(valeur))}</option>
                 {/each}
               </select>
             </label>
-          {/if}
-          <label class="reglage">
-            <span>{t('badges.ordre.titre')}</span>
-            <select data-champ="ordre" value={ordre} onchange={(evenement) => (ordre = evenement.currentTarget.value)}>
-              {#each ORDRES_OFFERTS as valeur (valeur)}
-                <option value={valeur}>{t(cleOrdre(valeur))}</option>
+            <label class="reglage">
+              <span>{t('badges.liste.colonnes.titre')}</span>
+              <select data-champ="colonnesListe" value={colonnesListe} onchange={(evenement) => choisirColonnes(evenement.currentTarget.value)}>
+                {#each COLONNES_LISTE_BADGES as valeur (valeur)}
+                  <option value={valeur}>{t(`badges.liste.colonnes.${valeur}`)}</option>
+                {/each}
+              </select>
+            </label>
+          </div>
+          <div class="cases" role="group" aria-labelledby={`${uid}-cases`}>
+            <p class="intitule" id={`${uid}-cases`}>{t('badges.donnees.titre')}</p>
+            <div class="rangee">
+              {#each DONNEES_BADGE as donnee (donnee)}
+                <div class="case">
+                  <input
+                    id={`${uid}-donnee-${donnee}`}
+                    type="checkbox"
+                    data-champ={`donneeBadge.${donnee}`}
+                    checked={donneesBadge[donnee]}
+                    onchange={(evenement) => choisirDonnee(donnee, evenement.currentTarget.checked)}
+                  />
+                  <label for={`${uid}-donnee-${donnee}`}>{t(`badges.donnees.${donnee}`)}</label>
+                </div>
               {/each}
-            </select>
-          </label>
-        </div>
-        <div class="cases" role="group" aria-labelledby={`${uid}-cases`}>
-          <p class="intitule" id={`${uid}-cases`}>{t('badges.donnees.titre')}</p>
-          <div class="rangee">
-            {#each DONNEES_BADGE as donnee (donnee)}
+            </div>
+            <div class="case">
+              <input
+                id={`${uid}-en-gros`}
+                type="checkbox"
+                data-champ="organisationEnGros"
+                checked={organisationEnGros}
+                disabled={!donneesBadge.organisation}
+                onchange={(evenement) => choisirEnGros(evenement.currentTarget.checked)}
+              />
+              <label for={`${uid}-en-gros`}>{t('badges.organisationEnGros.case')}</label>
+            </div>
+            <div class="case-notee">
               <div class="case">
                 <input
-                  id={`${uid}-donnee-${donnee}`}
+                  id={`${uid}-doublons`}
                   type="checkbox"
-                  data-champ={`donneeBadge.${donnee}`}
-                  checked={donneesBadge[donnee]}
-                  onchange={(evenement) => choisirDonnee(donnee, evenement.currentTarget.checked)}
+                  data-champ="cacherNumero"
+                  checked={cacherNumero}
+                  aria-describedby={`${uid}-doublons-note`}
+                  onchange={(evenement) => choisirCacher(evenement.currentTarget.checked)}
                 />
-                <label for={`${uid}-donnee-${donnee}`}>{t(`badges.donnees.${donnee}`)}</label>
+                <label for={`${uid}-doublons`}>{t('badges.doublons.case')}</label>
               </div>
-            {/each}
+              <p class="aide note" id={`${uid}-doublons-note`}>{t('badges.doublons.note')}</p>
+            </div>
+            <div class="case">
+              <input
+                id={`${uid}-technolibre`}
+                type="checkbox"
+                data-champ="piedTechnolibre"
+                checked={piedTechnolibre}
+                onchange={(evenement) => choisirPied(evenement.currentTarget.checked)}
+              />
+              <label for={`${uid}-technolibre`}>{t('badges.technolibre.case')}</label>
+            </div>
+            <div class="texte-pied">
+              <label for={`${uid}-texte-pied`}>{t('badges.technolibre.texte')}</label>
+              <textarea
+                id={`${uid}-texte-pied`}
+                data-champ="textePiedTechnolibre"
+                rows="3"
+                value={texteMontre}
+                disabled={!piedTechnolibre}
+                aria-describedby={`${uid}-texte-pied-aide`}
+                oninput={(evenement) => (brouillon = evenement.currentTarget.value)}
+                onchange={(evenement) => retenirTexte(evenement.currentTarget.value)}
+                onblur={() => (brouillon = null)}
+              ></textarea>
+              <p class="aide" id={`${uid}-texte-pied-aide`}>{t('badges.technolibre.texteAide')}</p>
+              <button
+                type="button"
+                class="defaut"
+                data-commande="texteParDefaut"
+                disabled={!piedTechnolibre || texteDejaDefaut}
+                onclick={() => retenirTexte(TEXTE_PIED_TECHNOLIBRE_DEFAUT)}>{t('badges.technolibre.texteDefaut')}</button
+              >
+            </div>
           </div>
-          <div class="case">
-            <input
-              id={`${uid}-technolibre`}
-              type="checkbox"
-              data-champ="piedTechnolibre"
-              checked={piedTechnolibre}
-              onchange={(evenement) => choisirPied(evenement.currentTarget.checked)}
-            />
-            <label for={`${uid}-technolibre`}>{t('badges.technolibre.case')}</label>
+          <ImageBadges {charge} />
+          <div role="status">
+            {#if modeleNonRetenu !== null && modeleNonRetenu === modeleBadge}
+              <Message ton="avis"><p data-avertissement="modeleNonRetenu">{t('badges.modele.nonRetenu')}</p></Message>
+            {/if}
+            {#if piedNonRetenu !== null && piedNonRetenu === piedTechnolibre}
+              <Message ton="avis"><p data-avertissement="piedNonRetenu">{t('badges.technolibre.nonRetenu')}</p></Message>
+            {/if}
+            {#if enGrosNonRetenu !== null && enGrosNonRetenu === organisationEnGros}
+              <Message ton="avis"><p data-avertissement="enGrosNonRetenu">{t('badges.organisationEnGros.nonRetenu')}</p></Message>
+            {/if}
+            {#if cacherNonRetenu !== null && cacherNonRetenu === cacherNumero}
+              <Message ton="avis"><p data-avertissement="cacherNonRetenu">{t('badges.doublons.nonRetenu')}</p></Message>
+            {/if}
+            {#if texteNonRetenu !== null && texteNonRetenu === textePiedTechnolibre}
+              <Message ton="avis"><p data-avertissement="texteNonRetenu">{t('badges.technolibre.texteNonRetenu')}</p></Message>
+            {/if}
+            {#if annoncerDonnees}
+              <Message ton="avis"><p data-avertissement="donneesNonRetenues">{t('badges.donnees.nonRetenues')}</p></Message>
+            {/if}
+            {#if colonnesNonRetenues !== null && colonnesNonRetenues === colonnesListe}
+              <Message ton="avis"><p data-avertissement="colonnesNonRetenues">{t('badges.liste.colonnes.nonRetenu')}</p></Message>
+            {/if}
           </div>
-          <div class="texte-pied">
-            <label for={`${uid}-texte-pied`}>{t('badges.technolibre.texte')}</label>
-            <textarea
-              id={`${uid}-texte-pied`}
-              data-champ="textePiedTechnolibre"
-              rows="3"
-              value={texteMontre}
-              disabled={!piedTechnolibre}
-              aria-describedby={`${uid}-texte-pied-aide`}
-              oninput={(evenement) => (brouillon = evenement.currentTarget.value)}
-              onchange={(evenement) => retenirTexte(evenement.currentTarget.value)}
-              onblur={() => (brouillon = null)}
-            ></textarea>
-            <p class="aide" id={`${uid}-texte-pied-aide`}>{t('badges.technolibre.texteAide')}</p>
-            <button
-              type="button"
-              class="defaut"
-              data-commande="texteParDefaut"
-              disabled={!piedTechnolibre || texteDejaDefaut}
-              onclick={() => retenirTexte(TEXTE_PIED_TECHNOLIBRE_DEFAUT)}>{t('badges.technolibre.texteDefaut')}</button
-            >
-          </div>
-        </div>
-        <div role="status">
-          {#if modeleNonRetenu !== null && modeleNonRetenu === modeleBadge}
-            <Message ton="avis"><p data-avertissement="modeleNonRetenu">{t('badges.modele.nonRetenu')}</p></Message>
-          {/if}
-          {#if piedNonRetenu !== null && piedNonRetenu === piedTechnolibre}
-            <Message ton="avis"><p data-avertissement="piedNonRetenu">{t('badges.technolibre.nonRetenu')}</p></Message>
-          {/if}
-          {#if texteNonRetenu !== null && texteNonRetenu === textePiedTechnolibre}
-            <Message ton="avis"><p data-avertissement="texteNonRetenu">{t('badges.technolibre.texteNonRetenu')}</p></Message>
-          {/if}
-          {#if annoncerDonnees}
-            <Message ton="avis"><p data-avertissement="donneesNonRetenues">{t('badges.donnees.nonRetenues')}</p></Message>
-          {/if}
-        </div>
 
-        {#if !cartes}
-          <Papier defaut={PAPIER_BADGES_DEFAUT} onChoisi={papierChoisi} />
-        {/if}
+          {#if !cartes}
+            <Papier defaut={PAPIER_BADGES_DEFAUT} onChoisi={papierChoisi} />
+          {/if}
 
-        <div class="commandes">
-          <Commande cle="badges.commande.preparer" nom="preparerPlanche" executer={() => preparer(null)} {gestes} />
+          <div class="commandes">
+            <Commande cle="badges.commande.preparer" nom="preparerPlanche" executer={() => preparer(null)} {gestes} />
+            {#if bloque}
+              <button type="button" data-commande="produirePlanche" aria-disabled="true" aria-describedby={`${uid}-bloque`}
+                >{t('badges.commande.produire')}</button
+              >
+            {:else}
+              <Commande cle="badges.commande.produire" nom="produirePlanche" variante="principale" executer={() => produire(null)} {gestes} />
+            {/if}
+            {#if listeEnRefus}
+              <button type="button" data-commande="produireListe" aria-disabled="true" aria-describedby={`${uid}-liste`}
+                >{t('badges.commande.produireListe')}</button
+              >
+            {:else}
+              <Commande cle="badges.commande.produireListe" nom="produireListe" executer={produireLaListe} gestes={gestesListe} />
+            {/if}
+            {#if explorateur.disponible}
+              <Commande cle="badges.commande.ouvrirDossier" nom="ouvrirDossier" executer={() => seance.ouvrirDossierEvenement()} />
+            {/if}
+          </div>
           {#if bloque}
-            <button type="button" data-commande="produirePlanche" aria-disabled="true" aria-describedby={`${uid}-bloque`}
-              >{t('badges.commande.produire')}</button
-            >
-          {:else}
-            <Commande cle="badges.commande.produire" nom="produirePlanche" variante="principale" executer={() => produire(null)} {gestes} />
+            <p class="explication" id={`${uid}-bloque`}>{t('badges.produire.bloque')}</p>
           {/if}
           {#if listeEnRefus}
-            <button type="button" data-commande="produireListe" aria-disabled="true" aria-describedby={`${uid}-liste`}
-              >{t('badges.commande.produireListe')}</button
-            >
-          {:else}
-            <Commande cle="badges.commande.produireListe" nom="produireListe" executer={produireLaListe} gestes={gestesListe} />
+            <p class="explication" id={`${uid}-liste`}>{t('badges.liste.bloquee')}</p>
           {/if}
-          {#if explorateur.disponible}
-            <Commande cle="badges.commande.ouvrirDossier" nom="ouvrirDossier" executer={() => seance.ouvrirDossierEvenement()} />
+          {#if refusRepris !== null}
+            <Refus refus={refusRepris} lever={() => (refusRepris = null)} {gestes} />
+          {/if}
+
+          {#if montree !== null}
+            <div class="annonce" data-annonce-planche role="group" aria-labelledby={`${uid}-annonce`}>
+              <h5 id={`${uid}-annonce`}>{t('badges.annonce.titre')}</h5>
+              <ul>
+                {#each phrases as phrase, rang (rang)}
+                  <li>{t(phrase.cle, phrase.details)}</li>
+                {/each}
+              </ul>
+              {#if montree.annonce.refus !== null}
+                <Refus refus={montree.annonce.refus} {gestes} />
+              {/if}
+            </div>
+          {/if}
+
+          {#if produite !== null}
+            <div class="produite">
+              {#if produite.chemin !== null}
+                <p>
+                  <span>{t('badges.produite.chemin')}</span>
+                  <span class="chemin" data-chemin-planche>{produite.chemin}</span>
+                </p>
+                {#if produite.controle !== null}
+                  <p>
+                    <span>{t('badges.produite.controle')}</span>
+                    <span class="chemin" data-chemin-controle>{produite.controle.chemin}</span>
+                  </p>
+                {/if}
+              {:else}
+                <p data-chemin-planche>{t('badges.produite.telechargee', { nom: produite.nom })}</p>
+                {#if produite.controle !== null}
+                  <p data-chemin-controle>{t('badges.produite.controleTelechargee', { nom: produite.controle.nom })}</p>
+                {/if}
+              {/if}
+            </div>
+          {/if}
+
+          {#if liste !== null}
+            <div class="produite">
+              {#if liste.chemin !== null}
+                <p>
+                  <span>{t('badges.produite.liste')}</span>
+                  <span class="chemin" data-chemin-liste>{liste.chemin}</span>
+                </p>
+              {:else}
+                <p data-chemin-liste>{t('badges.produite.listeTelechargee', { nom: liste.nom })}</p>
+              {/if}
+            </div>
           {/if}
         </div>
-        {#if bloque}
-          <p class="explication" id={`${uid}-bloque`}>{t('badges.produire.bloque')}</p>
-        {/if}
-        {#if listeEnRefus}
-          <p class="explication" id={`${uid}-liste`}>{t('badges.liste.bloquee')}</p>
-        {/if}
-        {#if refusRepris !== null}
-          <Refus refus={refusRepris} lever={() => (refusRepris = null)} {gestes} />
-        {/if}
+      </Carte>
 
-        {#if montree !== null}
-          <div class="annonce" data-annonce-planche role="group" aria-labelledby={`${uid}-annonce`}>
-            <h3 id={`${uid}-annonce`}>{t('badges.annonce.titre')}</h3>
-            <ul>
-              {#each phrases as phrase, rang (rang)}
-                <li>{t(phrase.cle, phrase.details)}</li>
-              {/each}
-            </ul>
-            {#if montree.annonce.refus !== null}
-              <Refus refus={montree.annonce.refus} {gestes} />
-            {/if}
-          </div>
-        {/if}
+      <Reedition {charge} executer={produire} {gestes} />
+    {/if}
+  </section>
 
-        {#if produite !== null}
-          <div class="produite">
-            {#if produite.chemin !== null}
-              <p>
-                <span>{t('badges.produite.chemin')}</span>
-                <span class="chemin" data-chemin-planche>{produite.chemin}</span>
-              </p>
-              {#if produite.controle !== null}
-                <p>
-                  <span>{t('badges.produite.controle')}</span>
-                  <span class="chemin" data-chemin-controle>{produite.controle.chemin}</span>
-                </p>
-              {/if}
-            {:else}
-              <p data-chemin-planche>{t('badges.produite.telechargee', { nom: produite.nom })}</p>
-              {#if produite.controle !== null}
-                <p data-chemin-controle>{t('badges.produite.controleTelechargee', { nom: produite.controle.nom })}</p>
-              {/if}
-            {/if}
-          </div>
-        {/if}
-
-        {#if liste !== null}
-          <div class="produite">
-            {#if liste.chemin !== null}
-              <p>
-                <span>{t('badges.produite.liste')}</span>
-                <span class="chemin" data-chemin-liste>{liste.chemin}</span>
-              </p>
-            {:else}
-              <p data-chemin-liste>{t('badges.produite.listeTelechargee', { nom: liste.nom })}</p>
-            {/if}
-          </div>
-        {/if}
-      </div>
-    </Carte>
-
-    <Reedition {charge} executer={produire} {gestes} />
+  {#if charge !== null}
+    <section class="partie" data-partie-impression="plan" aria-labelledby={`${uid}-partie-plan`}>
+      <h3 id={`${uid}-partie-plan`}>{t('badges.partie.plan')}</h3>
+      <Apercu />
+    </section>
   {/if}
 </section>
 
@@ -542,7 +667,21 @@
     font-size: var(--taille-titre);
   }
 
-  h3 {
+  /* Le titre d'une partie, au corps des titres de carte — aucun jeton ne
+     tombe entre lui et celui de la section — : sa place, au-dessus des
+     cartes de sa partie, et le filet qui ouvre la seconde partie, au-dessus
+     de son titre, l'en distinguent. */
+  .partie > h3 {
+    margin: 0;
+    font-size: var(--taille-titre-carte);
+  }
+
+  .partie + .partie {
+    padding-top: var(--espace-4);
+    border-top: 1px solid var(--couleur-page-filet);
+  }
+
+  .annonce h5 {
     margin: 0;
     font-size: var(--taille-texte);
   }
@@ -584,8 +723,8 @@
   /* Les cases de ce que le badge imprime, sous les sélecteurs : leur
      intitulé, en petites capitales d'encre secondaire comme celui d'un
      sélecteur, puis les cinq cases en rangée qui se replie, puis celle du
-     pied TechnoLibre. Chaque case : la case, puis son libellé, en encre
-     courante. */
+     nom des doublons et sa note, puis celle du pied TechnoLibre. Chaque
+     case : la case, puis son libellé, en encre courante. */
   .cases {
     display: flex;
     flex-direction: column;
@@ -614,6 +753,25 @@
 
   .case input {
     margin: 0;
+  }
+
+  /* Une case désactivée, celle de l'organisation en gros sans organisation
+     imprimée : son libellé passe à l'encre secondaire, comme le champ du
+     texte du pied TechnoLibre. */
+  .case input:disabled + label {
+    color: var(--couleur-page-texte-secondaire);
+  }
+
+  /* Une case suivie de sa note, en encre secondaire, serrée sous elle et
+     alignée sur le retrait du texte du pied TechnoLibre. */
+  .case-notee {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-1);
+  }
+
+  .note {
+    padding-left: var(--espace-5);
   }
 
   /* Le texte du pied TechnoLibre, sous sa case, en retrait : son libellé,

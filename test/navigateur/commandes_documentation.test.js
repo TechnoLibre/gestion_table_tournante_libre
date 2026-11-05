@@ -28,8 +28,9 @@ import { creerHorlogePilotee, creerHorlogeSysteme } from '../../src/application/
 import { libelle } from '../../src/application/libelles.js';
 import { dater } from '../../src/application/libelles/aides.js';
 import { PRENOMS } from '../../src/demo/noms.js';
+import { nomPlanche } from '../../src/stockage/noms.js';
 import { VERSION } from '../../src/version.genere.js';
-import { CHEMIN_MANIFESTE, DOSSIER_CAPTURES, lireEntetePng } from '../../scripts/documentation/manifeste.js';
+import { CAPTURES, CHEMIN_MANIFESTE, DOSSIER_CAPTURES, ETAPES, lireEntetePng } from '../../scripts/documentation/manifeste.js';
 import {
   COMMANDES,
   MODE_TRAMAGE,
@@ -40,6 +41,7 @@ import {
   dossierEpreuve,
   effacerDossierEpreuve,
   empreintesDossier,
+  etapesExigees,
   fautesDIdentite,
   lireManifeste,
   machineCourante,
@@ -47,6 +49,7 @@ import {
   tramer,
   tramerPdf,
 } from './commandes_documentation.js';
+import { traductionEcran } from './rendu.js';
 
 const sha256 = (octets) => createHash('sha256').update(octets).digest('hex');
 const enBase64 = (octets) => Buffer.from(octets).toString('base64');
@@ -290,6 +293,18 @@ async function deposer(racine, { fichier, etape, source, page }, remplacer = {})
   return deposerCapture(null, { fichier, entree, chemin, racine });
 }
 
+describe('etapesExigees : les étapes que le contrôle d’ordre exige d’une publication (§ 19.3)', () => {
+  test('la publication de toutes les CAPTURES exige toutes les étapes ; une sélection, ses seules étapes, dans l’ordre des étapes', () => {
+    const toutes = CAPTURES.map(({ fichier }) => fichier);
+    assert.equal(etapesExigees(toutes), ETAPES);
+    assert.equal(etapesExigees([...toutes].reverse()), ETAPES);
+    assert.deepEqual(etapesExigees(['24-badges-controle', '01-premier-ecran']), ['1', '12']);
+    const sansUne = toutes.slice(1);
+    const attendues = ETAPES.filter((etape) => sansUne.some((fichier) => CAPTURES.find((c) => c.fichier === fichier).etape === etape));
+    assert.deepEqual(etapesExigees(sansUne), attendues);
+  });
+});
+
 // Les images s'y écrivent par tramerPdf : sans canevas, ces épreuves ne
 // s'y jouent pas.
 describe('publierCaptures : une page de PDF à côté des captures du navigateur (§ 19.5, § 19.6)', () => {
@@ -326,6 +341,24 @@ describe('publierCaptures : une page de PDF à côté des captures du navigateur
       await assert.rejects(
         publierCaptures(CONTEXTE, { declarees: ['01-premier-ecran', '02-import-apercu'], racine, racineNeutre: RACINE_NEUTRE }),
         /publication : 02-import-apercu n’a pas le cadre ni le facteur d’échelle de 01-premier-ecran/,
+      );
+      assert.deepEqual(await empreintesDossier(null, { racine }), []);
+    });
+  });
+
+  test('le pilote porte le mode d’affichage inscrit par les captures du navigateur ; deux modes refusent la publication, rien de publié', async (contexte) => {
+    if (!canevasDisponible()) contexte.skip(SANS_CANEVAS);
+    await dansUnDossier(async (racine) => {
+      await deposer(racine, { fichier: '01-premier-ecran', etape: '1', source: 'navigateur', page: 1 }, { mode: 'chromium-headless' });
+      await publierCaptures(CONTEXTE, { declarees: ['01-premier-ecran'], racine, racineNeutre: RACINE_NEUTRE });
+      assert.equal((await lireManifeste(null, { racine })).pilote.mode, 'chromium-headless');
+    });
+    await dansUnDossier(async (racine) => {
+      await deposer(racine, { fichier: '01-premier-ecran', etape: '1', source: 'navigateur', page: 1 });
+      await deposer(racine, { fichier: '02-import-apercu', etape: '2', source: 'navigateur', page: 1 }, { mode: 'chromium-headless' });
+      await assert.rejects(
+        publierCaptures(CONTEXTE, { declarees: ['01-premier-ecran', '02-import-apercu'], racine, racineNeutre: RACINE_NEUTRE }),
+        /publication : 02-import-apercu n’a pas le mode d’affichage de 01-premier-ecran, « chromium-headless » contre « chromium-headless-shell »/,
       );
       assert.deepEqual(await empreintesDossier(null, { racine }), []);
     });
@@ -468,6 +501,10 @@ describe('publierCaptures : ni l’hôte, ni l’utilisateur, ni un instant étr
     const format = creerFormat(libelle);
     const systeme = creerHorlogeSysteme().horodatage();
     const dansUnTexte = (fichier) => new RegExp(`doc/captures/${fichier}\\.png : instant « [^»]+ » dans un texte, hors de l’horloge pilotée`);
+    // La ligne « Planche déposée : … » d'une planche produite à l'instant
+    // donné, son nom tel que le dépôt le compose.
+    const planche = (horodatage) =>
+      `${traductionEcran().t('badges.produite.chemin')} ${nomPlanche('soiree-des-hiboux', { papier: 'A4', imposition: 'feuille', horodatage })}`;
     const refus = [
       [{ texte: ['Aperçu', format.horodatage(systeme)] }, {}, dansUnTexte('01-premier-ecran')],
       [{}, { texte: [libelle('planche.pied.horodatage', { horodatage: systeme })] }, dansUnTexte('24-badges-controle')],
@@ -476,6 +513,11 @@ describe('publierCaptures : ni l’hôte, ni l’utilisateur, ni un instant étr
       [{ styles: { clair: [{ releve: '2026-10-10T18:03:00.000Z' }], sombre: [] } }, {}, dansUnTexte('01-premier-ecran')],
       [{ texte: [format.horodatage('2026-10-06T18:59:00-04:00')] }, {}, /instant « 6 octobre 2026, 18 h 59 » dans un texte/],
       [{}, { texte: [libelle('planche.pied.horodatage', { horodatage: '2026-10-07T19:00:01-04:00' })] }, /instant « 7 octobre 2026 à 19:00:01 » dans un texte/],
+      // Le nom de fichier daté que montre « Planche déposée : … », à l'heure
+      // locale sans décalage.
+      [{ texte: [planche(systeme)] }, {}, dansUnTexte('01-premier-ecran')],
+      [{ texte: [planche('2026-10-06T18:59:59-04:00')] }, {}, /instant « 2026-10-06_18-59-59 » dans un texte/],
+      [{}, { texte: [planche('2026-10-07T19:00:01-04:00')] }, /instant « 2026-10-07_19-00-01 » dans un texte/],
     ];
     for (const [remplacer, pdf, motif] of refus) {
       await dansUnDossier(async (racine) => {
@@ -491,7 +533,7 @@ describe('publierCaptures : ni l’hôte, ni l’utilisateur, ni un instant étr
       const instant = horloge.horodatage();
       const bilan = await publier(
         racine,
-        { texte: [format.horodatage(instant), `Modifié ${dater(instant, libelle)}`, instant, 'Soirée du 17 mai 2031'] },
+        { texte: [format.horodatage(instant), `Modifié ${dater(instant, libelle)}`, instant, 'Soirée du 17 mai 2031', planche(instant)] },
         { texte: [libelle('planche.pied.horodatage', { horodatage: instant })] },
       );
       assert.deepEqual(bilan.ecrites, declarees);

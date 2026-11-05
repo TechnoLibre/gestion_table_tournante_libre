@@ -22,7 +22,11 @@
 // (detail.bornes.planchers, là où le diagnostic du § 5.6 l'écrit) l'écrit
 // en dernière ligne, sous son chiffre, et dit « atteint : impossible de
 // faire moins » quand le détail le dit atteint ; sans plancher, aucune
-// ligne, jamais un 0. Les rencontres répétées
+// ligne, jamais un 0. Juste avant le plancher, la tuile d'un agrégat du
+// § 5.4 écrit ses deux lignes secondaires, mobiles et ancrés
+// (lireSecondaires, texteSecondaires), sur une ligne : le minimum de A(p),
+// celui de d(p), les trois chiffres du manque, les minimums de s(p) et de
+// m(p) ; le minimum brut a les siennes en tuiles. Les rencontres répétées
 // et les retours choisis énoncent à part les imposés, lus dans la ligne
 // d'évaluation et dans la table. Trois tuiles portent un pourcentage, un
 // entier que le détail porte déjà, suivi du compte du pire : le minimum
@@ -51,7 +55,16 @@
 // personne est souvent celle qui rencontre le moins de monde parce qu'elle
 // manque des tours.
 import { presenceSaisie } from '../../application/places.js';
-import { COLONNES, GROUPES_COLONNES, explicationDeColonne, lireColonne, tableau, texteCellule } from '../propositions/modele.js';
+import {
+  COLONNES,
+  GROUPES_COLONNES,
+  explicationDeColonne,
+  lireColonne,
+  lireSecondaires,
+  tableau,
+  texteCellule,
+  texteSecondaires,
+} from '../propositions/modele.js';
 
 /** Les tuiles qui portent un pourcentage (B11, D34), dans l'ordre de
  *  COLONNES : aucune autre n'en porte. */
@@ -68,8 +81,9 @@ const EN_TETES = new Map(COLONNES.map(({ nom, cle }) => [nom, cle]));
  * @property {string} texte          la valeur, écrite comme au tableau
  * @property {boolean} classe        vrai quand le tableau porte la colonne
  * @property {string|null} neClassePas   la mention, null quand elle classe
- * @property {string[]} bornes       les lignes de la borne, traduites, la
- *           ligne du plancher en dernier quand il est prouvé
+ * @property {string[]} bornes       les lignes de la borne, traduites, puis
+ *           celle des lignes secondaires d'un agrégat, et la ligne du
+ *           plancher en dernier quand il est prouvé
  * @property {{texte: string|null, compte: string}|null} pourcentage
  *           le pourcentage écrit, null quand son dénominateur est nul, et
  *           le compte du pire ; null hors des trois tuiles
@@ -92,12 +106,12 @@ function plancherNonProuveDe(nom, retires, t) {
 
 // L'infobulle du libellé de la tuile nom : l'explication de sa colonne ;
 // pour le minimum brut, la présence de la personne au rang 1 s'y ajoute
-// quand presenceDe la rend partielle.
-function infobulleDe(nom, explication, { rang1, nomDe, presenceDe }) {
+// quand presenceDe la rend partielle, ses tours nommés sous nomsTours.
+function infobulleDe(nom, explication, { rang1, nomDe, presenceDe, nomsTours }) {
   if (nom !== 'rencontresTous' || rang1 === null) return { cle: explication, details: {} };
   const tours = presenceDe(rang1.id);
   if (tours === null) return { cle: explication, details: {} };
-  return { cle: 'qualite.entete.explicationRang1', details: { explication, nom: nomDe(rang1.id), tours } };
+  return { cle: 'qualite.entete.explicationRang1', details: { explication, nom: nomDe(rang1.id), tours, nomsTours } };
 }
 
 /**
@@ -211,9 +225,9 @@ function plancherDe(nom, { bornes, t }) {
 
 /**
  * La cellule d'une tuile : la valeur de sa colonne écrite comme au tableau,
- * les lignes de sa borne, son plancher en dernier, et son pourcentage. La
- * tuile de l'en-tête chiffré et la cellule d'une colonne de la comparaison
- * s'écrivent par elle.
+ * les lignes de sa borne, ses lignes secondaires, son plancher en dernier,
+ * et son pourcentage. La tuile de l'en-tête chiffré et la cellule d'une
+ * colonne de la comparaison s'écrivent par elle.
  *
  * @param {string} nom  le nom d'une colonne de mesure de COLONNES
  * @param {{bornes: Object, ligne: Object, table: Object, t: Function,
@@ -233,9 +247,10 @@ export function celluleDeTuile(nom, { bornes, ligne, table, t, format, nomDe }) 
     nommer: (id) => t('qualite.tuile.personne', { nom: nomDe(id) }),
   };
   const { bornes: lignes, pourcentage } = bornesDe(nom, contexte);
+  const secondaires = lireSecondaires(ligne, nom);
   return {
     texte: texteCellule(lireColonne(ligne, nom), { t, format }),
-    bornes: [...lignes, ...plancherDe(nom, contexte)],
+    bornes: [...lignes, ...(secondaires === null ? [] : [texteSecondaires(secondaires, { t, format })]), ...plancherDe(nom, contexte)],
     pourcentage,
   };
 }
@@ -294,9 +309,10 @@ export function enTeteDeTuile(nom, classe, t) {
  *        le détail du placement (detaillerQualite), sa ligne d'évaluation
  *        et la table d'évaluation de la charge
  * @param {{t: Function, format: {nombre: Function},
- *          presenceDe?: (id: number) => number[]|null}} outils
+ *          presenceDe?: (id: number) => number[]|null, nomsTours?: Array<string|null>}} outils
  *        presenceDe : la présence saisie d'une personne (presenceDeCharge),
- *        null pour tous les tours ; par défaut, chacune vient à chaque tour
+ *        null pour tous les tours ; par défaut, chacune vient à chaque tour ;
+ *        nomsTours : les noms des tours de l'événement (nomsDesTours)
  * @returns {null|{population: string, groupes: Array<{cle: string,
  *   libelle: string, tuiles: Tuile[]}>, certificat: string}}
  *   population : la mention de la population mesurée ; groupes : ceux de
@@ -304,13 +320,13 @@ export function enTeteDeTuile(nom, classe, t) {
  *   certificat : « minimum atteint » ou « atteignabilité inconnue », qui
  *   suit les tuiles
  */
-export function enteteDe({ detail, ligne, table }, { t, format, presenceDe = () => null }) {
+export function enteteDe({ detail, ligne, table }, { t, format, presenceDe = () => null, nomsTours = undefined }) {
   if (detail === null || detail.statut !== 'comparable' || ligne === null || table === null) return null;
   const noms = new Map(detail.personnes.map(({ id, nom }) => [id, nom]));
   const nomDe = (id) => noms.get(id);
   const contexte = { bornes: detail.bornes, ligne, table, t, format, nomDe };
   const retires = detail.planchersRetires ?? [];
-  const lecture = { rang1: detail.bornes.rang1, nomDe, presenceDe };
+  const lecture = { rang1: detail.bornes.rang1, nomDe, presenceDe, nomsTours };
   const groupes = groupesDeTuiles(table, [ligne], t).map(({ cle, libelle, tuiles }) => ({
     cle,
     libelle,

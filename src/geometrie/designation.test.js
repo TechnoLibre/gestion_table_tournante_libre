@@ -10,7 +10,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { LIVREES } from '../demo/livrees.js';
 import { analyser, capacite } from '../stockage/document.js';
-import { CIBLE_MIN_PX, designer, regimeCibles, surLeSol } from './designation.js';
+import { CIBLE_MIN_PX } from './cible.js';
+import { designer, kSieges, regimeCibles, surLeSol } from './designation.js';
 import { englobant, geometrieTable } from './tables.js';
 
 const table = (id, forme, x, y) => ({ id, numero: id, sieges: null, forme, position: { x, y } });
@@ -70,6 +71,37 @@ describe('regimeCibles (§ 7.3)', () => {
 
   test('ronde de 7, pas 60 exactement : sièges à 0,40', () => {
     assert.equal(regimeCibles(0.4, geometrieTable(table(1, 'ronde', 0, 0), 7)), 'sieges');
+  });
+});
+
+describe('kSieges : le plus petit zoom où une table dessine ses chaises (§ 7.1, § 7.3)', () => {
+  // Rondes et carrées de 1 à 16 places, et chaque table des démonstrations
+  // livrées : des pas que CIBLE_MIN_PX ne divise pas exactement.
+  const geometries = [
+    ...['ronde', 'carree'].flatMap((forme) => Array.from({ length: 16 }, (_, i) => geometrieTable(table(i + 1, forme, 0, 0), i + 1))),
+    ...LIVREES.flatMap(({ texte }) => {
+      const { charge } = analyser(texte);
+      return charge.tables.map((t) => geometrieTable(t, capacite(charge, t)));
+    }),
+  ];
+
+  test('ronde de 8, pas 60 : 0,40 px/cm', () => {
+    assert.equal(kSieges(geometrieTable(table(1, 'ronde', 0, 0), 8)), 0.4);
+  });
+
+  test('à kSieges, regimeCibles rend les sièges ; un millionième au-dessous, la table', () => {
+    for (const g of geometries) {
+      const k = kSieges(g);
+      assert.equal(regimeCibles(k, g), 'sieges', `pas ${g.pas}`);
+      assert.equal(regimeCibles(k * (1 - 1e-6), g), 'table', `pas ${g.pas}`);
+    }
+  });
+
+  test('au plus un écart d’arrondi au-dessus de CIBLE_MIN_PX / pas', () => {
+    for (const g of geometries) {
+      const exact = CIBLE_MIN_PX / g.pas;
+      assert.ok(kSieges(g) >= exact && kSieges(g) - exact <= 4 * Number.EPSILON * exact, `pas ${g.pas}`);
+    }
   });
 });
 

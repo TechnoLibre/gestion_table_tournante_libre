@@ -398,6 +398,50 @@ describe('commandes des places : animateurs en lot et retrait (§ 2.1 étape 6, 
     assert.deepEqual(avertissements, [{ code: 'TABLE_GELEE', details: { table: 2 } }]);
   });
 
+  test('chaque personne qui a un titre pressenti reçoit le sien ; le libellé reçu sert aux autres', () => {
+    // Iris pressentie « animatrice VIP », Ondine pressentie d'un titre fait
+    // d'espaces, Théo sans titre pressenti. Un titre pressenti fait d'espaces
+    // ne vient que d'un fichier lu : la saisie d'un participant le range à
+    // null.
+    const pressenties = chargeAnimation();
+    pressenties.participants[0] = personne(1, { titrePressenti: 'animatrice VIP' });
+    pressenties.participants[2] = personne(3, { titrePressenti: '   ' });
+    const charge = figer(pressenties);
+    const { charge: apres, libelle: texte } = executer('designerAnimateurs', charge, {
+      table: 2,
+      participants: [1, 2, 3],
+      libelle: ' animateur ',
+    });
+    assert.deepEqual(apres.titres, [
+      { table: 2, siege: 1, libelle: 'animatrice VIP' },
+      { table: 2, siege: 2, libelle: 'animateur' },
+      { table: 2, siege: 3, libelle: 'animateur' },
+    ]);
+    assert.deepEqual(apres.reservations, [resa(1, 2, 1), resa(2, 2, 2), resa(3, 2, 3)]);
+    assert.equal(texte, 'Désigné 3 animateurs à la table 5 : Iris Ombrelle, Théo Pervenche, Ondine Lacasse');
+    // Le titre pressenti se normalise comme le libellé saisi : NFC, sans les
+    // espaces des bords.
+    const decompose = chargeAnimation();
+    decompose.participants[1] = personne(2, { titrePressenti: ' hôté ' });
+    const { charge: normalise } = executer('designerAnimateurs', figer(decompose), {
+      table: 2,
+      participants: [2],
+      libelle: 'animateur',
+    });
+    assert.deepEqual(normalise.titres, [{ table: 2, siege: 1, libelle: 'hôté' }]);
+    // Un titre déjà posé ne change pas : le titre non pourvu du siège 1 est
+    // pourvu par Iris, pressentie, sans prendre son titre pressenti.
+    const titres = [
+      { table: 2, siege: 1, libelle: 'veille' },
+      { table: 2, siege: 2, libelle: 'hôte' },
+      { table: 2, siege: 3, libelle: 'relève' },
+    ];
+    const posee = figer({ ...pressenties, reservations: [], titres });
+    const { charge: pourvue } = executer('designerAnimateurs', posee, { table: 2, participants: [1], libelle: 'animateur' });
+    assert.deepEqual(pourvue.titres, titres);
+    assert.deepEqual(pourvue.reservations, [resa(1, 2, 1)]);
+  });
+
   test('un titre non pourvu posé avant reste non pourvu : chacune reçoit son propre titre, au plus petit siège sans titre', () => {
     const charge = figer(executer('poserTitre', chargeAnimation(), { table: 4, siege: 1, libelle: 'hôte' }).charge);
     const { charge: apres, libelle: texte } = executer('designerAnimateurs', charge, { table: 4, participants: [1, 2], libelle: 'animateur' });
@@ -599,6 +643,17 @@ describe('commandes des places : animateurs en lot et retrait (§ 2.1 étape 6, 
     const { charge: deux, libelle: texte } = executer('designerAnimateurs', une, { table: 2, participants: [1, 2], libelle: 'animateur' });
     assert.deepEqual(deux.reservations, [resa(1, 2, 1), resa(2, 2, 2)]);
     assert.equal(texte, 'Désigné 1 animateur à la table 5 : Théo Pervenche');
+    // Capucine, désignée puis absente au tour 3 : sa désignation suspendue
+    // la garde animatrice de la table, si bien qu'elle est passée comme les
+    // autres, sans le refus ABSENT_AU_TOUR, et seule, SANS_EFFET.
+    const designee = executer('designerAnimateurs', chargeAnimation(), { table: 2, participants: [6], libelle: 'animateur' }).charge;
+    designee.participants[5] = personne(6, { presence: [1, 2] });
+    const absente = figer(designee);
+    refuse(() => executer('designerAnimateurs', absente, { table: 2, participants: [6], libelle: 'animateur' }), 'SANS_EFFET', {
+      commande: 'designerAnimateurs',
+    });
+    const { charge: avecTheo } = executer('designerAnimateurs', absente, { table: 2, participants: [6, 2], libelle: 'animateur' });
+    assert.deepEqual(avecTheo.reservations, [resa(6, 2, 1), resa(2, 2, 2)]);
   });
 
   test('retirerAnimateur : la réservation « tous les tours » et le titre partent ensemble, une entrée ; la table redevient comme avant', () => {

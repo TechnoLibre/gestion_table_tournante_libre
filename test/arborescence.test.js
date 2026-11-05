@@ -4,36 +4,37 @@
 // Gardes de l'arborescence, lues dans le texte des sources : le moteur, la
 // géométrie du plan, le générateur de démonstrations, le stockage,
 // l'analyseur CSV et la production PDF n'appellent aucune source non
-// reproductible (§ 14.7), et ne
-// parcourent les clés d'un objet que par exception nommée (§ 15.5, point 4) ;
-// le graphe d'imports de chaque couche, l'interface et ses composants compris,
-// ne rejoint que ce que le § 13.4 lui permet, et ni le moteur, ni la
-// géométrie, ni le générateur ne lisent la version engendrée (§ 14.7) ; seuls
-// deux lecteurs nommés touchent le pont de la coquille (§ 13.1) ; hors de
-// l'horloge, l'interface et l'application n'arment aucune minuterie et ne
-// lisent ni l'heure, ni l'aléa, ni la langue (§ 19.4) ; seul le point
-// d'entrée lit le nombre de processeurs logiques (§ 13.4) ; seul l'aperçu lit
-// le contexte 'imprimante' et appelle imprimer, et ni l'interface ni
-// l'application ne touchent print (§ 11.7) ; chaque paquet importé est déclaré dans devDependencies, et aucun
-// paquet refusé ne l'est (§ 13.3, § 14.8) ; une valeur du contrat de données
-// n'a qu'une définition, celle de configuration.js ; la mesure de la
-// couverture joue la série node sous le seul rapporteur default, publie
-// chaque module et tient ses seuils durs sur des modules qui existent
-// (§ 14.13) ; les épreuves s'écrivent selon le § 14.8, la série surveillée
-// n'attend ni n'écrit hors d'un temporaire, et ses motifs de surveillance ne
-// retirent aucune relance (§ 14.14) ; dans le moteur, deux modules nommés
-// lisent les réservations (§ 5.2) ; src/, electron/ et scripts/ n'ont qu'une
-// langue (§ 13.2) ; une épreuve de src/ vit à côté de son module, et aucune
-// donnée d'épreuve ne double un fichier livré (§ 14.9) ; fast-check ne se
-// charge que dans les épreuves nommées (§ 14.12). Chaque relevé lit le texte
-// entier, commentaires et chaînes compris, hors ceux qui disent le contraire —
-// les accès au navigateur et au pont, et les relevés des épreuves, sautent les
-// chaînes littérales ; les lectures du nombre de processeurs et de
-// l'imprimante sautent chaînes et commentaires : un commentaire qui nomme un appel refusé fait échouer
-// la garde comme l'appel lui-même. Chaque garde déclare son périmètre, refuse
-// de passer sur un balayage vide (§ 14.2), et d'autres épreuves la font
-// tourner sur des arbres temporaires qui portent, à plus d'un niveau de
-// profondeur, les formes qu'elle refuse et des formes voisines qu'elle admet.
+// reproductible (§ 14.7), et ne parcourent les clés d'un objet que par
+// exception nommée (§ 15.5, point 4) ; le graphe d'imports de chaque couche,
+// l'interface et ses composants compris, ne rejoint que ce que le § 13.4 lui
+// permet, et ni le moteur, ni la géométrie, ni le générateur ne lisent la
+// version engendrée (§ 14.7) ; seuls deux lecteurs nommés touchent le pont de
+// la coquille (§ 13.1) ; hors de l'horloge, l'interface et l'application
+// n'arment aucune minuterie et ne lisent ni l'heure, ni l'aléa, ni la langue
+// (§ 19.4) ; seul le point d'entrée lit le nombre de processeurs logiques
+// (§ 13.4) ; seul l'aperçu lit le contexte 'imprimante' et appelle imprimer,
+// et ni l'interface ni l'application ne touchent print (§ 11.7) ; chaque
+// paquet importé est déclaré dans devDependencies, et aucun paquet refusé ne
+// l'est (§ 13.3, § 14.8) ; une valeur du contrat de données n'a qu'une
+// définition, celle de configuration.js ; la mesure de la couverture joue la
+// série node sous le seul rapporteur default, publie chaque module et tient
+// ses seuils durs sur des modules qui existent (§ 14.13) ; les épreuves
+// s'écrivent selon le § 14.8, la série surveillée n'attend ni n'écrit hors
+// d'un temporaire, et ses motifs de surveillance ne retirent aucune relance
+// (§ 14.14) ; dans le moteur, deux modules nommés lisent les réservations
+// (§ 5.2) ; src/, electron/ et scripts/ n'ont qu'une langue (§ 13.2) ; une
+// épreuve de src/ vit à côté de son module, et aucune donnée d'épreuve ne
+// double un fichier livré (§ 14.9) ; fast-check ne se charge que dans les
+// épreuves nommées (§ 14.12). Chaque relevé lit le texte entier, commentaires
+// et chaînes compris : un commentaire qui nomme un appel refusé fait échouer
+// la garde comme l'appel lui-même. Seuls les relevés qui disent le contraire
+// en sautent une part : les accès au navigateur et au pont, et les relevés
+// des épreuves, sautent les chaînes littérales ; les lectures du nombre de
+// processeurs et de l'imprimante sautent chaînes et commentaires. Chaque
+// garde déclare son périmètre, refuse de passer sur un balayage vide
+// (§ 14.2), et d'autres épreuves la font tourner sur des arbres temporaires
+// qui portent, à plus d'un niveau de profondeur, les formes qu'elle refuse et
+// des formes voisines qu'elle admet.
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { isBuiltin } from 'node:module';
@@ -241,6 +242,7 @@ const MODULES_VIDES = Object.freeze({
   'src/pdf/a.js': '',
   'src/impression/a.js': '',
   'src/polices/a.js': '',
+  'src/actifs/a.js': '',
 });
 
 // Les fichiers donnés, sans ceux de l'arbre nommé.
@@ -551,25 +553,31 @@ const PAQUETS_DE_PLATEFORME = /^(?:svelte|electron|@capacitor\/.+)$/;
 // couche, lus par leurs blocs de script et les import() de leur gabarit.
 //
 // Le moteur et la géométrie ne connaissent ni l'écran, ni les fichiers, ni ce
-// qui les commande. La géométrie est une couche à part, plus bas que le
-// moteur : des fonctions pures du plan, qui n'importent ni le moteur, ni
-// l'analyseur CSV, ni le générateur de démonstrations. Le stockage lit et
-// écrit par le système de fichiers qu'il reçoit ; seules ses deux
+// qui les commande. Le moteur n'importe pas l'analyseur CSV, placé plus haut
+// que lui ; il partage avec le générateur de démonstrations son générateur
+// pseudo-aléatoire, src/demo/prng.js. La géométrie est une couche à part,
+// plus bas que le moteur : des fonctions pures du plan, qui n'importent ni le
+// moteur, ni l'analyseur CSV, ni le générateur de démonstrations. Le stockage
+// lit et écrit par le système de fichiers qu'il reçoit ; seules ses deux
 // implémentations de plateforme touchent le navigateur, par l'OPFS sous web
 // et par le pont window.gtt sous Electron.
 // L'analyseur CSV lit le modèle du stockage. L'application câble le moteur,
 // le stockage, le CSV et les systèmes de fichiers des plateformes, sous
 // l'interface. L'interface n'importe que svelte, ses propres modules,
-// l'application et la géométrie : elle atteint le CSV par
+// l'application, la géométrie, les actifs (src/actifs) et la version
+// engendrée : sa liste est fermée, et tout autre fichier du projet est
+// refusé, sans être parcouru. Elle atteint le CSV par
 // src/application/csv.js, et le moteur par la table d'évaluation, sans que
 // sa garde le lui reproche, l'application le faisant par construction ;
 // importés en direct, le stockage, le CSV, le moteur, les démonstrations et
-// test/ sont refusés. Le générateur de démonstrations lit le moteur et le
-// stockage, qui sérialise ses fichiers, mais ni l'application, ni
-// l'interface, ni le navigateur. Le moteur, la géométrie et le générateur ne
-// lisent pas la version engendrée (§ 14.7, § 18.5), à aucune profondeur :
-// une démonstration ou un placement qui en dépendrait changerait à chaque
-// livraison.
+// test/ sont refusés. Les actifs — le logo de l'éditeur, les textes des
+// licences — n'importent que leurs propres fichiers et les licences de
+// public/, et seule l'interface les importe. Le générateur de démonstrations
+// lit le moteur et le stockage, qui sérialise ses fichiers, mais ni
+// l'application, ni l'interface, ni le navigateur. Le moteur, la géométrie et
+// le générateur ne lisent pas la version engendrée (§ 14.7, § 18.5), à aucune
+// profondeur : une démonstration ou un placement qui en dépendrait changerait
+// à chaque livraison.
 //
 // Les trois couches des sorties n'importent, hors d'elles, que ce que leur
 // liste seulement nomme : tout autre fichier du projet est refusé, sans être
@@ -581,47 +589,48 @@ const PAQUETS_DE_PLATEFORME = /^(?:svelte|electron|@capacitor\/.+)$/;
 // police (src/polices) n'importe rien. Ni l'une ni l'autre ne s'importe
 // depuis une autre couche : src/main.js seul les câble (IMPORTATEURS_RESERVES).
 const VERSION_ENGENDREE = 'src/version.genere.js';
+const ACTIFS = 'src/actifs';
 const SORTIES = ['src/pdf', 'src/impression', 'src/polices'];
 const COUCHES = [
   {
     arbres: ['src/moteur'],
     requis: ['src/moteur'],
-    exterieures: ['src/interface', 'src/application', 'src/stockage', ...SORTIES, VERSION_ENGENDREE],
+    exterieures: ['src/interface', 'src/application', 'src/stockage', 'src/csv', ACTIFS, ...SORTIES, VERSION_ENGENDREE],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/geometrie'],
     requis: ['src/geometrie'],
-    exterieures: ['src/interface', 'src/application', 'src/stockage', 'src/moteur', 'src/csv', 'src/demo', ...SORTIES, VERSION_ENGENDREE],
+    exterieures: ['src/interface', 'src/application', 'src/stockage', 'src/moteur', 'src/csv', 'src/demo', ACTIFS, ...SORTIES, VERSION_ENGENDREE],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/demo'],
     requis: ['src/demo'],
-    exterieures: ['src/interface', 'src/application', ...SORTIES, VERSION_ENGENDREE],
+    exterieures: ['src/interface', 'src/application', ACTIFS, ...SORTIES, VERSION_ENGENDREE],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/stockage'],
     requis: ['src/stockage'],
-    exterieures: ['src/interface', 'src/application', 'src/csv', ...SORTIES],
+    exterieures: ['src/interface', 'src/application', 'src/csv', ACTIFS, ...SORTIES],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: ['src/stockage/fichiers_web.js', 'src/stockage/fichiers_electron.js'],
   },
   {
     arbres: ['src/csv'],
     requis: ['src/csv'],
-    exterieures: ['src/interface', 'src/application', ...SORTIES],
+    exterieures: ['src/interface', 'src/application', ACTIFS, ...SORTIES],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/application'],
     requis: [],
-    exterieures: ['src/interface', 'src/impression', 'src/polices'],
+    exterieures: ['src/interface', 'src/impression', 'src/polices', ACTIFS],
     frontieres: ['src/pdf'],
     paquets: /^svelte$/,
     navigateur: null,
@@ -629,11 +638,17 @@ const COUCHES = [
   {
     arbres: ['src/interface'],
     requis: ['src/interface'],
-    exterieures: ['src/stockage', 'src/csv', 'src/moteur', 'src/demo', 'test', ...SORTIES],
-    frontieres: ['src/application', 'src/geometrie'],
+    seulement: ['src/application', 'src/geometrie', ACTIFS, VERSION_ENGENDREE],
     paquets: /^(?!svelte$)/,
     navigateur: null,
     composants: true,
+  },
+  {
+    arbres: [ACTIFS],
+    requis: [ACTIFS],
+    seulement: ['public/licences'],
+    paquets: /^/,
+    navigateur: [],
   },
   {
     arbres: ['src/pdf'],
@@ -1217,7 +1232,7 @@ describe('arborescence : frontière des couches (§ 13.4)', () => {
     ]);
   });
 
-  test("src/interface n'importe que svelte, ses propres modules, l'application et la géométrie ; elle lit les blocs de script de ses composants, et ne parcourt pas les frontières admises", () => {
+  test("src/interface n'importe que svelte, ses propres modules, l'application, la géométrie, les actifs et la version engendrée ; elle lit les blocs de script de ses composants, et ne parcourt pas les fichiers de sa liste", () => {
     const fichiers = {
       ...MODULES_VIDES,
       // Les trois composants de l'arbre d'épreuve du plan : deux bibliothèques
@@ -1276,14 +1291,24 @@ describe('arborescence : frontière des couches (§ 13.4)', () => {
       ].join('\n'),
       'src/interface/import/modele.test.js': `import { lireDepot } from '../../stockage/depot.js';\nimport ${JSON.stringify('jsdom')};\n`,
       'src/interface/import/Import.navigateur.test.js': "import { page } from 'vitest/browser';\n",
-      // Un module hors des couches se parcourt depuis l'interface, et un
-      // composant qu'il importe aussi.
-      'src/interface/a.js': "import { outil } from '../commun/outil.js';\n",
+      // La liste est fermée : un module hors des couches se refuse, sans
+      // être parcouru, comme le point d'entrée de la page. Les actifs et la
+      // version engendrée sont admis, et non parcourus : la garde des actifs
+      // relève leur import du stockage.
+      'src/interface/a.js': [
+        "import { outil } from '../commun/outil.js';",
+        "import { chargerLogo } from '../actifs/logo.js';",
+        "import { VERSION } from '../version.genere.js';",
+        "import { fs } from '../main.js';",
+      ].join('\n'),
       'src/commun/outil.js': "import Calque from './Calque.svelte';\nexport const outil = Calque;\n",
       'src/commun/Calque.svelte': "<script>\n  import { noms } from '../stockage/noms.js';\n</script>\n",
+      'src/actifs/logo.js': "import { noms } from '../stockage/noms.js';\n",
     };
     assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
       'src/geometrie/vue.js:1 import ../moteur/recherche.js',
+      'src/interface/a.js:1 import ../commun/outil.js',
+      'src/interface/a.js:4 import ../main.js',
       'src/interface/import/modele.js:2 import ../../csv/lecture.js',
       'src/interface/import/modele.js:5 import ./voisin sans extension',
       'src/interface/import/modele.js:6 import ../../stockage/types.js',
@@ -1295,7 +1320,49 @@ describe('arborescence : frontière des couches (§ 13.4)', () => {
       'src/interface/import/Fiche.svelte:8 import electron',
       'src/interface/plan/Zoom.svelte:2 import d3-zoom',
       'src/interface/plan/Zoom.svelte:3 import konva',
-      'src/interface/a.js → src/commun/outil.js → src/commun/Calque.svelte:2 import ../stockage/noms.js',
+      'src/actifs/logo.js:1 import ../stockage/noms.js',
+    ]);
+  });
+
+  test("src/actifs n'importe que ses propres fichiers et les licences de public/, sans toucher le navigateur ; seule l'interface l'importe", () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/actifs/logo.js': [
+        "import { octetsDeDonnees } from './octets.js';",
+        "import { png } from './logo.png?inline';",
+        "import agpl from '../../public/licences/AGPL-3.0-or-later.txt?raw';",
+        "import { VERSION } from '../version.genere.js';",
+        "import { t } from '../application/traduction.js';",
+        "import icone from '../../public/icone.svg?raw';",
+        "import { mount } from 'svelte';",
+        "import { readFileSync } from 'node:fs';",
+        'export const largeur = () => window.innerWidth;',
+      ].join('\n'),
+      'src/actifs/octets.js': 'export const octetsDeDonnees = (d) => d;\n',
+      'src/moteur/a.js': "import { LICENCES } from '../actifs/licences.js';\n",
+      'src/geometrie/a.js': "import { LICENCES } from '../actifs/licences.js';\n",
+      'src/demo/a.js': "import { LICENCES } from '../actifs/licences.js';\n",
+      'src/stockage/a.js': "import { LICENCES } from '../actifs/licences.js';\n",
+      'src/csv/a.js': "import { LICENCES } from '../actifs/licences.js';\n",
+      'src/application/a.js': "import { LICENCES } from '../actifs/licences.js';\n",
+      'src/pdf/a.js': "import { LICENCES } from '../actifs/licences.js';\n",
+      'src/interface/a.js': "import { LICENCES } from '../actifs/licences.js';\n",
+      'src/actifs/licences.js': 'export const LICENCES = [];\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
+      'src/moteur/a.js:1 import ../actifs/licences.js',
+      'src/geometrie/a.js:1 import ../actifs/licences.js',
+      'src/demo/a.js:1 import ../actifs/licences.js',
+      'src/stockage/a.js:1 import ../actifs/licences.js',
+      'src/csv/a.js:1 import ../actifs/licences.js',
+      'src/application/a.js:1 import ../actifs/licences.js',
+      'src/actifs/logo.js:4 import ../version.genere.js',
+      'src/actifs/logo.js:5 import ../application/traduction.js',
+      'src/actifs/logo.js:6 import ../../public/icone.svg?raw',
+      'src/actifs/logo.js:7 import svelte',
+      'src/actifs/logo.js:8 import node:fs',
+      'src/actifs/logo.js:9 window.',
+      'src/pdf/a.js:1 import ../actifs/licences.js',
     ]);
   });
 
@@ -1334,6 +1401,23 @@ describe('arborescence : frontière des couches (§ 13.4)', () => {
     ]);
   });
 
+  test('le moteur n’importe pas l’analyseur CSV, placé plus haut que lui (§ 13.4), ni en direct ni par un type de sa JSDoc', () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/moteur/recherche.js': [
+        "import { lireLignes } from '../csv/lecture.js';",
+        '/** @param {import("../csv/modele.js").Ligne} ligne */',
+        'export const rien = (ligne) => ligne;',
+      ].join('\n'),
+      'src/csv/lecture.js': 'export const lireLignes = () => [];\n',
+      'src/csv/modele.js': 'export const MODELE = 1;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
+      'src/moteur/recherche.js:1 import ../csv/lecture.js',
+      'src/moteur/recherche.js:2 import ../csv/modele.js',
+    ]);
+  });
+
   test('un import() du gabarit d’un composant se relève comme celui d’un bloc de script ; le mot « import » d’un nœud de texte non', () => {
     const fichiers = {
       ...MODULES_VIDES,
@@ -1355,11 +1439,11 @@ describe('arborescence : frontière des couches (§ 13.4)', () => {
     ]);
   });
 
-  test('src/application peut manquer ; un src/moteur, un src/geometrie, un src/demo, un src/stockage, un src/csv ou un src/interface sans module fait échouer la garde ; un composant seul suffit à l’interface', () => {
+  test('src/application peut manquer ; un src/moteur, un src/geometrie, un src/demo, un src/stockage, un src/csv, un src/interface ou un src/actifs sans module fait échouer la garde ; un composant seul suffit à l’interface', () => {
     assert.deepEqual(avecArbre(MODULES_VIDES, releverFrontiere), []);
     const composantSeul = { ...sansArbre(MODULES_VIDES, 'src/interface'), 'src/interface/App.svelte': '<p></p>\n' };
     assert.deepEqual(avecArbre(composantSeul, releverFrontiere), []);
-    for (const arbre of ['src/moteur', 'src/geometrie', 'src/demo', 'src/stockage', 'src/csv', 'src/interface']) {
+    for (const arbre of ['src/moteur', 'src/geometrie', 'src/demo', 'src/stockage', 'src/csv', 'src/interface', 'src/actifs']) {
       const sansModule = { ...sansArbre(MODULES_VIDES, arbre), [`${arbre}/a.test.js`]: '' };
       assert.throws(
         () => avecArbre(sansModule, releverFrontiere),
@@ -1367,6 +1451,79 @@ describe('arborescence : frontière des couches (§ 13.4)', () => {
         arbre,
       );
     }
+  });
+});
+
+// Le module des graphiques de la page de qualité, frère de ceux du plan dans
+// src/geometrie (§ 12.9, § 14.10), et les modules qu'ils partagent : le
+// seuil des cibles d'écran, que la désignation d'un siège et la grille des
+// graphiques lisent l'une et l'autre.
+const MODULE_DES_GRAPHIQUES = 'src/geometrie/graphique.js';
+const COMMUNS_DES_GRAPHIQUES_ET_DU_PLAN = ['src/geometrie/cible.js'];
+
+// Relevé « fichier:ligne import spécificateur » des imports entre le module
+// des graphiques et les autres modules de src/geometrie, épreuves exclues,
+// par fichier puis par ligne : le module des graphiques n'importe du projet
+// que les modules communs ; aucun autre module n'importe celui des
+// graphiques ; un module commun n'importe aucun fichier du projet. Un
+// spécificateur nu se laisse à la garde des couches. Lève quand le module
+// des graphiques manque.
+function releverGraphiquesEtPlan(racine) {
+  const modules = modulesDe(join(racine, 'src', 'geometrie'));
+  assert.ok(
+    modules.some((fichier) => enBarres(racine, fichier) === MODULE_DES_GRAPHIQUES),
+    `${MODULE_DES_GRAPHIQUES} manque`,
+  );
+  const commun = (nom) => COMMUNS_DES_GRAPHIQUES_ET_DU_PLAN.includes(nom);
+  const refus = [];
+  for (const fichier of modules) {
+    const nom = enBarres(racine, fichier);
+    const texte = readFileSync(fichier, 'utf8');
+    for (const { specificateur, indice } of chargementsLitteraux(texte)) {
+      const cible = cibleDe(racine, fichier, specificateur);
+      if (cible === null) continue;
+      const vise = enBarres(racine, cible);
+      let refuse;
+      if (commun(nom)) refuse = true;
+      else if (nom === MODULE_DES_GRAPHIQUES) refuse = !commun(vise);
+      else refuse = vise === MODULE_DES_GRAPHIQUES;
+      if (refuse) refus.push(`${nom}:${ligneDe(texte, indice)} import ${specificateur}`);
+    }
+  }
+  return refus;
+}
+
+describe('arborescence : les graphiques et le plan, modules frères (§ 12.9, § 14.10)', () => {
+  test('le module des graphiques n’importe du projet que le module commun du seuil des cibles, qui n’importe rien, et aucun autre module de la géométrie ne l’importe', () => {
+    assert.deepEqual(releverGraphiquesEtPlan(RACINE), []);
+  });
+
+  test('la garde relève chaque import par sa ligne, JSDoc comprise, hors épreuves ; les paquets se laissent à la garde des couches ; sans module des graphiques, elle échoue', () => {
+    const fichiers = {
+      'src/geometrie/graphique.js': [
+        "import { CIBLE_MIN_PX } from './cible.js';",
+        "import { ronde } from './echelle.js';",
+        "/** @param {import('./tables.js').GeometrieTable} g */",
+        "import { regimeCibles } from '../geometrie/designation.js';",
+        "import { mount } from 'svelte';",
+      ].join('\n'),
+      'src/geometrie/designation.js': "import { CIBLE_MIN_PX } from './cible.js';\n",
+      'src/geometrie/tables.js': "import { constante } from './constantes.js';\nimport { NIVEAUX } from './graphique.js';\n",
+      'src/geometrie/sous/vue.js': "import { grille } from '../graphique.js';\n",
+      'src/geometrie/cible.js': "import { constante } from './constantes.js';\nexport const CIBLE_MIN_PX = 24;\n",
+      'src/geometrie/constantes.js': 'export const constante = () => 0;\n',
+      'src/geometrie/graphique.test.js': "import { designer } from './designation.js';\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, releverGraphiquesEtPlan), [
+      'src/geometrie/cible.js:1 import ./constantes.js',
+      'src/geometrie/graphique.js:2 import ./echelle.js',
+      'src/geometrie/graphique.js:3 import ./tables.js',
+      'src/geometrie/graphique.js:4 import ../geometrie/designation.js',
+      'src/geometrie/sous/vue.js:1 import ../graphique.js',
+      'src/geometrie/tables.js:2 import ./graphique.js',
+    ]);
+    const { 'src/geometrie/graphique.js': _, ...sansGraphiques } = fichiers;
+    assert.throws(() => avecArbre(sansGraphiques, releverGraphiquesEtPlan), /src\/geometrie\/graphique\.js manque/);
   });
 });
 
@@ -2592,8 +2749,9 @@ const MINUTERIES = [
 ];
 
 // Les arbres où l'heure ne se lit que par src/application/horloge.js, et le
-// point d'entrée de la page, qui la construit.
-const ARBRES_D_UNE_HORLOGE = ['src/interface', 'src/application'];
+// point d'entrée de la page, qui la construit. Le stockage, placé plus bas
+// que l'application, ne l'importe pas : il reçoit l'horloge en paramètre.
+const ARBRES_D_UNE_HORLOGE = ['src/interface', 'src/application', 'src/stockage'];
 const ENTREE_DE_LA_PAGE = join('src', 'main.js');
 const HORLOGE = join('src', 'application', 'horloge.js');
 
@@ -2611,12 +2769,13 @@ const SOURCES_ADMISES_HORS_HORLOGE = [
 // Relevé « fichier:ligne appel » des minuteries et des sources non
 // reproductibles (SOURCES_NON_REPRODUCTIBLES : heure, aléa, tirages de
 // crypto, tri et mise en forme selon la langue) dans les modules et les
-// composants de src/interface et de src/application, épreuves exclues, et
-// dans src/main.js ; horloge.js est hors du relevé. Le texte se lit entier,
-// commentaires et chaînes compris, comme celui du déterminisme. Par fichier,
-// par ligne, puis dans l'ordre de MINUTERIES et de SOURCES_NON_REPRODUCTIBLES ;
-// suit une ligne « exception sans objet : fichier appel » par exception qui
-// n'admet rien. Lève quand l'un des arbres ne fournit aucun fichier.
+// composants de src/interface, de src/application et de src/stockage,
+// épreuves exclues, et dans src/main.js ; horloge.js est hors du relevé. Le
+// texte se lit entier, commentaires et chaînes compris, comme celui du
+// déterminisme. Par fichier, par ligne, puis dans l'ordre de MINUTERIES et de
+// SOURCES_NON_REPRODUCTIBLES ; suit une ligne « exception sans objet :
+// fichier appel » par exception qui n'admet rien. Lève quand l'un des arbres
+// ne fournit aucun fichier.
 function releverHorloge(racine, admis = SOURCES_ADMISES_HORS_HORLOGE) {
   const fichiers = ARBRES_D_UNE_HORLOGE.flatMap((arbre) => {
     const trouves = [...modulesDe(join(racine, arbre)), ...composantsDe(join(racine, arbre)).filter((f) => !EPREUVE.test(f))];
@@ -2643,7 +2802,7 @@ function releverHorloge(racine, admis = SOURCES_ADMISES_HORS_HORLOGE) {
 }
 
 describe('arborescence : une horloge (§ 19.4, § 14.7)', () => {
-  test("hors d'horloge.js, ni src/interface, ni src/application, ni src/main.js n'arment une minuterie ni ne lisent l'heure, l'aléa ou la langue ; src/main.js tire les identifiants d'événement", () => {
+  test("hors d'horloge.js, ni src/interface, ni src/application, ni src/stockage, ni src/main.js n'arment une minuterie ni ne lisent l'heure, l'aléa ou la langue ; src/main.js tire les identifiants d'événement", () => {
     assert.deepEqual(releverHorloge(RACINE), []);
   });
 
@@ -2665,6 +2824,8 @@ describe('arborescence : une horloge (§ 19.4, § 14.7)', () => {
         'export const e = cancelAnimationFrame(image) + Date.UTC(2000, 0, 1);',
       ].join('\n'),
       'src/application/sous/tirage.js': 'export const f = Math.random() + crypto.randomUUID();\n',
+      'src/stockage/fichiers_web.js': 'export const liberer = (adresse) => setTimeout(() => URL.revokeObjectURL(adresse), 0);\n',
+      'src/stockage/depot.test.js': 'const laisser = () => new Promise((r) => setTimeout(r, 0));\n',
       'src/application/horloge.js': 'export const g = () => setTimeout(f, 0) + new Date() + performance.now();\n',
       'src/application/seance.test.js': 'const laisser = () => new Promise((r) => setTimeout(r, 0));\n',
       'src/interface/App.navigateur.test.js': 'await new Promise((r) => setTimeout(r, 10));\n',
@@ -2683,6 +2844,7 @@ describe('arborescence : une horloge (§ 19.4, § 14.7)', () => {
       'src/interface/plan/vue_plan.js:4 Date.now',
       'src/interface/plan/vue_plan.js:4 performance.now',
       `${join('src', 'main.js')}:2 Date.now`,
+      'src/stockage/fichiers_web.js:1 setTimeout',
     ]);
     const sansTirage = { ...fichiers, 'src/main.js': 'const t = 0;\n' };
     assert.deepEqual(avecArbre(sansTirage, releverHorloge).at(-1), `exception sans objet : ${join('src', 'main.js')} crypto.randomUUID`);
@@ -3762,20 +3924,36 @@ const LECTEURS_DES_RESERVATIONS = [
   },
 ];
 
-// Une lecture des réservations : le nom reservations dans le code —
-// propriété, déstructuration, paramètre —, ou une propriété nommée par une
-// chaîne entre crochets.
-const LECTURE_DES_RESERVATIONS = /\breservations\b/g;
-const RESERVATIONS_ENTRE_CROCHETS = /\[\s*(['"`])reservations\1\s*\]/g;
+// Les seuls lecteurs du champ presence dans le moteur (§ 5.2, § 13.2) : une
+// seule fonction dit qu'une personne est présente à un tour, et le reste du
+// moteur lit l'instance normalisée.
+const LECTEURS_DE_LA_PRESENCE = [
+  {
+    fichier: 'src/moteur/presence.js',
+    raison: 'toursDePresence et estPresente, la seule règle de lecture de la présence',
+  },
+  {
+    fichier: 'src/moteur/configuration.js',
+    raison: 'normaliser contrôle la présence, la fige, et en tire le masque des présents',
+  },
+  {
+    fichier: 'src/moteur/diagnostic.js',
+    raison: 'le diagnostic ramène la présence aux tours d’une configuration tronquée',
+  },
+];
 
-// Relevé des lectures des réservations dans les modules de src/moteur, à
-// toute profondeur, épreuves exclues, hors des lecteurs admis : chacune
-// « fichier:ligne reservations », ou « fichier:ligne ['reservations'] » pour
-// la forme à crochets, par fichier puis par ligne ; puis « exception sans
-// objet : fichier » pour un lecteur admis qui n'en lit aucune. Le nom se lit
-// dans le code sans chaînes ni commentaires : un typedef JSDoc qui le nomme
-// ne lit rien. Lève quand src/moteur ne fournit aucun module.
-function releverLecteursDesReservations(racine, admis = LECTEURS_DES_RESERVATIONS) {
+// Relevé des lectures d'un champ dans les modules de src/moteur, à toute
+// profondeur, épreuves exclues, hors des lecteurs admis. Une lecture est le
+// nom du champ dans le code — propriété, déstructuration, paramètre —, ou
+// une propriété nommée par une chaîne entre crochets : chacune
+// « fichier:ligne champ », ou « fichier:ligne ['champ'] » pour la forme à
+// crochets, par fichier puis par ligne ; puis « exception sans objet :
+// fichier » pour un lecteur admis qui n'en lit aucune. Le nom se lit dans le
+// code sans chaînes ni commentaires : un typedef JSDoc qui le nomme ne lit
+// rien. Lève quand src/moteur ne fournit aucun module.
+function releverLecteursDuChamp(racine, champ, admis) {
+  const lecture = new RegExp(`\\b${champ}\\b`, 'g');
+  const entreCrochets = new RegExp(`\\[\\s*(['"\`])${champ}\\1\\s*\\]`, 'g');
   const modules = modulesDe(join(racine, 'src', 'moteur'));
   assert.ok(modules.length > 0, 'src/moteur ne fournit aucun module');
   const lecteurs = new Set();
@@ -3787,10 +3965,10 @@ function releverLecteursDesReservations(racine, admis = LECTEURS_DES_RESERVATION
     // Le crochet d'une lecture subsiste dans le code ; celui d'un
     // commentaire est blanchi avec lui.
     const trouves = [
-      ...[...code.matchAll(LECTURE_DES_RESERVATIONS)].map(({ index }) => ({ indice: index, rang: 0, motif: 'reservations' })),
-      ...[...texte.matchAll(RESERVATIONS_ENTRE_CROCHETS)]
+      ...[...code.matchAll(lecture)].map(({ index }) => ({ indice: index, rang: 0, motif: champ })),
+      ...[...texte.matchAll(entreCrochets)]
         .filter(({ index }) => code[index] === '[')
-        .map(({ index }) => ({ indice: index, rang: 1, motif: "['reservations']" })),
+        .map(({ index }) => ({ indice: index, rang: 1, motif: `['${champ}']` })),
     ];
     if (trouves.length > 0) lecteurs.add(nom);
     if (admis.some((e) => e.fichier === nom)) continue;
@@ -3800,6 +3978,11 @@ function releverLecteursDesReservations(racine, admis = LECTEURS_DES_RESERVATION
   const sansObjet = admis.filter(({ fichier }) => !lecteurs.has(fichier)).map(({ fichier }) => `exception sans objet : ${fichier}`);
   return [...refus, ...sansObjet];
 }
+
+const releverLecteursDesReservations = (racine, admis = LECTEURS_DES_RESERVATIONS) =>
+  releverLecteursDuChamp(racine, 'reservations', admis);
+const releverLecteursDeLaPresence = (racine, admis = LECTEURS_DE_LA_PRESENCE) =>
+  releverLecteursDuChamp(racine, 'presence', admis);
 
 // Les arbres du code livré et de son outillage, où ne vit qu'une langue
 // (§ 13.2) : JavaScript, composants Svelte, feuilles de style, et des
@@ -4315,6 +4498,40 @@ describe('arborescence : un seul chemin de code pour les réservations (§ 5.2)'
     const sansLecture = { ...fichiers, 'src/moteur/diagnostic.js': 'export const sonder = (c) => c.tables;\n' };
     assert.deepEqual(avecArbre(sansLecture, releverLecteursDesReservations).at(-1), 'exception sans objet : src/moteur/diagnostic.js');
     assert.throws(() => avecArbre({ 'src/moteur/a.test.js': '' }, releverLecteursDesReservations), /src\/moteur ne fournit aucun module/);
+  });
+});
+
+describe('arborescence : une seule lecture de la présence (§ 5.2, § 13.2)', () => {
+  test('dans src/moteur, seuls presence.js, configuration.js et diagnostic.js lisent la présence', () => {
+    assert.deepEqual(releverLecteursDeLaPresence(RACINE), []);
+  });
+
+  test('la garde relève chaque lecture par sa ligne — propriété, déstructuration, crochet —, hors commentaires, chaînes et épreuves ; un lecteur admis qui ne lit plus est sans objet', () => {
+    const fichiers = {
+      'src/moteur/presence.js': 'export const estPresente = ({ presence }, tour) => presence === undefined || presence.includes(tour);\n',
+      'src/moteur/configuration.js': 'export const normaliser = (c) => c.participants.map((p) => p.presence);\n',
+      'src/moteur/diagnostic.js': 'export const tronquer = (p) => p.presence?.filter((t) => t <= 2);\n',
+      'src/moteur/indicateurs.js': [
+        '// la presence se lit par toursDePresence',
+        'export const mesurer = (personne, R) => {',
+        '  const { id, presence } = personne;',
+        "  const cle = 'presence';",
+        "  return personne?.presence ?? personne['presence'] ?? presents.length;",
+        '};',
+      ].join('\n'),
+      'src/moteur/types.js': '/** @property {number[]} [presence] */\nexport const presentsParTour = 1;\n',
+      'src/moteur/sous/profond.js': 'export const lire = (p) => p.presence;\n',
+      'src/moteur/indicateurs.test.js': 'const r = personne.presence;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverLecteursDeLaPresence), [
+      'src/moteur/indicateurs.js:3 presence',
+      'src/moteur/indicateurs.js:5 presence',
+      "src/moteur/indicateurs.js:5 ['presence']",
+      'src/moteur/sous/profond.js:1 presence',
+    ]);
+    const sansLecture = { ...fichiers, 'src/moteur/diagnostic.js': 'export const tronquer = (p) => p.anime;\n' };
+    assert.deepEqual(avecArbre(sansLecture, releverLecteursDeLaPresence).at(-1), 'exception sans objet : src/moteur/diagnostic.js');
+    assert.throws(() => avecArbre({ 'src/moteur/a.test.js': '' }, releverLecteursDeLaPresence), /src\/moteur ne fournit aucun module/);
   });
 });
 

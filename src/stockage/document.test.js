@@ -27,7 +27,9 @@ import {
   FORMAT,
   GENERATION_PAR_DEFAUT,
   HISTORIQUE_GENERATION_DEFAUT,
+  IMAGE_BADGES_DEFAUT,
   LIBELLE_TABLE_MAX,
+  POSITIONS_IMAGE_BADGES,
   SCHEMA,
   SIEGES_MAX,
   TOURS_MAX,
@@ -38,7 +40,9 @@ import {
   critereCoche,
   estLibelleTable,
   etatDeduit,
+  imageBadgesDe,
   modeObjectifs,
+  nomsDesTours,
   premiereFaute,
   premiereFauteEnPlace,
   priorites,
@@ -1454,8 +1458,18 @@ describe('les champs facultatifs : forme et place (§ 8.9, A16)', () => {
       ],
     );
     assert.deepEqual(
-      PARTICIPANT.champs.slice(-5).map(([cle, regle]) => [cle, regle.optionnel]),
-      [['exclu', false], ['etiquettes', true], ['presence', true], ['conflits', true], ['logo', true]],
+      PARTICIPANT.champs.slice(-9).map(([cle, regle]) => [cle, regle.optionnel]),
+      [
+        ['exclu', false],
+        ['etiquettes', true],
+        ['presence', true],
+        ['conflits', true],
+        ['inclusionsOrganisation', true],
+        ['inclusionsParticipant', true],
+        ['logo', true],
+        ['nomNumerote', true],
+        ['animationReservee', true],
+      ],
     );
     assert.deepEqual(
       TABLE.champs.slice(-3).map(([cle, regle]) => [cle, regle.optionnel]),
@@ -1695,6 +1709,123 @@ describe('le libellé d’une table : un champ facultatif, absent quand la table
   });
 });
 
+// --- Les noms des tours (§ 4, § 8.9) ------------------------------------------
+
+describe('les noms des tours : un champ facultatif de l’événement, absent quand aucun tour n’a de nom (§ 4, § 8.9)', () => {
+  test('il s’écrit en dernière clé de l’événement, et se relit à l’identique ; absent, il ne s’écrit pas', () => {
+    const d = documentComplet();
+    d.charge.evenement.nomsTours = [null, 'Entremets'];
+    const lu = analyser(JSON.stringify(d));
+    assert.deepEqual(lu.charge.evenement.nomsTours, [null, 'Entremets']);
+    const texte = serialiser(lu.charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(texte.includes('"libelle":"Tables posées"}},"nomsTours":[null,"Entremets"]}'), texte);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge, lu.charge);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+    const sans = serialiser(documentComplet().charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.equal(sans.includes('nomsTours'), false);
+  });
+
+  test('nomsDesTours rend un élément par tour, null pour un tour sans nom, et une liste neuve', () => {
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    assert.deepEqual(nomsDesTours(sans), [null, null]);
+    const avec = analyser(abime((d) => { d.charge.evenement.nomsTours = ['Apéritif', null]; })).charge;
+    const noms = nomsDesTours(avec);
+    assert.deepEqual(noms, ['Apéritif', null]);
+    noms[1] = 'autre';
+    assert.deepEqual(avec.evenement.nomsTours, ['Apéritif', null]);
+  });
+
+  test('un nom a la forme d’un libellé de table ; une autre longueur que le nombre de tours, ou aucun nom, est une faute nommée par la liste', () => {
+    const SOIXANTE = 'é'.repeat(LIBELLE_TABLE_MAX);
+    assert.deepEqual(analyser(abime((d) => { d.charge.evenement.nomsTours = [SOIXANTE, 'Dessert']; })).charge.evenement.nomsTours, [SOIXANTE, 'Dessert']);
+    const liste = 'charge.evenement.nomsTours';
+    assert.deepEqual(ecartsDeRefus([
+      ['vide', abime((d) => { d.charge.evenement.nomsTours = []; }), 'FORME', liste],
+      ['aucun nom', abime((d) => { d.charge.evenement.nomsTours = [null, null]; }), 'FORME', liste],
+      ['trop court', abime((d) => { d.charge.evenement.nomsTours = ['Apéritif']; }), 'FORME', liste],
+      ['trop long', abime((d) => { d.charge.evenement.nomsTours = ['Apéritif', null, null]; }), 'FORME', liste],
+      ['nul', abime((d) => { d.charge.evenement.nomsTours = null; }), 'FORME', liste],
+      ['un nom vide', abime((d) => { d.charge.evenement.nomsTours = ['', 'Dessert']; }), 'FORME', `${liste}[0]`],
+      ['un blanc en bord', abime((d) => { d.charge.evenement.nomsTours = ['Dessert ', null]; }), 'FORME', `${liste}[0]`],
+      ['hors de NFC', abime((d) => { d.charge.evenement.nomsTours = [null, 'Entre\u{0301}e']; }), 'FORME', `${liste}[1]`],
+      ['trop de points de code', abime((d) => { d.charge.evenement.nomsTours = [`${SOIXANTE}x`, null]; }), 'FORME', `${liste}[0]`],
+      ['un nombre', abime((d) => { d.charge.evenement.nomsTours = [2, null]; }), 'FORME', `${liste}[0]`],
+    ]), []);
+  });
+
+  test('la configuration du moteur ne lit pas les noms des tours', () => {
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    const avec = analyser(abime((d) => { d.charge.evenement.nomsTours = ['Apéritif', 'Dessert']; })).charge;
+    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
+  });
+});
+
+// --- L'image des badges (§ 8.9, § 11.4) ---------------------------------------
+
+describe('l’image des badges : un champ facultatif de l’événement, absent à son défaut (§ 8.9, § 11.4)', () => {
+  const CHEMIN = `logo/${'c'.repeat(64)}.png`;
+
+  test('il s’écrit en dernière clé de l’événement, après nomsTours, et se relit à l’identique ; absent, il ne s’écrit pas', () => {
+    const d = documentComplet();
+    d.charge.evenement.nomsTours = [null, 'Entremets'];
+    d.charge.evenement.imageBadges = { active: true, chemin: CHEMIN, position: 'centre' };
+    const lu = analyser(JSON.stringify(d));
+    assert.deepEqual(lu.charge.evenement.imageBadges, { active: true, chemin: CHEMIN, position: 'centre' });
+    const texte = serialiser(lu.charge, { revision: 12, produitVersion: VERSION.affichee });
+    const attendu = `"nomsTours":[null,"Entremets"],"imageBadges":{"active":true,"chemin":"${CHEMIN}","position":"centre"}}`;
+    assert.ok(texte.includes(attendu), texte);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge, lu.charge);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+    const sans = serialiser(documentComplet().charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.equal(sans.includes('imageBadges'), false);
+  });
+
+  test('imageBadgesDe rend le défaut sans le champ, le champ sinon, dans un objet neuf', () => {
+    assert.deepEqual(IMAGE_BADGES_DEFAUT, { active: false, chemin: null, position: 'haut' });
+    assert.deepEqual(POSITIONS_IMAGE_BADGES, ['haut', 'centre', 'bas']);
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    assert.deepEqual(imageBadgesDe(sans), IMAGE_BADGES_DEFAUT);
+    const lue = imageBadgesDe(sans);
+    lue.active = true;
+    assert.deepEqual(imageBadgesDe(sans), IMAGE_BADGES_DEFAUT);
+    const avec = analyser(abime((d) => { d.charge.evenement.imageBadges = { active: false, chemin: CHEMIN, position: 'bas' }; })).charge;
+    const image = imageBadgesDe(avec);
+    assert.deepEqual(image, { active: false, chemin: CHEMIN, position: 'bas' });
+    image.position = 'haut';
+    assert.equal(avec.evenement.imageBadges.position, 'bas');
+  });
+
+  test('chaque clé a sa forme ; le défaut écrit, ou null à la place de l’objet, est une faute nommée par le champ', () => {
+    const champ = 'charge.evenement.imageBadges';
+    const poser = (valeur) => abime((d) => { d.charge.evenement.imageBadges = valeur; });
+    assert.deepEqual(analyser(poser({ active: true, chemin: null, position: 'haut' })).charge.evenement.imageBadges, {
+      active: true,
+      chemin: null,
+      position: 'haut',
+    });
+    assert.deepEqual(ecartsDeRefus([
+      ['le défaut', poser({ active: false, chemin: null, position: 'haut' }), 'FORME', champ],
+      ['nul', poser(null), 'FORME', champ],
+      ['une liste', poser([]), 'FORME', champ],
+      ['sans active', poser({ chemin: null, position: 'haut' }), 'FORME', `${champ}.active`],
+      ['active hors des booléens', poser({ active: 1, chemin: null, position: 'haut' }), 'FORME', `${champ}.active`],
+      ['un chemin hors de logo/', poser({ active: true, chemin: 'etat.json', position: 'haut' }), 'FORME', `${champ}.chemin`],
+      ['un chemin en capitales', poser({ active: true, chemin: CHEMIN.toUpperCase(), position: 'haut' }), 'FORME', `${champ}.chemin`],
+      ['sans chemin', poser({ active: true, position: 'haut' }), 'FORME', `${champ}.chemin`],
+      ['une autre position', poser({ active: true, chemin: null, position: 'gauche' }), 'FORME', `${champ}.position`],
+      ['une clé inconnue', poser({ active: true, chemin: null, position: 'haut', taille: 3 }), 'FORME', `${champ}.taille`],
+    ]), []);
+  });
+
+  test('la configuration du moteur ne lit pas l’image des badges', () => {
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    const avec = analyser(abime((d) => { d.charge.evenement.imageBadges = { active: true, chemin: CHEMIN, position: 'bas' }; })).charge;
+    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
+  });
+});
+
 // --- Le logo d'une personne (§ 8.9) ------------------------------------------
 
 describe('le logo d’une personne : un champ facultatif, absent quand elle n’en porte pas (§ 8.9)', () => {
@@ -1765,6 +1896,147 @@ describe('le logo d’une personne : un champ facultatif, absent quand elle n’
   test('la configuration du moteur ne lit pas le logo : une personne qui en porte un donne la même configuration', () => {
     const sans = analyser(JSON.stringify(documentValide())).charge;
     const avec = analyser(abime((d) => { d.charge.participants[0].logo = LOGO; })).charge;
+    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
+  });
+});
+
+// --- Le nom numéroté d'une personne (§ 8.9, § 10.1) --------------------------
+
+describe('le nom numéroté : une marque facultative, absente quand le nom n’a pas reçu de numéro (§ 8.9)', () => {
+  // Le document valide, la personne de rang 1 renommée nom et marquée de
+  // valeur.
+  const marque = (nom, valeur = true) => (d) => {
+    d.charge.participants[1].nom = nom;
+    d.charge.participants[1].nomNumerote = valeur;
+  };
+
+  test('elle s’écrit en dernier, après le logo, et se relit à l’identique ; absente, elle ne s’écrit pas', () => {
+    const d = documentComplet();
+    d.charge.participants[0].logo = `logo/${'0123456789abcdef'.repeat(4)}.png`;
+    d.charge.participants[0].nom = 'Brindille 01';
+    d.charge.participants[0].nomNumerote = true;
+    marque('Sarrasin 02')(d);
+    const lu = analyser(JSON.stringify(d));
+    assert.equal(lu.charge.participants[0].nomNumerote, true);
+    assert.equal(Object.hasOwn(lu.charge.participants[2], 'nomNumerote'), false);
+    const texte = serialiser(lu.charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(texte.includes('.png","nomNumerote":true}'), texte);
+    assert.ok(texte.includes('"exclu":false,"nomNumerote":true}'), texte);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge, lu.charge);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+    // Sans marque, la personne s'écrit comme avant elle, même sous un nom
+    // qui finit par un numéro : la marque ne se déduit jamais du nom.
+    const sans = serialiser(analyser(abime((x) => { x.charge.participants[1].nom = 'Sarrasin 02'; })).charge, {
+      revision: 12,
+      produitVersion: VERSION.affichee,
+    });
+    assert.ok(!sans.includes('"nomNumerote"'), sans);
+  });
+
+  test('un nom qui finit par une espace et deux chiffres ou plus se lit marqué', () => {
+    for (const nom of ['Sarrasin 01', 'Sarrasin 100', 'Sarrasin 01 01', 'de la Combe 07']) {
+      assert.equal(analyser(abime(marque(nom))).charge.participants[1].nomNumerote, true, nom);
+    }
+  });
+
+  test('une autre valeur que vrai est une faute de forme ; un nom marqué sans numéro final aussi, nommée par la marque', () => {
+    const chemin = 'charge.participants[1].nomNumerote';
+    assert.deepEqual(ecartsDeRefus([
+      ['faux', abime(marque('Sarrasin 01', false)), 'FORME', chemin],
+      ['nul', abime(marque('Sarrasin 01', null)), 'FORME', chemin],
+      ['une chaîne', abime(marque('Sarrasin 01', 'oui')), 'FORME', chemin],
+      ['un nombre', abime(marque('Sarrasin 01', 1)), 'FORME', chemin],
+      ['sans numéro', abime(marque('Sarrasin')), 'FORME', chemin],
+      ['un seul chiffre', abime(marque('Sarrasin 1')), 'FORME', chemin],
+      ['sans espace', abime(marque('Sarrasin01')), 'FORME', chemin],
+      ['une tabulation', abime(marque('Sarrasin\t01')), 'FORME', chemin],
+      ['un mot après', abime(marque('Sarrasin 01 bis')), 'FORME', chemin],
+      ['des chiffres pleine chasse', abime(marque('Sarrasin ０１')), 'FORME', chemin],
+    ]), []);
+  });
+
+  test('le contrôle de la marque suit celui des conflits : une personne fautive des deux est nommée par ses conflits', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['les deux', abime((d) => {
+        marque('Sarrasin')(d);
+        d.charge.participants[1].conflits = ['Chorale du Vallon'];
+      }), 'FORME', 'charge.participants[1].conflits[0]'],
+    ]), []);
+  });
+
+  test('un fichier d’un format plus récent garde la marque, et lève FORMAT_PLUS_RECENT sur une marque que le format courant refuse', () => {
+    const lu = analyser(abime((d) => {
+      d.entete.format = FORMAT + 1;
+      marque('Sarrasin 01')(d);
+    }));
+    assert.equal(lu.formatPlusRecent, true);
+    assert.equal(lu.charge.participants[1].nomNumerote, true);
+    const plus = { format: FORMAT + 1 };
+    assert.deepEqual(ecartsDeRefus([
+      ['faux', abime((d) => { d.entete.format = FORMAT + 1; marque('Sarrasin 01', false)(d); }),
+        'FORMAT_PLUS_RECENT', 'charge.participants[1].nomNumerote', plus],
+      ['sans numéro', abime((d) => { d.entete.format = FORMAT + 1; marque('Sarrasin')(d); }),
+        'FORMAT_PLUS_RECENT', 'charge.participants[1].nomNumerote', plus],
+    ]), []);
+  });
+
+  test('la configuration du moteur ne lit pas la marque : une personne marquée donne la même configuration', () => {
+    const sans = analyser(abime((d) => { d.charge.participants[1].nom = 'Sarrasin 01'; })).charge;
+    const avec = analyser(abime(marque('Sarrasin 01'))).charge;
+    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
+  });
+});
+
+// --- L'animation réservée d'une personne (§ 4, § 8.9) ------------------------
+
+describe('l’animation réservée : une marque facultative, absente quand la personne n’est pas à désigner (§ 8.9)', () => {
+  // Le document valide, la personne de rang 1 marquée de valeur.
+  const reservee = (valeur = true) => (d) => {
+    d.charge.participants[1].animationReservee = valeur;
+  };
+
+  test('elle s’écrit en dernier, après le nom numéroté, et se relit à l’identique ; absente, elle ne s’écrit pas', () => {
+    const d = documentComplet();
+    d.charge.participants[0].nom = 'Brindille 01';
+    d.charge.participants[0].nomNumerote = true;
+    d.charge.participants[0].animationReservee = true;
+    reservee()(d);
+    const lu = analyser(JSON.stringify(d));
+    assert.equal(lu.charge.participants[0].animationReservee, true);
+    assert.equal(lu.charge.participants[1].animationReservee, true);
+    assert.equal(Object.hasOwn(lu.charge.participants[2], 'animationReservee'), false);
+    const texte = serialiser(lu.charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(texte.includes('"nomNumerote":true,"animationReservee":true}'), texte);
+    assert.ok(texte.includes('"exclu":false,"animationReservee":true}'), texte);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge, lu.charge);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+    const sans = serialiser(analyser(JSON.stringify(documentValide())).charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(!sans.includes('"animationReservee"'), sans);
+  });
+
+  test('une autre valeur que vrai est une faute de forme, nommée par la marque', () => {
+    const chemin = 'charge.participants[1].animationReservee';
+    assert.deepEqual(ecartsDeRefus([
+      ['faux', abime(reservee(false)), 'FORME', chemin],
+      ['nul', abime(reservee(null)), 'FORME', chemin],
+      ['une chaîne', abime(reservee('oui')), 'FORME', chemin],
+      ['un nombre', abime(reservee(1)), 'FORME', chemin],
+    ]), []);
+  });
+
+  test('une personne exclue la garde : la marque ne dépend ni de l’exclusion ni de la présence', () => {
+    const lu = analyser(abime((d) => {
+      reservee()(d);
+      d.charge.participants[1].exclu = true;
+    }));
+    assert.equal(lu.charge.participants[1].animationReservee, true);
+  });
+
+  test('la configuration du moteur ne lit pas la marque : une personne marquée donne la même configuration', () => {
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    const avec = analyser(abime(reservee())).charge;
     assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
   });
 });
@@ -1945,6 +2217,7 @@ describe('configurationDepuisCharge : étiquettes, objectifs, mode et cases (con
 const prioritesParDefaut = () =>
   [
     'conflitsOrganisation',
+    'inclusionsNonSatisfaites',
     'excedentCollisions',
     'rencontresRepetees',
     'collisionsCumulees',
@@ -1968,8 +2241,8 @@ function avecPalierPartage(premier, second, [poidsPremier, poidsSecond] = [1, 3]
 
 // L'ordre réglé des épreuves : l'écart au premier palier, l'excédent de
 // collisions × 1 et les tours hors objectif × 3 au deuxième, les collisions
-// cumulées, les rencontres répétées, les animateurs et la redondance seuls
-// à leur palier, dans cet ordre.
+// cumulées, les rencontres répétées, les animateurs, la redondance, les
+// conflits et les inclusions seuls à leur palier, dans cet ordre.
 const prioritesReglees = () => avecPalierPartage('excedentCollisions', 'toursHorsObjectif');
 
 describe('l’ordre des priorités : un réglage facultatif, absent à son défaut (§ 8.9, A16)', () => {
@@ -1985,6 +2258,28 @@ describe('l’ordre des priorités : un réglage facultatif, absent à son défa
     assert.ok(ecrit.includes(attendu), ecrit);
     assert.ok(attendu.includes('[{"critere":"excedentCollisions","poids":1},{"critere":"toursHorsObjectif","poids":3}]'), attendu);
     assert.equal(serialiser(analyser(ecrit).charge, lu.entete), ecrit);
+  });
+
+  test('une liste écrite avant les inclusions se lit et se récrit telle quelle ; ses lecteurs les placent après le palier des conflits (§ 8.9)', () => {
+    const sansInclusions = () => prioritesReglees().filter(([{ critere }]) => critere !== 'inclusionsNonSatisfaites');
+    const lu = analyser(abime((d) => { d.charge.reglages.priorites = sansInclusions(); }));
+    assert.deepEqual(lu.charge.reglages.priorites, sansInclusions());
+    assert.deepEqual(priorites(lu.charge), prioritesReglees());
+    assert.deepEqual(configurationDepuisCharge(lu.charge).priorites, prioritesReglees());
+    const ecrit = serialiser(lu.charge, lu.entete);
+    assert.ok(ecrit.includes(`"priorites":${JSON.stringify(sansInclusions())}}`), ecrit);
+    assert.equal(serialiser(analyser(ecrit).charge, lu.entete), ecrit);
+    // Complétée, l'ancienne liste par défaut serait l'ordre par défaut :
+    // elle reste une faute, comme lui. Un autre critère absent avec les
+    // inclusions en est une aussi.
+    const P = 'charge.reglages.priorites';
+    const ancienDefaut = () => prioritesParDefaut().filter(([{ critere }]) => critere !== 'inclusionsNonSatisfaites');
+    assert.deepEqual(ecartsDeRefus([
+      ['l’ordre par défaut d’avant les inclusions', abime((d) => { d.charge.reglages.priorites = ancienDefaut(); }), 'FORME', P],
+      ['la redondance absente avec les inclusions', abime((d) => {
+        d.charge.reglages.priorites = sansInclusions().filter(([{ critere }]) => critere !== 'redondance');
+      }), 'FORME', P],
+    ]), []);
   });
 
   test('un palier hors de l’ordre du registre se lit ; il s’écrit rangé, et ses lecteurs le rendent rangé', () => {
@@ -2003,7 +2298,7 @@ describe('l’ordre des priorités : un réglage facultatif, absent à son défa
     trois.splice(trois.findIndex(([{ critere }]) => critere === 'collisionsCumulees'), 1);
     trois[1].splice(1, 0, { critere: 'collisionsCumulees', poids: 2 });
     const animateursDAbord = prioritesParDefaut();
-    animateursDAbord.splice(1, 0, ...animateursDAbord.splice(6, 1));
+    animateursDAbord.splice(1, 0, ...animateursDAbord.splice(7, 1));
     const seuls = prioritesParDefaut().reverse();
     seuls.push(...seuls.splice(seuls.findIndex(([{ critere }]) => critere === 'ecartAuPlafondAPrioriMax'), 1));
     const variantes = [
@@ -2123,12 +2418,15 @@ describe('priorites : le lecteur de l’ordre des priorités (§ 5.7, § 8.9)', 
     // l'excédent, et non après les rencontres répétées qui les précèdent
     // dans l'ordre du registre.
     charge.reglages.priorites = prioritesReglees().filter(([{ critere }]) => critere !== 'animateursNonRencontres');
-    const [ecart, partage, cumulees, repetees, animateurs, redondance, conflits] = prioritesReglees();
-    assert.deepEqual(priorites(charge), [ecart, partage, animateurs, cumulees, repetees, redondance, conflits]);
+    const [ecart, partage, cumulees, repetees, animateurs, redondance, conflits, inclusions] = prioritesReglees();
+    assert.deepEqual(priorites(charge), [ecart, partage, animateurs, cumulees, repetees, redondance, conflits, inclusions]);
     // Le conflit d'organisation, premier de l'ordre par défaut, se place en
     // tête.
     charge.reglages.priorites = prioritesReglees().filter(([{ critere }]) => critere !== 'conflitsOrganisation');
-    assert.deepEqual(priorites(charge), [conflits, ecart, partage, cumulees, repetees, animateurs, redondance]);
+    assert.deepEqual(priorites(charge), [conflits, ecart, partage, cumulees, repetees, animateurs, redondance, inclusions]);
+    // Les inclusions suivent le palier des conflits, où qu'il soit.
+    charge.reglages.priorites = [conflits, ecart, partage, cumulees, repetees, animateurs, redondance];
+    assert.deepEqual(priorites(charge), [conflits, inclusions, ecart, partage, cumulees, repetees, animateurs, redondance]);
   });
 });
 
@@ -2687,5 +2985,174 @@ describe('les conflits d’organisation : participant.conflits, facultatif (§ 4
     assert.deepEqual(charge.participants[3].conflits, [VALLON]);
     // Le moteur relie les deux organisations.
     assert.equal(normaliser(configuration).pairesEnConflit > 0, true);
+  });
+});
+
+describe('les inclusions : participant.inclusionsOrganisation et inclusionsParticipant, facultatifs (§ 8.9)', () => {
+  const VALLON = 'Chorale du Vallon';
+  const GAMMA = 'Cercle Gamma';
+  // Le document valide, où le participant de rang rang inclut organisations,
+  // puis participants ; undefined laisse le champ absent.
+  const avecInclusions = (rang, organisations, participants) =>
+    abime((d) => {
+      if (organisations !== undefined) d.charge.participants[rang].inclusionsOrganisation = organisations;
+      if (participants !== undefined) d.charge.participants[rang].inclusionsParticipant = participants;
+    });
+  const ENTETE = { revision: 12, produitVersion: VERSION.affichee };
+
+  test('absentes, rien ne s’écrit : une personne sans inclusion se clôt sur ses champs d’avant, et aucune démonstration n’en porte', () => {
+    const sans = analyser(abime(() => {}));
+    const texte = serialiser(sans.charge, ENTETE);
+    assert.ok(!texte.includes('"inclusions'), texte);
+    assert.ok(texte.includes('"notes":"part à 21 h","exclu":false}'), texte);
+    for (const cle of ['grande', 'grande-sans-exception', 'petite', 'petite-conflit']) {
+      assert.equal(texteLivre(cle).includes('"inclusions'), false, cle);
+    }
+  });
+
+  test('présentes, elles se lisent telles qu’écrites, s’écrivent rangées après les conflits et avant le logo, et se relisent à l’octet', () => {
+    const LOGO = `logo/${'0123456789abcdef'.repeat(4)}.png`;
+    // La personne de rang 0 inclut deux participants hors de l'ordre
+    // croissant, et l'organisation que nomme son conflit : la contradiction
+    // se lit sans faute. Son conflit et son logo encadrent les deux champs.
+    // L'exclue de rang 2, sans organisation, en inclut deux hors de l'ordre
+    // des unités de code, où « e » (0x65) précède « h » (0x68).
+    const lu = analyser(abime((d) => {
+      Object.assign(d.charge.participants[0], {
+        conflits: [GAMMA],
+        inclusionsOrganisation: [GAMMA],
+        inclusionsParticipant: [5, 3],
+        logo: LOGO,
+      });
+      d.charge.participants[2].inclusionsOrganisation = [VALLON, GAMMA];
+    }));
+    assert.deepEqual(lu.charge.participants[0].inclusionsParticipant, [5, 3]);
+    assert.deepEqual(lu.charge.participants[2].inclusionsOrganisation, [VALLON, GAMMA]);
+    const texte = serialiser(lu.charge, ENTETE);
+    assert.ok(
+      texte.includes(`"conflits":["${GAMMA}"],"inclusionsOrganisation":["${GAMMA}"],"inclusionsParticipant":[3,5],"logo":"${LOGO}"}`),
+      texte,
+    );
+    assert.ok(texte.includes(`"exclu":true,"inclusionsOrganisation":["${GAMMA}","${VALLON}"]}`), texte);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge.participants[0].inclusionsParticipant, [3, 5]);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+  });
+
+  test('une liste vide, répétée, d’une autre sorte d’élément : FORME, nommée par son chemin', () => {
+    const organisation = 'charge.participants[3].inclusionsOrganisation';
+    const participant = 'charge.participants[3].inclusionsParticipant';
+    assert.deepEqual(ecartsDeRefus([
+      ['organisations : une liste vide', avecInclusions(3, []), 'FORME', organisation],
+      ['organisations : un doublon', avecInclusions(3, [VALLON, VALLON]), 'FORME', organisation],
+      ['organisations : un texte vide', avecInclusions(3, [VALLON, '']), 'FORME', `${organisation}[1]`],
+      ['organisations : un nombre', avecInclusions(3, [7]), 'FORME', `${organisation}[0]`],
+      ['organisations : null', avecInclusions(3, null), 'FORME', organisation],
+      ['organisations : un texte seul', avecInclusions(3, VALLON), 'FORME', organisation],
+      ['participants : une liste vide', avecInclusions(3, undefined, []), 'FORME', participant],
+      ['participants : un doublon', avecInclusions(3, undefined, [1, 1]), 'FORME', participant],
+      ['participants : zéro', avecInclusions(3, undefined, [1, 0]), 'FORME', `${participant}[1]`],
+      ['participants : négatif', avecInclusions(3, undefined, [-2]), 'FORME', `${participant}[0]`],
+      ['participants : non entier', avecInclusions(3, undefined, [1.5]), 'FORME', `${participant}[0]`],
+      ['participants : au-delà de 2^31 − 1', avecInclusions(3, undefined, [2 ** 31]), 'FORME', `${participant}[0]`],
+      ['participants : un nom', avecInclusions(3, undefined, ['Brindille']), 'FORME', `${participant}[0]`],
+      ['participants : null', avecInclusions(3, undefined, null), 'FORME', participant],
+      ['participants : un entier seul', avecInclusions(3, undefined, 1), 'FORME', participant],
+    ]), []);
+  });
+
+  test('sa propre organisation et soi-même : FORME au rang qui les nomme, l’organisation d’abord', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['la sienne', avecInclusions(1, [GAMMA, VALLON]), 'FORME', 'charge.participants[1].inclusionsOrganisation[1]'],
+      ['soi-même', avecInclusions(3, undefined, [1, 5]), 'FORME', 'charge.participants[3].inclusionsParticipant[1]'],
+      ['les deux', avecInclusions(0, [VALLON], [1]), 'FORME', 'charge.participants[0].inclusionsOrganisation[0]'],
+    ]), []);
+  });
+
+  test('une organisation que nul ne porte, un identifiant que nul n’a : REFERENCE, nommée par son rang', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['organisation inconnue', avecInclusions(0, [GAMMA, 'Cercle Gama']), 'REFERENCE', 'charge.participants[0].inclusionsOrganisation[1]'],
+      // L'égalité de chaînes décide : une autre casse n'est pas la même
+      // organisation.
+      ['une autre casse', avecInclusions(3, ['chorale du vallon']), 'REFERENCE', 'charge.participants[3].inclusionsOrganisation[0]'],
+      // L'identifiant 4, retiré, n'est plus celui de personne.
+      ['identifiant retiré', avecInclusions(0, undefined, [2, 4]), 'REFERENCE', 'charge.participants[0].inclusionsParticipant[1]'],
+      ['identifiant jamais attribué', avecInclusions(0, undefined, [6]), 'REFERENCE', 'charge.participants[0].inclusionsParticipant[0]'],
+      // Les organisations d'une personne se contrôlent avant ses participants.
+      ['les deux', avecInclusions(0, ['Cercle Gama'], [4]), 'REFERENCE', 'charge.participants[0].inclusionsOrganisation[0]'],
+    ]), []);
+  });
+
+  test('un collègue nommé, une exclue, une réciproque : admis', () => {
+    const lu = analyser(abime((d) => {
+      // Un collègue de la même organisation, et l'exclue de rang 2.
+      d.charge.participants[0].inclusionsParticipant = [2, 3];
+      // L'exclue, sans organisation, garde sa liste et inclut en retour.
+      d.charge.participants[2].inclusionsOrganisation = [GAMMA];
+      d.charge.participants[2].inclusionsParticipant = [1];
+      // L'organisation d'une exclue existe.
+      d.charge.participants[2].organisation = 'Atelier Pivoine';
+      d.charge.participants[3].inclusionsOrganisation = ['Atelier Pivoine'];
+    }));
+    assert.deepEqual(lu.charge.participants[0].inclusionsParticipant, [2, 3]);
+    assert.deepEqual(lu.charge.participants[2].inclusionsParticipant, [1]);
+    assert.deepEqual(lu.charge.participants[3].inclusionsOrganisation, ['Atelier Pivoine']);
+  });
+
+  test('le contrôle suit celui des conflits et précède celui du nom numéroté ; les références suivent celles des conflits', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['conflit et inclusion fautifs', abime((d) => {
+        d.charge.participants[1].conflits = [VALLON];
+        d.charge.participants[1].inclusionsOrganisation = [VALLON];
+      }), 'FORME', 'charge.participants[1].conflits[0]'],
+      ['inclusion et marque fautives', abime((d) => {
+        d.charge.participants[1].inclusionsParticipant = [2];
+        d.charge.participants[1].nomNumerote = true;
+      }), 'FORME', 'charge.participants[1].inclusionsParticipant[0]'],
+      ['références d’une personne plus loin', abime((d) => {
+        d.charge.participants[0].inclusionsOrganisation = ['Cercle Gama'];
+        d.charge.participants[3].conflits = ['Cercle Gama'];
+      }), 'REFERENCE', 'charge.participants[3].conflits[0]'],
+    ]), []);
+  });
+
+  test('un fichier d’un format plus récent les garde, et lève FORMAT_PLUS_RECENT sur ce que le format courant refuse', () => {
+    const lu = analyser(abime((d) => {
+      d.entete.format = FORMAT + 1;
+      d.charge.participants[0].inclusionsParticipant = [5];
+    }));
+    assert.equal(lu.formatPlusRecent, true);
+    assert.deepEqual(lu.charge.participants[0].inclusionsParticipant, [5]);
+    assert.deepEqual(ecartsDeRefus([
+      ['soi-même', abime((d) => {
+        d.entete.format = FORMAT + 1;
+        d.charge.participants[0].inclusionsParticipant = [1];
+      }), 'FORMAT_PLUS_RECENT', 'charge.participants[0].inclusionsParticipant[0]', { format: FORMAT + 1 }],
+      ['identifiant inconnu', abime((d) => {
+        d.entete.format = FORMAT + 1;
+        d.charge.participants[0].inclusionsParticipant = [4];
+      }), 'REFERENCE', 'charge.participants[0].inclusionsParticipant[0]', { format: FORMAT + 1 }],
+    ]), []);
+  });
+
+  test('configurationDepuisCharge en porte une copie ; absentes, la configuration est celle d’avant les champs', () => {
+    const sans = analyser(abime(() => {})).charge;
+    const { charge } = analyser(avecInclusions(0, [GAMMA], [3, 5]));
+    geler(charge);
+    const configuration = configurationDepuisCharge(charge);
+    assert.deepEqual(configuration.participants[0].inclusionsOrganisation, [GAMMA]);
+    assert.deepEqual(configuration.participants[0].inclusionsParticipant, [3, 5]);
+    configuration.participants[0].inclusionsOrganisation.push('Autre');
+    configuration.participants[0].inclusionsParticipant.push(9);
+    assert.deepEqual(charge.participants[0].inclusionsOrganisation, [GAMMA]);
+    assert.deepEqual(charge.participants[0].inclusionsParticipant, [3, 5]);
+    const { inclusionsOrganisation, inclusionsParticipant, ...reste } = configurationDepuisCharge(charge).participants[0];
+    assert.deepEqual(
+      { ...configurationDepuisCharge(charge), participants: [reste, ...configurationDepuisCharge(charge).participants.slice(1)] },
+      configurationDepuisCharge(sans),
+    );
+    // Le moteur en tire trois lignes, actives ou hors d'atteinte.
+    const instance = normaliser(configurationDepuisCharge(charge));
+    assert.equal(instance.inclusionsActives + instance.inclusionsHorsAtteinte.length, 3);
   });
 });

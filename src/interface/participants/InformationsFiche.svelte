@@ -5,8 +5,9 @@
   // Le bloc des informations de la fiche d'une personne (§ 4, § 10.2,
   // data-informations-fiche) : en lecture, les six valeurs de texte — nom,
   // prénom, organisation, courriel, titre pressenti, notes —, chacune sous
-  // l'intitulé de sa colonne, « — » quand elle manque, puis le statut que
-  // la fiche lui passe ; puis « Modifier », nommée par la personne.
+  // l'intitulé de sa colonne, « — » quand elle manque, puis l'animation
+  // réservée, « oui » ou « non », puis le statut que la fiche lui passe ;
+  // puis « Modifier », nommée par la personne.
   // Fiche.svelte le recrée pour chaque personne ({#key}) : un formulaire,
   // un refus ou un signal ne survivent pas au passage à une autre, et rien
   // ne s'écrit.
@@ -16,7 +17,8 @@
   // « Logo ». Sinon le formulaire prend la place du bloc : un champ par
   // valeur, prérempli (saisieDesInformations, informations.js), les notes en
   // zone de texte, l'organisation proposant celles de l'événement (datalist,
-  // suggestionsOrganisation) ; le focus va au nom. « Enregistrer », ou
+  // suggestionsOrganisation), puis la case « Animation réservée », cochée
+  // sous la marque ; le focus va au nom. « Enregistrer », ou
   // Entrée, pose une seule commande, modifierParticipant des seuls champs que
   // la saisie change depuis l'ouverture et qui diffèrent de la personne
   // courante (commandeDesInformations) : une écriture venue d'ailleurs
@@ -36,13 +38,14 @@
   //
   // Une écriture aboutie laisse sous le bloc, tant que sa révision est la
   // courante, le signal de l'orthographe d'organisation retenue
-  // (ORTHOGRAPHE_RETENUE) et l'avis de ce que les listes de conflits ont
-  // suivi (suiviDesConflits) : Défaire, ou toute autre écriture, les
-  // retire.
+  // (ORTHOGRAPHE_RETENUE), puis l'avis de ce que les listes de conflits ont
+  // suivi et celui de ce que les listes d'inclusions d'organisation ont
+  // suivi (suiviDesListes) : Défaire, ou toute autre écriture, les retire.
   //
-  // Les conflits d'organisation de la personne restent dans leur rubrique,
-  // hors du formulaire, actifs pendant la saisie : leur commande écrit sa
-  // propre entrée, et le formulaire garde la sienne.
+  // Les conflits d'organisation et les inclusions de la personne restent
+  // dans leurs rubriques, hors du formulaire, actives pendant la saisie :
+  // chacune de leurs commandes écrit sa propre entrée, et le formulaire
+  // garde la sienne.
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { cleNormalisee } from '../../application/csv.js';
   import { organisationsDe } from '../../application/conflits_organisation.js';
@@ -55,13 +58,14 @@
   import { effetDe } from '../raccourcis.js';
   import { cleDeColonne, entreeValide } from './grille.js';
   import {
+    CASE_ANIMATION,
     CHAMPS_INFORMATIONS,
     champDuRefus,
     commandeDesInformations,
     informationsModifiees,
     saisieDesInformations,
     suggestionsOrganisation,
-    suiviDesConflits,
+    suiviDesListes,
   } from './informations.js';
 
   let { participant, charge, statut } = $props();
@@ -79,7 +83,7 @@
   // Le formulaire ouvert, la saisie de son ouverture et la courante, ses
   // refus — celui du nom, celui d'« Enregistrer » —, l'envoi en cours, et
   // le rendu de la dernière écriture aboutie : sa révision, l'orthographe
-  // retenue et le suivi des conflits.
+  // retenue et le suivi des conflits et des inclusions.
   let ouvert = $state(false);
   let initiale = $state.raw(untrack(() => saisieDesInformations(participant)));
   let saisie = $state(untrack(() => saisieDesInformations(participant)));
@@ -150,7 +154,7 @@
     dernier = {
       revision: apres.evenement.revision,
       orthographe: rendu.orthographe,
-      conflits: suiviDesConflits(avant, apres.charge, rendu.args.id),
+      ...suiviDesListes(avant, apres.charge, rendu.args.id),
     };
     await fermer();
   }
@@ -223,6 +227,10 @@
           {/if}
         </div>
       {/each}
+      <div class="case">
+        <input id={`${uid}-${CASE_ANIMATION}`} type="checkbox" data-champ={CASE_ANIMATION} bind:checked={saisie[CASE_ANIMATION]} />
+        <label for={`${uid}-${CASE_ANIMATION}`}>{t('participants.informations.animationReservee')}</label>
+      </div>
       <div class="boutons">
         <button
           type="submit"
@@ -245,6 +253,8 @@
         <dt>{t(cleDeColonne(cle))}</dt>
         <dd>{participant[cle] ?? t('participants.fiche.vide')}</dd>
       {/each}
+      <dt>{t('participants.informations.animationReservee')}</dt>
+      <dd>{t(participant[CASE_ANIMATION] === true ? 'participants.informations.animationOui' : 'participants.informations.animationNon')}</dd>
       <dt>{t('participants.fiche.statut')}</dt>
       <dd>{statut}</dd>
     </dl>
@@ -265,6 +275,12 @@
     <div class="signal" role="status" data-avertissement="conflitsSuivis" {@attach montrer}>
       <span class="signe"><Icone nom="triangle" /></span>
       <p>{t('participants.informations.conflitsSuivis', signaux.conflits)}</p>
+    </div>
+  {/if}
+  {#if signaux !== null && signaux.inclusions !== null}
+    <div class="signal" role="status" data-avertissement="inclusionsSuivies" {@attach montrer}>
+      <span class="signe"><Icone nom="triangle" /></span>
+      <p>{t('participants.informations.inclusionsSuivies', signaux.inclusions)}</p>
     </div>
   {/if}
 </div>
@@ -335,6 +351,30 @@
 
   textarea {
     resize: vertical;
+  }
+
+  /* La case de l'animation réservée : la case à la taille du texte, son
+     intitulé à côté, dans l'encre et le corps du texte, la rangée haute d'une
+     cible de pointage au moins, comme les cases de l'historique. */
+  .case {
+    display: flex;
+    align-items: center;
+    gap: var(--espace-1);
+    min-height: var(--cible-minimale);
+  }
+
+  .case input {
+    width: auto;
+    min-height: 0;
+    margin: 0;
+  }
+
+  .case label {
+    color: var(--couleur-page-texte);
+    font-size: inherit;
+    font-weight: normal;
+    letter-spacing: normal;
+    text-transform: none;
   }
 
   input[aria-invalid='true'] {

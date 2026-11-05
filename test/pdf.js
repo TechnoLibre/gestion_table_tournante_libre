@@ -59,8 +59,9 @@ const appliquer = ([a, b, c, d, e, f], x, y) => [a * x + c * y + e, b * x + d * 
 // l'utilisateur) tracé de (x1, y1) vers (x2, y2), sous la matrice m : la
 // largeur du parallélogramme image de la bande du trait, mesurée en travers
 // de sa direction, w·|det m| / |m·u|, u le vecteur unitaire du trait. Juste
-// pour une matrice quelconque : une échelle d'un seul axe épaissit le trait
-// qui la traverse et laisse l'autre tel quel.
+// pour toute matrice inversible : une échelle d'un seul axe épaissit le
+// trait qui la traverse et laisse l'autre tel quel. Une matrice singulière
+// rend 0, ou NaN (0/0) quand elle écrase la direction même du trait.
 function epaisseurSous([a, b, c, d], w, [x1, y1], [x2, y2]) {
   const longueur = Math.hypot(x2 - x1, y2 - y1);
   const [ux, uy] = [(x2 - x1) / longueur, (y2 - y1) / longueur];

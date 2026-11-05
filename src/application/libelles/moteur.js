@@ -4,7 +4,7 @@
 // Les textes des codes du moteur qui n'ont pas leur table ailleurs, et les
 // libellés de ses critères (§ 5, § 5.7, § 14.6) : les codes d'une
 // ErreurConfiguration, ceux des violations de verifierInvariants et de
-// verifierIndicateurs ; moteur.critere.<nom> pour chacun des sept critères
+// verifierIndicateurs ; moteur.critere.<nom> pour chacun des neuf critères
 // du registre, le nom que la phrase de l'ordre lui donne sous le défaut ;
 // moteur.valeur.<valeur> pour chaque valeur qui classe, le nom que la phrase
 // donne à la valeur appliquée — « rencontres répétées », ou « retours » sous
@@ -21,7 +21,10 @@
 // son rang sinon ; l'organisation d'un reste négatif, de même, par son
 // libellé ou par son rang. INCONNU, aux mêmes détails que la faute de
 // placement du stockage, a son texte dans libelles/stockage.js.
-import { auxToursNommes, capitale, compte, enumeration, nomDans } from './aides.js';
+// PLACES_MANQUANTES et SURRESERVATION, qu'un refus montre aussi à
+// l'opérateur, nomment leurs tours sous nomsTours (aides.js) quand l'écran
+// les leur donne ; un défaut du moteur, sans eux, garde le numéro seul.
+import { auxToursNommes, capitale, compte, enumeration, nomDans, tourDansPhrase } from './aides.js';
 
 // Les cas d'une table que le plan ne rattache pas à l'instance, par detail.
 const CAS_DE_TABLE = new Map([
@@ -45,11 +48,12 @@ const organisationDe = ({ groupe, organisation }) =>
 
 // Les manques d'une salle trop petite, tour par tour : les tours d'un même
 // manque se nomment ensemble, les manques dans l'ordre de leur premier tour.
-// La Map ne sert qu'à retrouver un manque déjà rencontré.
-function manquesParTour(tours) {
+// La Map ne sert qu'à retrouver un manque déjà rencontré. Les tours se
+// nomment sous nomsTours (aides.js).
+function manquesParTour(tours, nomsTours) {
   const toursDe = new Map();
   for (const { tour, manque } of tours) toursDe.set(manque, [...(toursDe.get(manque) ?? []), tour]);
-  return enumeration([...toursDe].map(([manque, siens]) => `${compte(manque, 'place', 'places')} ${auxToursNommes(siens)}`));
+  return enumeration([...toursDe].map(([manque, siens]) => `${compte(manque, 'place', 'places')} ${auxToursNommes(siens, nomsTours)}`));
 }
 
 // Un rang de réservation, compté à partir de 0 par le moteur.
@@ -74,18 +78,18 @@ export const TABLE = new Map([
   // chaque tour à manque positif, que le texte nomme.
   [
     'PLACES_MANQUANTES',
-    ({ placesManquantes, tours }) =>
+    ({ placesManquantes, tours, nomsTours }) =>
       tours === undefined
         ? `Il manque ${compte(placesManquantes, 'place', 'places')} à chaque tour pour asseoir toutes les personnes : ` +
           'ajouter des tables ou des sièges, ou exclure des personnes, rend la génération possible.'
-        : `Il manque ${manquesParTour(tours)} pour asseoir les personnes présentes : ` +
+        : `Il manque ${manquesParTour(tours, nomsTours)} pour asseoir les personnes présentes : ` +
           'ajouter des tables ou des sièges, ou changer des présences, rend la génération possible.',
   ],
   [
     'SURRESERVATION',
-    ({ table, tour, reservees, capacite }) =>
+    ({ table, tour, reservees, capacite, nomsTours }) =>
       `La table d'identifiant ${table} reçoit ${compte(reservees, 'personne réservée', 'personnes réservées')} ` +
-      `au tour ${tour}, pour ${compte(capacite, 'place', 'places')}.`,
+      `au ${tourDansPhrase(tour, nomsTours)}, pour ${compte(capacite, 'place', 'places')}.`,
   ],
 
   // --- La configuration (normaliser, § 4, § 5.2) ------------------------------
@@ -269,6 +273,16 @@ export const TABLE = new Map([
     () => "Le plus de tours hors objectif d'une personne dépasse le plus de tours possibles : le calcul est faux.",
   ],
   [
+    'INCLUSIONS_SATISFAITES',
+    (details) =>
+      `Les inclusions satisfaites de ${personneDe(details)} dépassent ses inclusions atteignables : le calcul est faux.`,
+  ],
+  [
+    'INCLUSIONS_AVIS',
+    () =>
+      'Les inclusions non satisfaites ne valent pas les inclusions demandées moins les satisfaites : le calcul est faux.',
+  ],
+  [
     'RESTE_NEGATIF',
     (details) =>
       `Les collisions cumulées de ${organisationDe(details)} passent sous la part prouvée inévitable : le reste est négatif, le calcul est faux.`,
@@ -311,6 +325,7 @@ export const TABLE = new Map([
   ['moteur.critere.animateursNonRencontres', 'animateurs non rencontrés'],
   ['moteur.critere.redondance', "redondance d'organisation"],
   ['moteur.critere.conflitsOrganisation', "conflits d'organisation"],
+  ['moteur.critere.inclusionsNonSatisfaites', 'inclusions non satisfaites'],
 
   // --- Les valeurs qui classent (§ 5.7, A11, D9, D20) ------------------------------
   ['moteur.valeur.ecartAuPlafondAPrioriMax', 'écart au plafond a priori'],
@@ -324,6 +339,7 @@ export const TABLE = new Map([
   ['moteur.valeur.animateursNonRencontres', 'animateurs non rencontrés'],
   ['moteur.valeur.redondance', "redondance d'organisation"],
   ['moteur.valeur.conflitsOrganisation', "conflits d'organisation"],
+  ['moteur.valeur.inclusionsNonSatisfaites', 'inclusions non satisfaites'],
 
   // --- Un palier partagé (§ 5.7, A11) : « ensemble, », puis chaque critère
   // suivi de son poids.

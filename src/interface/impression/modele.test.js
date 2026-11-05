@@ -24,6 +24,7 @@ import {
   bandeDeFeuille,
   clesPapier,
   cleDecoupe,
+  cleTri,
   cleVue,
   dimensionsPage,
   feuilleDe,
@@ -36,7 +37,17 @@ import {
   toursOfferts,
 } from './modele.js';
 
-const APERCU = Object.freeze({ vue: 'plan', tour: 2, listes: true, decoupe: 'auto', parTour: false, retour: 'plan' });
+const APERCU = Object.freeze({
+  vue: 'plan',
+  tour: 2,
+  listes: true,
+  organisations: true,
+  decoupe: 'auto',
+  parColonne: true,
+  parTour: false,
+  dessinTable: false,
+  tri: 'organisation',
+});
 const PIED = Object.freeze({ nom: 'Soirée des Merles', date: '2026-10-09', tour: 2, horodatage: '2026-10-09T19:00:00-04:00', version: 'v' });
 
 const petite = () => analyser(texteLivre('petite')).charge;
@@ -67,19 +78,24 @@ function avecProposition() {
 }
 
 describe('optionsApercu : ce que l’aperçu imprime', () => {
-  test('le plan : son tour, ses listes, sa découpe ; l’orientation, celle que la découpe choisira (null)', () => {
+  test('le plan : son tour, ses listes et leurs organisations, sa découpe et une colonne par page ; l’orientation, celle que la découpe choisira (null)', () => {
     assert.deepEqual(optionsApercu(APERCU, 'A4'), {
-      vue: 'plan', papier: 'A4', orientation: null, tour: 2, listes: true, decoupe: 'auto', parTour: false, question: false,
+      vue: 'plan', papier: 'A4', orientation: null, tour: 2, listes: true, organisations: true,
+      decoupe: 'auto', parColonne: true, parTour: false, dessinTable: false, tri: 'organisation', question: false,
     });
+    const sans = optionsApercu({ ...APERCU, organisations: false, parColonne: false }, 'A4');
+    assert.deepEqual([sans.organisations, sans.parColonne], [false, false]);
   });
 
-  test('les listes s’impriment en portrait et couvrent la soirée, quel que soit le tour du plan', () => {
+  test('les listes s’impriment en portrait et couvrent la soirée, quel que soit le tour du plan ; la feuille par tour, le dessin de la table et le tri rendus tels quels', () => {
     for (const vue of ['accueil', 'tables']) {
-      const options = optionsApercu({ ...APERCU, vue, parTour: true }, 'Lettre');
+      const options = optionsApercu({ ...APERCU, vue, parTour: true, dessinTable: true, tri: 'prenom' }, 'Lettre');
+      assert.equal(options.tri, 'prenom', vue);
       assert.equal(options.orientation, 'portrait', vue);
       assert.equal(options.tour, 'tous', vue);
       assert.equal(options.papier, 'Lettre', vue);
       assert.equal(options.parTour, true, vue);
+      assert.equal(options.dessinTable, true, vue);
     }
   });
 
@@ -200,6 +216,15 @@ describe('feuilleDe : le pied de cinq éléments et le filigrane (§ 11.7, § 18
     assert.deepEqual(elements[3], { element: 'horodatage', libelle: { cle: 'impression.pied.placementInconnu', details: {} }, donnee: null, forme: 'texte' });
   });
 
+  test('un tour qui a un nom s’écrit par ce nom, une donnée sans libellé ; un tour sans nom garde son libellé', () => {
+    const nomsTours = [null, 'Plat principal'];
+    assert.deepEqual(feuilleDe(PIED, false, nomsTours).elements[2], { element: 'tour', libelle: null, donnee: 'Plat principal', forme: 'texte' });
+    assert.deepEqual(feuilleDe({ ...PIED, tour: 1 }, false, nomsTours).elements[2], {
+      element: 'tour', libelle: { cle: 'impression.pied.tour', details: { tour: 1 } }, donnee: null, forme: 'texte',
+    });
+    assert.equal(feuilleDe({ ...PIED, tour: 'tous' }, false, nomsTours).elements[2].libelle.cle, 'impression.pied.tousLesTours');
+  });
+
   test('un pied hors du contrat, un brouillon qui n’est pas un booléen, lèvent', () => {
     assert.throws(() => feuilleDe({ ...PIED, tour: 0 }, false), TypeError);
     assert.throws(() => feuilleDe({ ...PIED, nom: 3 }, false), TypeError);
@@ -288,6 +313,7 @@ describe('les libellés de l’aperçu (§ 14.6)', () => {
     const cles = [
       ...['plan', 'accueil', 'tables'].map(cleVue),
       ...['auto', 'unePage', 'decoupe'].map(cleDecoupe),
+      ...['organisation', 'nom', 'prenom'].map(cleTri),
       ...PAPIERS_OFFERTS.flatMap((papier) => Object.values(clesPapier(papier))),
       ...[feuilleDe(PIED, true), feuilleDe({ ...PIED, date: null, horodatage: null, tour: 'tous' }, false)].flatMap(({ elements }) =>
         elements.filter(({ libelle }) => libelle !== null).map(({ libelle }) => libelle.cle),
@@ -300,5 +326,6 @@ describe('les libellés de l’aperçu (§ 14.6)', () => {
     }
     assert.throws(() => cleVue('badges'), RangeError);
     assert.throws(() => cleDecoupe('deux'), RangeError);
+    assert.throws(() => cleTri('table'), RangeError);
   });
 });

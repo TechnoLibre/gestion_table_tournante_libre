@@ -4,14 +4,15 @@
 // La vue des paires répétées dans un vrai moteur de rendu (§ 12.5, B14,
 // D32, D33, D50) : sur 12 / 4 × 3 / 6, le tableau des paires choisies puis,
 // sous leur intitulé, des paires imposées ; la première commande d'une
-// ligne mène au plan au premier tour où la paire se revoit, la première
-// personne mise en évidence, et chaque tour à son tour ; la ligne n'est pas
-// une cible ; la matrice dans l'ordre du profil, et sa phrase quand elle
-// est trop étroite ou au-delà du seuil ; les pages de cent ; les cas d'une
-// table et d'un tour. Les épreuves de la page montent App (monterApp) au
-// cadre de 1 366 × 700 ; celles des pages montent la vue seule, sur un
-// détail forgé. Le rendu se lit par le texte et les attributs data-…,
-// jamais par une classe. Les noms d'épreuve sont inventés.
+// ligne mène au plan au premier tour où la paire se revoit, et chaque tour
+// à son tour, la première personne mise en évidence et sa chaise au centre
+// du cadre ; la ligne n'est pas une cible ; la matrice dans l'ordre du
+// profil, et sa phrase quand elle est trop étroite ou au-delà du seuil ;
+// les pages de cent ; les cas d'une table et d'un tour. Les épreuves de la
+// page montent App (monterApp) au cadre de 1 366 × 700 ; celles des pages
+// montent la vue seule, sur un détail forgé. Le rendu se lit par le texte
+// et les attributs data-…, jamais par une classe. Les noms d'épreuve sont
+// inventés.
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
@@ -259,7 +260,26 @@ describe('le tableau des paires sur 12 / 4 × 3 / 6 (§ 12.5, D32)', () => {
     }
   });
 
-  test('chaque tour d’une ligne est une commande sœur qui mène au plan à ce tour', async () => {
+  test('le plan ouvert par la première commande centre la chaise de la première personne dans son cadre, marquée', async () => {
+    const m = await ouvrir(lue);
+    const { a, b } = detail.paires.choisies[0];
+    const vue = await vueRendue(m);
+    commandes(vue.querySelector(`[data-paire="${a}:${b}"]`), 'allerAuTour')[0].click();
+    flushSync();
+    expect([m.ui.etat().miseEnEvidence, m.ui.etat().centrerEvidence]).toEqual([a, true]);
+    const marque = await attendre(() => {
+      expect(m.ui.etat().centrerEvidence).toBe(false);
+      const marques = [...m.racine.querySelectorAll('[data-marque="miseEnEvidence"]')];
+      expect(marques).toHaveLength(1);
+      return marques[0];
+    });
+    const rect = marque.getBoundingClientRect();
+    const cadre = m.racine.querySelector('svg[data-plan]').getBoundingClientRect();
+    expect(Math.abs(rect.left + rect.width / 2 - (cadre.left + cadre.width / 2))).toBeLessThan(1);
+    expect(Math.abs(rect.top + rect.height / 2 - (cadre.top + cadre.height / 2))).toBeLessThan(1);
+  });
+
+  test('chaque tour d’une ligne est une commande sœur qui mène au plan à ce tour, la chaise de la première personne au centre du cadre', async () => {
     const m = await ouvrir(lue);
     const { a, b, tours } = detail.paires.choisies[0];
     for (const [rang, { tour, table }] of tours.entries()) {
@@ -272,7 +292,17 @@ describe('le tableau des paires sur 12 / 4 × 3 / 6 (§ 12.5, D32)', () => {
       expect(bouton.getAttribute('aria-label')).toBe(tEcran('qualite.paires.tourNom', { tour: tour + 1, table: 10 + table, a: nomDe(a), b: nomDe(b) }));
       bouton.click();
       flushSync();
-      expect([m.ui.etat().section, m.ui.etat().tour, m.ui.etat().miseEnEvidence]).toEqual(['plan', tour + 1, a]);
+      expect([m.ui.etat().section, m.ui.etat().tour, m.ui.etat().miseEnEvidence, m.ui.etat().centrerEvidence]).toEqual(['plan', tour + 1, a, true]);
+      const marque = await attendre(() => {
+        expect(m.ui.etat().centrerEvidence).toBe(false);
+        const marques = [...m.racine.querySelectorAll('[data-marque="miseEnEvidence"]')];
+        expect(marques).toHaveLength(1);
+        return marques[0];
+      });
+      const rect = marque.getBoundingClientRect();
+      const cadre = m.racine.querySelector('svg[data-plan]').getBoundingClientRect();
+      expect(Math.abs(rect.left + rect.width / 2 - (cadre.left + cadre.width / 2)), `tour ${tour + 1}`).toBeLessThan(1);
+      expect(Math.abs(rect.top + rect.height / 2 - (cadre.top + cadre.height / 2)), `tour ${tour + 1}`).toBeLessThan(1);
     }
   });
 

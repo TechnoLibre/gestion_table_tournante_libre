@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le texte du plan (§ 7.4) : la troncature d'un nom dans la largeur d'un bloc
-// de noms, le repli d'un libellé de table en lignes de largeurs données, et
-// les ordonnées des lignes d'une liste, chaque ligne étant un <tspan> à
-// décalage explicite. Aucune fonction ne lit le DOM : la largeur
-// d'une chaîne vient d'une mesure injectée, getComputedTextLength au
-// navigateur, sur la police rendue (§ 14.1).
+// de noms, le repli d'un libellé de table en lignes de largeurs données, le
+// repli entier d'une organisation sous le nom, et les ordonnées des lignes
+// d'une liste, chaque ligne étant un <tspan> à décalage explicite. Aucune
+// fonction ne lit le DOM : la largeur d'une chaîne vient d'une mesure
+// injectée, getComputedTextLength au navigateur, sur la police rendue
+// (§ 14.1).
 
 /**
  * Gabarit dont se mesure la hauteur de ligne d'une liste : capitales
@@ -167,6 +168,49 @@ export function replier(texte, largeurs, mesurer, marque) {
     lignes.push(ligne);
     premier = suivant;
   }
+  return lignes;
+}
+
+/**
+ * Les lignes d'un texte replié dans une largeur, sur autant de lignes qu'il
+ * en faut, sans jamais l'abréger (§ 7.4) : le repli d'une organisation sous
+ * le nom, dans une liste de noms.
+ *
+ * Le texte se coupe en mots à chaque suite de blancs, et chaque ligne prend
+ * autant de mots entiers que la largeur en tient, séparés d'une espace. Un
+ * mot qui ne tient pas seul s'y coupe entre deux caractères, aux fins
+ * qu'admet replier, le plus loin possible, et sa suite ouvre la ligne
+ * suivante. Une ligne prend au moins un caractère : un caractère plus large
+ * que la largeur la dépasse seul, et le repli s'achève toujours. Hors de ce
+ * cas, chaque ligne mesure au plus largeur. Les lignes rendent tous les
+ * mots, dans l'ordre ; un texte vide, ou fait de blancs, n'en rend aucune.
+ *
+ * @param {string} texte
+ * @param {number} largeur   dans l'unité de mesurer
+ * @param {function(string): number} mesurer  largeur d'une chaîne
+ * @returns {string[]}
+ */
+export function replierEntier(texte, largeur, mesurer) {
+  const mots = texte.split(BLANCS).filter((mot) => mot !== '');
+  const lignes = [];
+  let ligne = '';
+  let rang = 0;
+  while (rang < mots.length) {
+    const essai = ligne === '' ? mots[rang] : `${ligne} ${mots[rang]}`;
+    if (mesurer(essai) <= largeur) {
+      ligne = essai;
+      rang += 1;
+    } else if (ligne !== '') {
+      lignes.push(ligne);
+      ligne = '';
+    } else {
+      const mot = mots[rang];
+      const coupe = plusLongueFin(mot, largeur, mesurer) || finsAdmises(mot)[1];
+      lignes.push(mot.slice(0, coupe));
+      mots[rang] = mot.slice(coupe);
+    }
+  }
+  if (ligne !== '') lignes.push(ligne);
   return lignes;
 }
 

@@ -21,7 +21,7 @@
 // (§ 14.8).
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { appliquerCommande } from '../../application/commandes.js';
-import { DONNEES_BADGE, TEXTE_PIED_TECHNOLIBRE_DEFAUT } from '../../application/seance.js';
+import { DONNEES_BADGE, INACTIVITE_MS, TEXTE_PIED_TECHNOLIBRE_DEFAUT } from '../../application/seance.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { listeBadges, modelePlanche } from '../../application/planche.js';
 import { MARQUE_TEMOIN, creerTraduction } from '../../application/traduction.js';
@@ -64,7 +64,7 @@ const plat = (chaine) => chaine.replace(/\s+/g, ' ').trim();
 const texte = (element) => plat(element.textContent);
 const section = (m) => dans(m, '[data-section="badges"]');
 const annonce = (m) => dans(m, '[data-section="badges"] [data-annonce-planche]');
-const question = (m) => dans(m, '[data-section="badges"] [data-papier="question"]');
+const question = (m) => dans(m, '[data-partie-impression="badges"] [data-papier="question"]');
 const produire = (m) => dans(m, '[data-section="badges"] [data-commande="produirePlanche"]');
 const produireListe = (m) => dans(m, '[data-section="badges"] [data-commande="produireListe"]');
 
@@ -178,7 +178,7 @@ async function cheminDocuments(m, nom) {
 
 describe('le papier des badges : Lettre par défaut, sans question (§ 8.5, § 11.2)', () => {
   // Le papier que la section des badges montre.
-  const papierMontre = (m) => dans(m, '[data-section="badges"] [data-papier="choisi"]');
+  const papierMontre = (m) => dans(m, '[data-partie-impression="badges"] [data-papier="choisi"]');
 
   test('le témoin sans papier choisi : Lettre montré ; « Produire » annonce 65 A4 et 129 Lettre, produit sur Lettre, ne retient rien', async () => {
     const m = await ouvrirBadges(chargeTemoin(), { papier: null });
@@ -206,7 +206,7 @@ describe('le papier des badges : Lettre par défaut, sans question (§ 8.5, § 1
 
   test('« Changer » pose la question ; le papier choisi s’écrit et vaut ensuite, nouvel événement et App remontée compris', async () => {
     const m = await ouvrirBadges(chargeBloquee(), { papier: null });
-    dans(m, '[data-section="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
+    dans(m, '[data-partie-impression="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
     await attendre('la question du papier', () => question(m), IMAGES);
     dans(m, '[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
     await attendre('le papier choisi', () => m.seance.etat().papier === 'A4' && papierMontre(m), IMAGES);
@@ -233,7 +233,7 @@ describe('le papier des badges : Lettre par défaut, sans question (§ 8.5, § 1
     const second = await contexte.monter({ systeme: { disque: m.disque } });
     await cliquer(second, `[data-evenement="${BASE}/${BASE}"] [data-commande="ouvrir"]`);
     await cliquer(second, '[data-commande="section"][data-cible="badges"]');
-    await attendre('le papier relu', () => second.seance.etat().papier === 'A4' && dans(second, '[data-section="badges"] [data-papier="choisi"]'), IMAGES);
+    await attendre('le papier relu', () => second.seance.etat().papier === 'A4' && dans(second, '[data-partie-impression="badges"] [data-papier="choisi"]'), IMAGES);
     const avant = second.trace.length;
     await cliquerProduire(second, 'la planche du second montage', () => dans(second, '[data-chemin-planche]'));
     expect(question(second)).toBeNull();
@@ -256,7 +256,7 @@ describe('sortir n’est pas modifier (§ 8.4, § 11.6, contrainte 24)', () => {
     expect(lue).toContain(plat(t('badges.annonce.source.proposition', { id: charge.propositions[0].id })));
     expect(lue).toContain(plat(t('badges.annonce.brouillon.proposition')));
     expect(dans(m, '[data-annonce-planche] [data-refus]')).toBeNull();
-    dans(m, '[data-section="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
+    dans(m, '[data-partie-impression="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
     await attendre('la question du papier', () => question(m), IMAGES);
     dans(m, '[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
     await attendre('l’annonce sur A4', () => annonce(m) && m.seance.etat().papier === 'A4', IMAGES);
@@ -570,7 +570,7 @@ describe('la langue témoin (§ 14.6)', () => {
       const m = await ouvrirEvenement(temoin, charge, { section: 'badges', options: { fichiers: reglages } });
       produire(m).click();
       await attendre('la planche et l’annonce', () => dans(m, '[data-chemin-planche]') && annonce(m), IMAGES);
-      dans(m, '[data-section="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
+      dans(m, '[data-partie-impression="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
       await attendre('la question', () => question(m), IMAGES);
       const racine = m.seance.etat().racine.chemin;
       const noms = new Set([...personnesReeditables(charge).flatMap(({ nom, organisation }) => [nom, organisation]), charge.evenement.nom]);
@@ -661,7 +661,7 @@ describe('le modèle de badge : Avery 5392 par défaut, l’A6 au choix (§ 8.5,
     const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
     expect(champ(m, 'modeleBadge').value).toBe('avery5392');
     expect(champ(m, 'imposition')).toBeNull();
-    expect(dans(m, '[data-section="badges"] [data-papier]')).toBeNull();
+    expect(dans(m, '[data-partie-impression="badges"] [data-papier]')).toBeNull();
     const depuis = m.trace.length;
     await cliquerProduire(m, 'les deux fichiers', () => dans(m, '[data-chemin-controle]'));
     const ecrites = planchesEcrites(m, depuis).map(([, , nom]) => nom);
@@ -670,7 +670,7 @@ describe('le modèle de badge : Avery 5392 par défaut, l’A6 au choix (§ 8.5,
     expect(ecrites[1]).toMatch(/\.controle_avery5392_.*\.pdf$/);
     expect(texte(dans(m, '[data-chemin-planche]'))).toBe(await cheminDocuments(m, ecrites[0]));
     expect(texte(dans(m, '[data-chemin-controle]'))).toBe(await cheminDocuments(m, ecrites[1]));
-    expect(dans(m, '[data-section="badges"] [data-papier]')).toBeNull();
+    expect(dans(m, '[data-partie-impression="badges"] [data-papier]')).toBeNull();
     expect(m.seance.etat().papier).toBeNull();
     const lue = texte(annonce(m));
     // Six cartes par feuille.
@@ -686,7 +686,7 @@ describe('le modèle de badge : Avery 5392 par défaut, l’A6 au choix (§ 8.5,
     await attendre('l’annonce Avery', () => annonce(m), IMAGES);
     choisirReglage(m, 'modeleBadge', 'a6');
     await attendre('le modèle écrit', () => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).modele_badge === 'a6', IMAGES);
-    await attendre('l’imposition et le papier', () => champ(m, 'imposition') && dans(m, '[data-section="badges"] [data-papier="choisi"]'), IMAGES);
+    await attendre('l’imposition et le papier', () => champ(m, 'imposition') && dans(m, '[data-partie-impression="badges"] [data-papier="choisi"]'), IMAGES);
     expect(m.seance.etat().modeleBadge).toBe('a6');
     expect(annonce(m)).toBeNull();
     expect(dans(m, '[data-section="badges"] [data-avertissement="modeleNonRetenu"]')).toBeNull();
@@ -697,7 +697,7 @@ describe('le modèle de badge : Avery 5392 par défaut, l’A6 au choix (§ 8.5,
 
     choisirReglage(m, 'modeleBadge', 'avery5392');
     await attendre('l’imposition cachée', () => champ(m, 'imposition') === null, IMAGES);
-    expect(dans(m, '[data-section="badges"] [data-papier]')).toBeNull();
+    expect(dans(m, '[data-partie-impression="badges"] [data-papier]')).toBeNull();
     expect(JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).papier).toBe('A4');
   });
 
@@ -817,8 +817,10 @@ describe('la liste des badges en CSV (§ 11.6)', () => {
     expect(ecrites[0]).toMatch(/\.badges_[^.]+\.csv$/);
     expect(ecrites[0]).not.toContain('BROUILLON');
     expect(texte(dans(m, '[data-chemin-liste]'))).toBe(await cheminDocuments(m, ecrites[0]));
+    // Une machine qui n'a rien choisi : une colonne par tour.
     const contenu = texteFichier(m, ecrites[0]);
-    expect(contenu.startsWith('\u{FEFF}Nom;Prénom;Organisation;Tours\r\n')).toBe(true);
+    const tetes = Array.from({ length: charge.evenement.tours }, (_, indice) => `Tour ${indice + 1}`).join(';');
+    expect(contenu.startsWith(`\u{FEFF}Nom;Prénom;Organisation;${tetes}\r\n`)).toBe(true);
     expect(contenu).toContain(`table ${charge.tables[0].numero} (Terrasse)`);
     const presents = charge.participants.filter(({ exclu }) => !exclu).length;
     expect(contenu.split('\r\n').filter((ligne) => /^[^"]*;/.test(ligne)).length).toBeGreaterThanOrEqual(presents);
@@ -859,8 +861,11 @@ describe('la liste des badges en CSV (§ 11.6)', () => {
     const explication = dans(enDerive, `#${produireListe(enDerive).getAttribute('aria-describedby')}`);
     expect(texte(explication)).toBe(plat(t('badges.liste.bloquee')));
 
+    // Sans organisation, le nom reste en gros, case cochée ou non : c'est
+    // lui qui ne tient pas.
     const charge = structuredClone(chargeBloquee());
     charge.participants[0].nom = `Ombrelle${'w'.repeat(1990)}`;
+    charge.participants[0].organisation = null;
     const m = await ouvrirBadges(charge);
     await cliquerProduire(m, 'le refus du nom', () => dans(m, '[data-annonce-planche] [data-refus="PLANCHE_NOM_TROP_LONG"]'));
     expect(produire(m).getAttribute('aria-disabled')).toBe('true');
@@ -1080,6 +1085,197 @@ describe('les cases de ce que le badge imprime : gardées sur le poste (§ 8.5, 
   });
 });
 
+describe('l’organisation en gros : une case gardée sur le poste (§ 8.5, § 11.4)', () => {
+  const caseEnGros = (m) => dans(m, '[data-section="badges"] [data-champ="organisationEnGros"]');
+  const caseOrganisation = (m) => dans(m, '[data-section="badges"] [data-champ="donneeBadge.organisation"]');
+  const avisNonRetenu = (m) => dans(m, '[data-section="badges"] [data-avertissement="enGrosNonRetenu"]');
+  const caseEcrite = (m) => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).organisation_en_gros;
+
+  test('une machine neuve : la case cochée, dans le groupe des cases, sous les cinq cases et avant celle des doublons, son libellé lié', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    const element = caseEnGros(m);
+    expect(element).not.toBeNull();
+    expect(element.type).toBe('checkbox');
+    expect(element.checked).toBe(true);
+    expect(element.disabled).toBe(false);
+    expect(m.seance.etat().organisationEnGros).toBe(true);
+    expect(texte(dans(m, `label[for="${element.id}"]`))).toBe(plat(tEcran('badges.organisationEnGros.case')));
+    const bloc = element.closest('.case');
+    expect(bloc.previousElementSibling.contains(caseOrganisation(m))).toBe(true);
+    expect(bloc.nextElementSibling.contains(dans(m, '[data-section="badges"] [data-champ="cacherNumero"]'))).toBe(true);
+  });
+
+  test('décocher l’écrit sur la machine et retire l’annonce montrée ; l’annonce suivante se prépare sur la case ; recocher l’écrit de nouveau', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    const lues = [];
+    const originale = m.seance.preparerPlanche;
+    m.seance.preparerPlanche = async (demande) => {
+      const rendue = await originale(demande);
+      lues.push(rendue.organisationEnGros);
+      return rendue;
+    };
+    caseEnGros(m).click();
+    await attendre('la case écrite', () => caseEcrite(m) === false, IMAGES);
+    expect(m.seance.etat().organisationEnGros).toBe(false);
+    expect(caseEnGros(m).checked).toBe(false);
+    await attendre('l’annonce retirée', () => annonce(m) === null, IMAGES);
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce sur la case', () => annonce(m), IMAGES);
+    expect(lues).toEqual([false]);
+    caseEnGros(m).click();
+    await attendre('la case écrite', () => caseEcrite(m) === true, IMAGES);
+    expect(avisNonRetenu(m)).toBeNull();
+  });
+
+  test('l’écriture des réglages refusée : la case vaut pour la séance, et une annonce le dit sous les réglages, dans un rôle d’état ; une case retenue ensuite la retire', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    expect(avisNonRetenu(m)).toBeNull();
+    m.fs.pannes.ecriture('documents');
+    caseEnGros(m).click();
+    const avis = await attendre('l’annonce de la case non retenue', () => avisNonRetenu(m), IMAGES);
+    expect(m.seance.etat().organisationEnGros).toBe(false);
+    expect(caseEnGros(m).checked).toBe(false);
+    expect(texte(avis)).toBe(plat(tEcran('badges.organisationEnGros.nonRetenu')));
+    expect(avis.closest('[role="status"]')).not.toBeNull();
+    const originale = m.seance.choisirOrganisationEnGros;
+    m.seance.choisirOrganisationEnGros = async (coche) => ({ ...(await originale(coche)), retenu: true });
+    caseEnGros(m).click();
+    await attendre('l’annonce retirée', () => avisNonRetenu(m) === null, IMAGES);
+  });
+
+  test('la case « Organisation » décochée désactive la case, qui garde sa valeur ; recochée, elle la réactive', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    caseOrganisation(m).click();
+    await attendre('la case désactivée', () => caseEnGros(m).disabled, IMAGES);
+    expect(caseEnGros(m).checked).toBe(true);
+    expect(m.seance.etat().organisationEnGros).toBe(true);
+    caseOrganisation(m).click();
+    await attendre('la case réactivée', () => !caseEnGros(m).disabled, IMAGES);
+  });
+});
+
+describe('le nom des doublons laissé en blanc : une case gardée sur le poste (§ 8.5, § 11.4)', () => {
+  const caseCacher = (m) => dans(m, '[data-section="badges"] [data-champ="cacherNumero"]');
+  const avisNonRetenu = (m) => dans(m, '[data-section="badges"] [data-avertissement="cacherNonRetenu"]');
+  const caseEcrite = (m) => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).cacher_numero_doublon;
+
+  test('une machine neuve : la case cochée, dans le groupe des cases, juste avant celle du pied TechnoLibre, son libellé et sa note liés', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    const element = caseCacher(m);
+    expect(element).not.toBeNull();
+    expect(element.type).toBe('checkbox');
+    expect(element.checked).toBe(true);
+    expect(m.seance.etat().cacherNumero).toBe(true);
+    expect(texte(dans(m, `label[for="${element.id}"]`))).toBe(plat(tEcran('badges.doublons.case')));
+    const note = dans(m, `[id="${element.getAttribute('aria-describedby')}"]`);
+    expect(texte(note)).toBe(plat(tEcran('badges.doublons.note')));
+    expect(element.closest('.case').nextElementSibling).toBe(note);
+    const technolibre = dans(m, '[data-section="badges"] [data-champ="piedTechnolibre"]');
+    expect(technolibre.closest('[role="group"]').contains(element)).toBe(true);
+    expect(note.parentElement.nextElementSibling.contains(technolibre)).toBe(true);
+    choisirReglage(m, 'modeleBadge', 'a6');
+    await attendre('l’A6', () => dans(m, '[data-section="badges"] [data-champ="imposition"]'), IMAGES);
+    expect(caseCacher(m).checked).toBe(true);
+  });
+
+  test('décocher l’écrit sur la machine et retire l’annonce montrée ; l’annonce suivante se prépare sur la case ; recocher l’écrit de nouveau', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    const lues = [];
+    const originale = m.seance.preparerPlanche;
+    m.seance.preparerPlanche = async (demande) => {
+      const rendue = await originale(demande);
+      lues.push(rendue.cacherNumero);
+      return rendue;
+    };
+    caseCacher(m).click();
+    await attendre('la case écrite', () => caseEcrite(m) === false, IMAGES);
+    expect(m.seance.etat().cacherNumero).toBe(false);
+    expect(caseCacher(m).checked).toBe(false);
+    await attendre('l’annonce retirée', () => annonce(m) === null, IMAGES);
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce sur la case', () => annonce(m), IMAGES);
+    expect(lues).toEqual([false]);
+    caseCacher(m).click();
+    await attendre('la case écrite', () => caseEcrite(m) === true, IMAGES);
+    expect(avisNonRetenu(m)).toBeNull();
+  });
+
+  test('l’écriture des réglages refusée : la case vaut pour la séance, et une annonce le dit sous les réglages, dans un rôle d’état ; une case retenue ensuite la retire', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    expect(avisNonRetenu(m)).toBeNull();
+    m.fs.pannes.ecriture('documents');
+    caseCacher(m).click();
+    const avis = await attendre('l’annonce de la case non retenue', () => avisNonRetenu(m), IMAGES);
+    expect(m.seance.etat().cacherNumero).toBe(false);
+    expect(caseCacher(m).checked).toBe(false);
+    expect(texte(avis)).toBe(plat(tEcran('badges.doublons.nonRetenu')));
+    expect(avis.closest('[role="status"]')).not.toBeNull();
+    const originale = m.seance.choisirCacherNumero;
+    m.seance.choisirCacherNumero = async (coche) => ({ ...(await originale(coche)), retenu: true });
+    caseCacher(m).click();
+    await attendre('l’annonce retirée', () => avisNonRetenu(m) === null, IMAGES);
+  });
+});
+
+describe('les colonnes de la liste (CSV) : un choix gardé sur le poste (§ 8.5, § 11.6)', () => {
+  const choixColonnes = (m) => dans(m, '[data-section="badges"] [data-champ="colonnesListe"]');
+  const avisNonRetenu = (m) => dans(m, '[data-section="badges"] [data-avertissement="colonnesNonRetenues"]');
+  const choixEcrit = (m) => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).colonnes_liste_badges;
+
+  test('une machine neuve : « Une colonne par tour » choisie, parmi les réglages de la planche, les deux formes offertes dans l’ordre', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    const element = choixColonnes(m);
+    expect(element).not.toBeNull();
+    expect(element.value).toBe('parTour');
+    expect(m.seance.etat().colonnesListe).toBe('parTour');
+    expect(element.closest('.reglages')).not.toBeNull();
+    expect(texte(element.closest('label').querySelector('span'))).toBe(plat(tEcran('badges.liste.colonnes.titre')));
+    expect([...element.options].map(({ value }) => value)).toEqual(['parTour', 'unique']);
+    expect([...element.options].map((option) => texte(option))).toEqual(
+      ['parTour', 'unique'].map((valeur) => plat(tEcran(`badges.liste.colonnes.${valeur}`))),
+    );
+  });
+
+  test('« Une seule colonne » l’écrit sur la machine, laisse l’annonce montrée, et la liste produite porte « Tours » ; revenir à une colonne par tour l’écrit de nouveau', async () => {
+    const charge = structuredClone(chargeBloquee());
+    const m = await ouvrirBadges(charge, { papier: 'A4', modeleBadge: null });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    choisirReglage(m, 'colonnesListe', 'unique');
+    await attendre('le choix écrit', () => choixEcrit(m) === 'unique', IMAGES);
+    expect(m.seance.etat().colonnesListe).toBe('unique');
+    expect(annonce(m)).not.toBeNull();
+    const depuis = m.trace.length;
+    produireListe(m).click();
+    await attendre('la liste', () => dans(m, '[data-chemin-liste]'), IMAGES);
+    const [ecrite] = planchesEcrites(m, depuis).map(([, , nom]) => nom);
+    expect(texteFichier(m, ecrite).startsWith('\u{FEFF}Nom;Prénom;Organisation;Tours\r\n')).toBe(true);
+    choisirReglage(m, 'colonnesListe', 'parTour');
+    await attendre('le choix écrit', () => choixEcrit(m) === 'parTour', IMAGES);
+    expect(avisNonRetenu(m)).toBeNull();
+  });
+
+  test('l’écriture des réglages refusée : le choix vaut pour la séance, et une annonce le dit sous les réglages, dans un rôle d’état ; un choix retenu ensuite la retire', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    expect(avisNonRetenu(m)).toBeNull();
+    m.fs.pannes.ecriture('documents');
+    choisirReglage(m, 'colonnesListe', 'unique');
+    const avis = await attendre('l’annonce du choix non retenu', () => avisNonRetenu(m), IMAGES);
+    expect(m.seance.etat().colonnesListe).toBe('unique');
+    expect(choixColonnes(m).value).toBe('unique');
+    expect(texte(avis)).toBe(plat(tEcran('badges.liste.colonnes.nonRetenu')));
+    expect(avis.closest('[role="status"]')).not.toBeNull();
+    const originale = m.seance.choisirColonnesListe;
+    m.seance.choisirColonnesListe = async (colonnes) => ({ ...(await originale(colonnes)), retenu: true });
+    choisirReglage(m, 'colonnesListe', 'parTour');
+    await attendre('l’annonce retirée', () => avisNonRetenu(m) === null, IMAGES);
+  });
+});
+
 describe('le texte du pied TechnoLibre : un champ gardé sur le poste (§ 8.5, § 11.4)', () => {
   const champTexte = (m) => dans(m, '[data-section="badges"] [data-champ="textePiedTechnolibre"]');
   const boutonDefaut = (m) => dans(m, '[data-section="badges"] [data-commande="texteParDefaut"]');
@@ -1117,6 +1313,26 @@ describe('le texte du pied TechnoLibre : un champ gardé sur le poste (§ 8.5, �
     caseTechnolibre(m).click();
     await attendre('le champ désactivé', () => champTexte(m).disabled, IMAGES);
     expect(boutonDefaut(m).disabled).toBe(true);
+  });
+
+  test('en écriture, une frappe non quittée tient la séance en écriture ; quitter le champ rend le compte, qui ramène en lecture', async () => {
+    const m = await ouvrirBadges(chargePrincipale(), { papier: 'A4', modeleBadge: null, ecriture: true });
+    // L'horloge passe le délai d'inactivité, puis la file de la séance.
+    const laisserPasser = async () => {
+      m.horloge.avancer(INACTIVITE_MS + 1);
+      await m.seance.attendre();
+    };
+    expect(m.seance.etat().mode).toBe('ecriture');
+    expect(m.seance.gesteEnCours).toBe(false);
+    saisir(m, 'Atelier des Grèbes');
+    await attendre('la saisie en cours', () => m.seance.gesteEnCours, IMAGES);
+    await laisserPasser();
+    expect(m.seance.etat().mode).toBe('ecriture');
+    quitter(m);
+    await attendre('le texte écrit', () => texteEcrit(m) === 'Atelier des Grèbes', IMAGES);
+    await attendre('la saisie rendue', () => !m.seance.gesteEnCours, IMAGES);
+    await laisserPasser();
+    expect(m.seance.etat().mode).toBe('lecture');
   });
 
   test('une frappe n’écrit rien ; quitter le champ écrit le texte normalisé et retire l’annonce ; « Texte par défaut » remet la phrase d’origine, la clé retirée', async () => {
@@ -1181,5 +1397,105 @@ describe('le texte du pied TechnoLibre : un champ gardé sur le poste (§ 8.5, �
     saisir(m, 'Atelier des Hérons cendrés');
     quitter(m);
     await attendre('l’annonce retirée', () => avisTexte(m) === null, IMAGES);
+  });
+});
+
+describe('l’image sur tous les badges : un réglage de l’événement (§ 8.9, § 11.4)', () => {
+  const caseImage = (m) => dans(m, '[data-section="badges"] [data-champ="imageBadges"]');
+  const bloc = (m) => dans(m, '[data-section="badges"] [data-image-badges]');
+  const commandeImage = (m, nom) => dans(m, `[data-section="badges"] [data-image-badges] [data-commande="${nom}"]`);
+  const positions = (m) => [...m.racine.querySelectorAll('[data-section="badges"] [data-champ="positionImage"]')];
+  const reglage = (m) => m.seance.etat().charge.evenement.imageBadges ?? null;
+
+  // Les octets d'une image largeur × hauteur, d'une teinte unie, en PNG.
+  async function image(largeur, hauteur) {
+    const canevas = new OffscreenCanvas(largeur, hauteur);
+    const contexte2d = canevas.getContext('2d');
+    contexte2d.fillStyle = 'rgb(40, 110, 170)';
+    contexte2d.fillRect(0, 0, largeur, hauteur);
+    return new Uint8Array(await (await canevas.convertToBlob({ type: 'image/png' })).arrayBuffer());
+  }
+
+  test('décochée par défaut, sous le groupe des cases, son libellé lié ; ni image ni position tant qu’elle l’est', async () => {
+    const m = await ouvrirBadges(chargeRetenue());
+    const element = caseImage(m);
+    expect(element.type).toBe('checkbox');
+    expect(element.checked).toBe(false);
+    expect(texte(dans(m, `label[for="${element.id}"]`))).toBe(plat(tEcran('badges.image.case')));
+    expect(bloc(m).previousElementSibling.querySelector('[data-champ="piedTechnolibre"]')).not.toBeNull();
+    expect(positions(m)).toEqual([]);
+    expect(commandeImage(m, 'choisirImageBadges')).toBeNull();
+  });
+
+  test('en lecture, cocher se refuse à côté de la case, avec son remède ; la case reste décochée et rien ne s’écrit', async () => {
+    const m = await ouvrirBadges(chargeRetenue());
+    const depuis = m.trace.length;
+    caseImage(m).click();
+    const refus = await attendre('le refus de la case', () => bloc(m).querySelector('[role="status"]'), IMAGES);
+    expect(caseImage(m).getAttribute('aria-describedby')).toBe(refus.id);
+    expect(caseImage(m).checked).toBe(false);
+    expect(reglage(m)).toBeNull();
+    expect(ecrituresEvenement(m, depuis)).toEqual([]);
+  });
+
+  test('en écriture : cocher, choisir l’image, la placer au centre, produire ; chaque geste est une entrée, l’annonce montrée se retire, et la planche porte l’image sur chaque badge', async () => {
+    const source = await image(600, 200);
+    const m = await ouvrirBadges(chargeRetenue(), { ecriture: true, options: { aImporter: [{ nom: 'blason.png', octets: source }] } });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    caseImage(m).click();
+    await attendre('la case écrite', () => reglage(m)?.active === true, IMAGES);
+    expect(caseImage(m).checked).toBe(true);
+    await attendre('l’annonce retirée', () => annonce(m) === null, IMAGES);
+    await attendre('les réglages de l’image', () => positions(m).length === 3, IMAGES);
+    expect(texte(bloc(m).querySelector('[data-image-absente]'))).toBe(plat(tEcran('badges.image.aucune')));
+    expect(positions(m).map((bouton) => [bouton.value, bouton.checked])).toEqual([
+      ['haut', true],
+      ['centre', false],
+      ['bas', false],
+    ]);
+    expect(commandeImage(m, 'retirerImageBadges')).toBeNull();
+
+    commandeImage(m, 'choisirImageBadges').click();
+    await attendre('l’image posée', () => reglage(m)?.chemin?.startsWith('logo/'), IMAGES);
+    const chemin = reglage(m).chemin;
+    expect(m.fs.octets('documents', `${BASE}/${chemin}`)).not.toBeNull();
+    await attendre('la vignette', () => bloc(m).querySelector('[data-image-vignette] img')?.naturalWidth > 0, IMAGES);
+    expect(bloc(m).querySelector('[data-image-vignette] img').getAttribute('alt')).toBe(plat(tEcran('badges.image.vignette')));
+
+    const centre = positions(m).find((bouton) => bouton.value === 'centre');
+    centre.click();
+    await attendre('la position écrite', () => reglage(m)?.position === 'centre', IMAGES);
+    expect(reglage(m)).toEqual({ active: true, chemin, position: 'centre' });
+    expect(m.seance.historique().lignes.slice(-3).map(({ libelle }) => libelle)).toEqual([
+      'Image des badges : case cochée',
+      'Image des badges : image posée',
+      'Image des badges : au centre',
+    ]);
+
+    const depuis = m.trace.length;
+    dans(m, '[data-section="badges"] [data-commande="produirePlanche"]').click();
+    await attendre('la planche', () => dans(m, '[data-chemin-planche]'), IMAGES);
+    expect(planchesEcrites(m, depuis).length).toBe(1);
+    const lue = await m.seance.preparerPlanche({ source: 'retenu' });
+    expect(lue.imageBadges).toEqual({ position: 'centre', chemin, posees: lue.comptes.produits, sansPlace: 0, introuvable: null });
+
+    commandeImage(m, 'retirerImageBadges').click();
+    await attendre('l’image retirée', () => reglage(m)?.chemin === null, IMAGES);
+    await attendre('« Aucune image choisie. »', () => bloc(m).querySelector('[data-image-absente]'), IMAGES);
+    expect(m.fs.octets('documents', `${BASE}/${chemin}`)).not.toBeNull();
+    await attendre('le focus à « Choisir l’image »', () => document.activeElement === commandeImage(m, 'choisirImageBadges'), IMAGES);
+  });
+
+  test('cochée sans image choisie, l’annonce le dit sans rien bloquer', async () => {
+    const charge = structuredClone(chargeRetenue());
+    charge.evenement.imageBadges = { active: true, chemin: null, position: 'bas' };
+    const m = await ouvrirBadges(charge);
+    expect(caseImage(m).checked).toBe(true);
+    expect(positions(m).find((bouton) => bouton.checked).value).toBe('bas');
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    const montree = await attendre('l’annonce', () => annonce(m), IMAGES);
+    expect(texte(montree)).toContain(plat(tEcran('badges.annonce.imageAucune')));
+    expect(produire(m).getAttribute('aria-disabled')).toBeNull();
   });
 });

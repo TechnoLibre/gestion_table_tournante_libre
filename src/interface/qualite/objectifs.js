@@ -77,8 +77,10 @@ const colonnesDe = (t, liste) => liste.map(([cle, genre]) => ({ cle, libelle: t(
  *
  * @param {Object|null} detail   le détail du placement (detaillerQualite)
  * @param {(cle: string, details?: Object) => string} t
+ * @param {Array<string|null>} [nomsTours]   les noms des tours de
+ *        l'événement (nomsDesTours), qui nomment les tours
  */
-export function modeleObjectifs(detail, t) {
+export function modeleObjectifs(detail, t, nomsTours = undefined) {
   if (detail === null) return null;
   const { objectifs, personnes, R } = detail;
   if (objectifs === null) return { cas: 'aucunConcerne' };
@@ -107,7 +109,7 @@ export function modeleObjectifs(detail, t) {
   for (const r of ordre) {
     const { possibles, servis, pourcent, hors, plancher, reste, sansCouple } = parTour[r];
     const tour = r + 1;
-    const nom = t('qualite.objectifs.tour', { tour });
+    const nom = t('qualite.objectifs.tour', { tour, nomsTours });
     const sansCoupleAuTour = possibles === 0;
     let valeurs;
     if (sansCoupleAuTour) valeurs = segments.map(() => 0);
@@ -189,8 +191,8 @@ export function modeleObjectifs(detail, t) {
     barres: {
       nom: t('qualite.objectifs.graphique'),
       synthese: planchersValides
-        ? t('qualite.objectifs.synthese', { tour: pireTour + 1, reste: parTour[pireTour].reste, hors: parTour[pireTour].hors })
-        : t('qualite.objectifs.syntheseHorsDomaine', { tour: pireTour + 1, hors: parTour[pireTour].hors }),
+        ? t('qualite.objectifs.synthese', { tour: pireTour + 1, reste: parTour[pireTour].reste, hors: parTour[pireTour].hors, nomsTours })
+        : t('qualite.objectifs.syntheseHorsDomaine', { tour: pireTour + 1, hors: parTour[pireTour].hors, nomsTours }),
       segments,
       lignes,
     },

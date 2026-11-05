@@ -14,7 +14,7 @@
 import { refusNomEvenement } from '../../application/commandes.js';
 import { etatPlaces } from '../../application/places.js';
 import { PAPIERS } from '../../geometrie/papiers.js';
-import { DECOUPES, VUES_IMPRESSION } from '../etat_ui.js';
+import { DECOUPES, TRIS_ACCUEIL, VUES_IMPRESSION } from '../etat_ui.js';
 
 /** Millimètres par pixel CSS : 96 px au pouce, 25,4 mm au pouce. */
 export const MM_PAR_PX = 25.4 / 96;
@@ -50,12 +50,17 @@ const nombreFini = (valeur) => typeof valeur === 'number' && Number.isFinite(val
  * par table — s'impriment en portrait et couvrent la soirée ; le plan
  * s'imprime à son tour, dans l'orientation que choisit sa découpe (null
  * ici). Sans papier choisi, question est vrai : l'aperçu pose la question
- * du papier avant de rien mettre en page (§ 8.5, § 11.2).
+ * du papier avant de rien mettre en page (§ 8.5, § 11.2). Les organisations
+ * des listes et une colonne de tables par page sont des réglages du plan,
+ * une feuille par tour et le dessin de la table des réglages de la feuille
+ * par table, le tri un réglage de la liste d'accueil, rendus tels quels.
  *
- * @param {{vue: string, tour: number|'tous', listes: boolean, decoupe: string, parTour: boolean}} apercu
+ * @param {{vue: string, tour: number|'tous', listes: boolean, organisations: boolean, decoupe: string,
+ *          parColonne: boolean, parTour: boolean, dessinTable: boolean, tri: string}} apercu
  * @param {'A4'|'Lettre'|null} papier
  * @returns {{vue: string, papier: string|null, orientation: 'portrait'|null, tour: number|'tous',
- *            listes: boolean, decoupe: string, parTour: boolean, question: boolean}}
+ *            listes: boolean, organisations: boolean, decoupe: string, parColonne: boolean,
+ *            parTour: boolean, dessinTable: boolean, tri: string, question: boolean}}
  * @throws {TypeError} sans aperçu ouvert
  * @throws {RangeError} une vue ou un papier hors de leur domaine
  */
@@ -70,8 +75,12 @@ export function optionsApercu(apercu, papier) {
     orientation: plan ? null : 'portrait',
     tour: plan ? apercu.tour : 'tous',
     listes: apercu.listes,
+    organisations: apercu.organisations,
     decoupe: apercu.decoupe,
+    parColonne: apercu.parColonne,
     parTour: apercu.parTour,
+    dessinTable: apercu.dessinTable,
+    tri: apercu.tri,
     question: papier === null,
   };
 }
@@ -108,6 +117,12 @@ export function cleVue(vue) {
 export function cleDecoupe(decoupe) {
   if (!DECOUPES.includes(decoupe)) throw new RangeError(`découpe inconnue : ${JSON.stringify(decoupe)}`);
   return `impression.decoupe.${decoupe}`;
+}
+
+/** La clé du libellé d'un tri de la liste d'accueil. */
+export function cleTri(tri) {
+  if (!TRIS_ACCUEIL.includes(tri)) throw new RangeError(`tri inconnu : ${JSON.stringify(tri)}`);
+  return `impression.tri.${tri}`;
 }
 
 /**
@@ -164,21 +179,32 @@ export function bandeDeFeuille({ feuillePx, contenuPx, margeMm }) {
 const element = (nom, libelle, donnee = null, forme = 'texte') => ({ element: nom, libelle, donnee, forme });
 const libelle = (cle, details = {}) => ({ cle, details });
 
+// L'élément du tour d'un pied : « Tous les tours », le nom du tour, posé
+// comme donnée, ou son libellé sans lui.
+function piedDuTour(tour, nom) {
+  if (tour === 'tous') return element('tour', libelle('impression.pied.tousLesTours'));
+  return nom === null ? element('tour', libelle('impression.pied.tour', { tour })) : element('tour', null, nom);
+}
+
 /**
  * La feuille d'un pied (piedDePage, src/application/sorties.js) : ses cinq
  * éléments dans l'ordre du § 11.7 — nom de l'événement, date, tour,
  * horodatage du placement, version —, chacun un libellé à traduire et une
  * donnée à poser telle quelle (forme 'texte') ou à mettre en forme ('date',
  * 'horodatage'), et le filigrane, qui suit brouillon (estBrouillon). Une
- * date ou un horodatage absents s'écrivent par un libellé qui le dit.
+ * date ou un horodatage absents s'écrivent par un libellé qui le dit. Le
+ * tour imprimé qui a un nom dans nomsTours, les noms des tours de
+ * l'événement (nomsDesTours), s'écrit par ce nom, une donnée posée telle
+ * quelle ; sans nom, par son libellé, « Tour 3 ».
  *
  * @param {{nom: string, date: string|null, tour: number|'tous', horodatage: string|null, version: string}} pied
  * @param {boolean} brouillon
+ * @param {Array<string|null>} [nomsTours]
  * @returns {{elements: Array<{element: string, libelle: {cle: string, details: Object}|null,
  *            donnee: string|null, forme: 'texte'|'date'|'horodatage'}>, filigrane: boolean}}
  * @throws {TypeError} un pied hors du contrat, un brouillon non booléen
  */
-export function feuilleDe(pied, brouillon) {
+export function feuilleDe(pied, brouillon, nomsTours = undefined) {
   const { nom, date, tour, horodatage, version } = pied;
   const texteOuNull = (v) => v === null || typeof v === 'string';
   const valide =
@@ -193,7 +219,7 @@ export function feuilleDe(pied, brouillon) {
     elements: [
       element('nom', null, nom),
       date === null ? element('date', libelle('impression.pied.sansDate')) : element('date', null, date, 'date'),
-      element('tour', tour === 'tous' ? libelle('impression.pied.tousLesTours') : libelle('impression.pied.tour', { tour })),
+      piedDuTour(tour, nomsTours?.[tour - 1] ?? null),
       horodatage === null
         ? element('horodatage', libelle('impression.pied.placementInconnu'))
         : element('horodatage', libelle('impression.pied.placement'), horodatage, 'horodatage'),

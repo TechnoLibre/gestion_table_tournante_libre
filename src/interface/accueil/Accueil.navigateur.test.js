@@ -66,6 +66,7 @@ import {
 import { versionVoisine } from '../../../test/version_voisine.js';
 import App from '../App.svelte';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { actionRemede } from '../primitives/commande.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 // Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
@@ -459,10 +460,11 @@ describe('créer et ouvrir', () => {
     aucuneFenetre();
   });
 
-  test('la date se choisit dans un sélecteur de date, à l’année de quatre chiffres, sous l’étiquette sans format', async () => {
+  test('la date se choisit dans un sélecteur de date, à l’année de quatre chiffres, de 1900 à 9999, sous l’étiquette sans format', async () => {
     const m = await monter();
     const champ = dans(m, '[data-champ="date"]');
     expect(champ.type).toBe('date');
+    expect(champ.min).toBe('1900-01-01');
     expect(champ.max).toBe('9999-12-31');
     expect(champ.labels[0].textContent.trim()).toBe(t('accueil.creation.date'));
     expect(t('accueil.creation.date')).toBe('Date, facultative');
@@ -560,6 +562,52 @@ describe('créer et ouvrir', () => {
     expect(creerFacade).not.toHaveBeenCalled();
     expect(ecritures(m)).toBe(avant);
     expect(m.seance.etat().evenement).toBeNull();
+  });
+
+  test('une année avant 1900, tapée sur trois chiffres : un refus qui nomme l’année minimale, contre le champ, le focus sur lui, rien au relevé', async () => {
+    const m = await monter();
+    const avant = ecritures(m);
+    saisir(dans(m, '[data-champ="nom"]'), 'Bal des Grisailles');
+    const champ = dans(m, '[data-champ="date"]');
+    // Le 17 mai 0203, tapé segment par segment dans l'ordre de la langue du
+    // navigateur : le sélecteur lit une date complète, sous son minimum.
+    const segments = { day: '17', month: '05', year: '0203' };
+    const ordre = new Intl.DateTimeFormat(navigator.language, { year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(0)
+      .map(({ type }) => type)
+      .filter((type) => type in segments);
+    champ.focus();
+    for (const chiffre of ordre.map((type) => segments[type]).join('')) await touche(chiffre);
+    flushSync();
+    expect(champ.value).toBe('0203-05-17');
+    expect(champ.validity.badInput).toBe(false);
+    expect(champ.validity.rangeUnderflow).toBe(true);
+    const creer = dans(m, '[data-commande="creer"]');
+    const creerFacade = vi.spyOn(m.facade, 'creer');
+    creer.focus();
+    await cliquer(creer);
+    const message = await vi.waitFor(() => {
+      const element = dans(m, '[data-refus="accueil.creation.anneeAvantMinimum"]');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    expect(visible(message)).toBe(true);
+    expect(message.textContent).toContain(tEcran('accueil.creation.anneeAvantMinimum', { minimum: 1900, remede: null }));
+    expect(message.textContent).toContain('1900 au plus tôt');
+    expect(dans(m, '[data-refus="DATE_INCOMPLETE"]')).toBeNull();
+    expect(champ.getAttribute('aria-invalid')).toBe('true');
+    expect(champ.getAttribute('aria-describedby')).toBe(message.id);
+    expect(document.activeElement).toBe(champ);
+    expect(creerFacade).not.toHaveBeenCalled();
+    expect(ecritures(m)).toBe(avant);
+    expect(m.seance.etat().evenement).toBeNull();
+    // Le 1er janvier 1900, le minimum, crée l'événement.
+    saisir(champ, '1900-01-01');
+    await cliquer(dans(m, '[data-commande="creer"]'));
+    const cree = await attendreEvenement(m);
+    expect(creerFacade).toHaveBeenCalledTimes(1);
+    const lue = analyser(m.fs.contenu('documents', `${cree.cle}${SUFFIXES.etat}`));
+    expect(lue.charge.evenement.date).toBe('1900-01-01');
   });
 
   test('un seul événement ouvert : A en écriture, « Liste des événements » le ferme sans question ni verrou ; B s’ouvre en lecture', async () => {
@@ -755,6 +803,25 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     await attendreEvenement(m);
   });
 
+  test('réglages locaux dont les octets ne sont pas de l’UTF-8 : l’avis dit la raison en clair, jamais le code du refus', async () => {
+    // Des octets qui ne sont pas de l'UTF-8 : la lecture lève LECTURE, cause
+    // UTF8_INVALIDE, que l'avis porte pour raison et cause. Son texte ne cite
+    // ni ce code, ni un détail manquant (« undefined »), ni rien entre
+    // parenthèses ; le système a lu le fichier, et l'avis ne dit pas qu'il en
+    // refuse la lecture.
+    const disque = new Map();
+    creerFichiersSimules({ disque }).deposerOctets('documents', 'reglages_locaux.json', new Uint8Array([0xff, 0xfe, 0xfd]));
+    const m = await monter({ systeme: { disque } });
+    const avis = dans(m, '[data-avertissement="REGLAGES_ILLISIBLES"]');
+    expect(avis).not.toBeNull();
+    const { avis: attendus } = await m.facade.demarrer();
+    const reglages = attendus.find(({ code }) => code === 'REGLAGES_ILLISIBLES');
+    expect(reglages.details).toEqual({ chemin: 'reglages_locaux.json', raison: 'LECTURE', cause: 'UTF8_INVALIDE' });
+    expect(avis.textContent).toBe(tEcran(reglages.code, reglages.details));
+    expect(avis.textContent).not.toMatch(/\bLECTURE\b|undefined|\(/);
+    expect(avis.textContent).not.toBe(tEcran(reglages.code, { chemin: reglages.details.chemin, raison: 'LECTURE' }));
+  });
+
   test('publié, sonde réussie : la liste affiche le dossier data en entier ; non publié : celui des Documents', async () => {
     const portable = await monter({ systeme: { executable: PUBLIE } });
     expect(dans(portable, '[data-dossier-travail]').textContent).toBe(DATA);
@@ -823,7 +890,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     expect(web.erreurs()).toEqual([]);
   });
 
-  test('explorateur : un ouvreur du système en échec se refuse NON_DISPONIBLE à côté de la commande, sa raison citée, et la commande reste offerte', async () => {
+  test('explorateur : un ouvreur du système en échec dit, à côté de la commande, que l’ouverture a échoué, sa raison citée, et la commande reste offerte', async () => {
     const m = await monter();
     const cause = "xdg-open: no method available for opening '/poste/essai/data'";
     m.fs.ouvrirDansExplorateur = async () => {
@@ -837,6 +904,10 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     });
     expect(visible(refus)).toBe(true);
     expect(refus.textContent.replace(/\s+/g, ' ')).toContain(tEcran('NON_DISPONIBLE', { cause }).replace(/\s+/g, ' '));
+    // L'ouverture qui échoue a son propre texte : la commande existe, et ne
+    // se dit pas absente comme celle qu'une plateforme n'offre pas.
+    const nonOfferte = tEcran('NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' }).replace(/\.$/, '');
+    expect(refus.textContent.replace(/\s+/g, ' ')).not.toContain(nonOfferte.replace(/\s+/g, ' '));
     const commande = dans(m, '[data-dossier] [data-commande="explorateur"]');
     expect(commande.getAttribute('aria-disabled')).toBeNull();
     expect(m.erreurs()).toEqual([]);
@@ -980,6 +1051,36 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     expect(ligne.querySelector('[data-champ="nomCopie"]').getAttribute('aria-invalid')).toBe('true');
     expect(ecritures(m)).toBe(avant);
     expect([...m.disque.keys()].some((cle) => cle.includes('(COPIE)'))).toBe(false);
+  });
+
+  test('le remède « Renommer » d’un événement ouvert : la liste revient, le focus sur « Renommer » de sa ligne, le filtre qui la cachait levé', async () => {
+    const { disque } = await disqueAvec([
+      { id: 'evt-pervenches', nom: 'Gala des Pervenches' },
+      { id: 'evt-grisailles', nom: 'Bal des Grisailles' },
+    ]);
+    const m = await monter({ systeme: { disque } });
+    // Un filtre qu'aucune ligne ne passe : la ligne à renommer y est cachée,
+    // et l'événement s'ouvre par la séance.
+    const tuile = (filtre) => dans(m, `[data-commande="filtrer"][data-cible="${filtre}"]`);
+    await cliquer(tuile('bloque'));
+    expect(ligneDe(m, 'Bal des Grisailles')).toBeNull();
+    await m.seance.ouvrir('Bal des Grisailles/Bal des Grisailles');
+    await attendreEvenement(m, ({ base }) => base === 'Bal des Grisailles');
+    await actionRemede({ geste: 'renommer' }, { seance: m.seance }).executer();
+    const commande = await vi.waitFor(() => {
+      const element = ligneDe(m, 'Bal des Grisailles')?.querySelector('[data-commande="renommer"]');
+      expect(element).toBeTruthy();
+      expect(document.activeElement).toBe(element);
+      return element;
+    });
+    expect(m.seance.etat().evenement).toBeNull();
+    expect(tuile('tous').getAttribute('aria-pressed')).toBe('true');
+    expect(tuile('bloque').getAttribute('aria-pressed')).toBe('false');
+    expect(lignes(m).length).toBe(2);
+    // La commande focalisée ouvre la saisie du nouveau nom de cette ligne.
+    await cliquer(commande);
+    expect(ligneDe(m, 'Bal des Grisailles').querySelector('[data-champ="nouveauNom"]').value).toBe('Bal des Grisailles');
+    expect(ligneDe(m, 'Gala des Pervenches').querySelector('[data-champ="nouveauNom"]')).toBeNull();
   });
 
   test('renommer : le nouveau nom et le nouveau chemin dans la liste ; ce que l’ancien dossier portait suit, et il se retire sans rien dire', async () => {

@@ -1,10 +1,11 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// La vue du plan côté interface (§ 7.2, § 8.5, § 13.3), sans DOM : ce que
-// Plan.svelte décide de sa vue — à l'ouverture, après un changement de
-// cadre, à la molette et aux boutons de zoom —, composé des seules
-// fonctions de src/geometrie/vue.js. Le cadre est un paramètre, relu par
+// La vue du plan côté interface (§ 7.1, § 7.2, § 8.5, § 13.3), sans DOM :
+// ce que Plan.svelte décide de sa vue — à l'ouverture, après un changement
+// de cadre, à la molette, aux boutons de zoom et sur « Voir sur le plan » —,
+// composé des fonctions de src/geometrie/vue.js et du seuil des chaises de
+// src/geometrie/designation.js. Le cadre est un paramètre, relu par
 // l'appelant au moment du geste ; aucune fonction ne lit le DOM.
 //
 // Une vue ne se calcule que dans un cadre où kAjuste rend un nombre : un
@@ -12,7 +13,8 @@
 // nul compris — un plan monté caché —, ne fixe aucune borne, et bornesZoom
 // lèverait sur null. Chaque fonction fait ce contrôle avant de borner.
 import { nomAffiche } from '../../application/personnes.js';
-import { englobant, geometrieTable } from '../../geometrie/tables.js';
+import { kSieges } from '../../geometrie/designation.js';
+import { englobant, geometrieEcartee } from '../../geometrie/tables.js';
 import { ajuster, borner, bornesZoom, facteurMolette, kAjuste, zoomerSous } from '../../geometrie/vue.js';
 
 /** Facteur de zoom des boutons de zoom, appliqué autour du centre du cadre. */
@@ -92,11 +94,15 @@ export function zoomerBouton(vue, englobantPlan, cadre, sens) {
 /**
  * L'englobant des emprises des tables d'un état des places (EtatPlaces,
  * A5), chacune à sa capacité courante, comme le modèle de dessin les pose
- * (geometrieTable) ; null sans table. Il ne dépend ni du tour ni de k.
+ * (geometrieEcartee), sur le plan écarté que disent les rangées, aucune par
+ * défaut ; null sans table. Il ne dépend jamais de k, et du tour que par
+ * les rangées.
+ * @param {Object} etat
+ * @param {Array<{y: number, decalage: number}>} [rangees]   celles de rangeesEcartees
  * @returns {{minX: number, minY: number, maxX: number, maxY: number}|null}
  */
-export function englobantDuTour(etat) {
-  return englobant(etat.tables.map((table) => geometrieTable(table, table.capacite)));
+export function englobantDuTour(etat, rangees = []) {
+  return englobant(etat.tables.map((table) => geometrieEcartee(table, table.capacite, rangees)));
 }
 
 /**
@@ -118,6 +124,67 @@ export function tourAffiche(tour, tours) {
   return Math.min(tour, tours);
 }
 
+// Vrai quand une chaise de l'état des places porte la personne id.
+const assiseDans = (etat, id) => etat.tables.some((table) => table.chaises.some(({ occupant }) => occupant === id));
+
+/**
+ * Le tour où « Voir sur le plan » montre une personne (§ 7.1) : le tour
+ * montré quand elle y a une chaise ; sinon le premier tour, de 1 à tours,
+ * où elle en a une ; le tour montré encore quand elle n'en a à aucun tour
+ * — la barre de vue dit alors l'absence ou la réserve, et ne qualifie pas
+ * une exclue (evidenceDe). tourPourVoir ne lit que etatDuTour(r), l'état
+ * des places du placement que le plan montre au tour r, et ne recalcule
+ * aucun placement ; le tour montré se lit seul quand elle y est assise.
+ *
+ * @param {number} id
+ * @param {number} tours   entier ≥ 1
+ * @param {number} montre  le tour montré, tourAffiche, de 1 à tours
+ * @param {(tour: number) => {tables: Array<{chaises: Array<{occupant: number|null}>}>}} etatDuTour
+ * @returns {number}
+ */
+export function tourPourVoir(id, tours, montre, etatDuTour) {
+  if (assiseDans(etatDuTour(montre), id)) return montre;
+  for (let tour = 1; tour <= tours; tour += 1) {
+    if (tour !== montre && assiseDans(etatDuTour(tour), id)) return tour;
+  }
+  return montre;
+}
+
+/**
+ * La vue où « Voir sur le plan » montre une personne (§ 7.1, § 7.3) : le
+ * centre de la chaise qu'elle occupe dans l'état des places du tour montré
+ * au centre du cadre, au plus petit zoom où sa table dessine ses chaises
+ * (kSieges), ou au k de la vue quand il est déjà plus grand ; k ramené
+ * dans les bornes du cadre. Null quand elle n'a pas de chaise à ce tour —
+ * réserve, absence, exclusion, personne que la charge n'a plus —, sans vue,
+ * ou dans un cadre où kAjuste vaut null : la vue reste. La chaise se lit
+ * sur la géométrie de sa table à sa capacité, sur le plan écarté que disent
+ * les rangées, celle que le modèle de dessin pose ; aucun argument n'est
+ * modifié.
+ *
+ * @param {{k: number, tx: number, ty: number}|null} vue
+ * @param {{tables: Object[]}} etat   EtatPlaces du tour montré
+ * @param {number} id
+ * @param {{minX: number, minY: number, maxX: number, maxY: number}|null} englobantPlan
+ * @param {{gauche: number, haut: number, largeur: number, hauteur: number}} cadre
+ * @param {Array<{y: number, decalage: number}>} [rangees]   celles de rangeesEcartees, aucune par défaut
+ * @returns {{k: number, tx: number, ty: number}|null}
+ */
+export function vuePourVoir(vue, etat, id, englobantPlan, cadre, rangees = []) {
+  const kCadre = vue === null ? null : kAjuste(englobantPlan, cadre);
+  if (kCadre === null) return null;
+  for (const table of etat.tables) {
+    const rang = table.chaises.findIndex(({ occupant }) => occupant === id);
+    if (rang === -1) continue;
+    const geometrie = geometrieEcartee(table, table.capacite, rangees);
+    const { x, y } = geometrie.chaises[rang];
+    const { kMin, kMax } = bornesZoom(kCadre);
+    const k = Math.min(kMax, Math.max(kMin, vue.k, kSieges(geometrie)));
+    return { k, tx: cadre.largeur / 2 - k * x, ty: cadre.hauteur / 2 - k * y };
+  }
+  return null;
+}
+
 /**
  * La fonction nomDe du modèle de dessin : l'identifiant d'un participant de
  * la charge vers son nom affiché (nomAffiche, F1).
@@ -131,17 +198,19 @@ export function nomDeCharge(charge) {
 /**
  * La personne mise en évidence, que la barre de vue nomme : son identifiant,
  * son nom affiché par nomDe — null pour une personne que la charge n'a
- * plus —, et absente, vrai quand l'état des places du tour montré la nomme
- * parmi ses absents (non exclue, absente à ce tour). Une personne que la
- * charge n'a plus, ou une exclue, n'est jamais dite absente au tour.
+ * plus —, absente, vrai quand l'état des places du tour montré la nomme
+ * parmi ses absents (non exclue, absente à ce tour), et reserve, vrai quand
+ * il la nomme dans sa réserve (présente à ce tour, sans chaise). Une
+ * personne que la charge n'a plus, ou une exclue, n'est jamais dite absente
+ * ni en réserve au tour.
  *
  * @param {number} id
  * @param {(id: number) => string|undefined} nomDe   nomDeCharge
- * @param {{absents: number[]}} etat   EtatPlaces du tour montré
- * @returns {{id: number, nom: string|null, absente: boolean}}
+ * @param {{absents: number[], reserve: number[]}} etat   EtatPlaces du tour montré
+ * @returns {{id: number, nom: string|null, absente: boolean, reserve: boolean}}
  */
 export function evidenceDe(id, nomDe, etat) {
-  return { id, nom: nomDe(id) ?? null, absente: etat.absents.includes(id) };
+  return { id, nom: nomDe(id) ?? null, absente: etat.absents.includes(id), reserve: etat.reserve.includes(id) };
 }
 
 /**

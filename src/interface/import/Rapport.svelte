@@ -9,15 +9,20 @@
   // tables dont les objectifs changent —, puis l'aperçu appliqué, ses lignes
   // refusées remplacées par resume.refusees : celles de l'aperçu, puis celles
   // de la mise à jour, chacune à son rang, avec les personnes qu'elle
-  // désigne. Un import qui n'a rien écrit le dit.
+  // désigne. Un import qui n'a rien écrit le dit. Un import de participants
+  // qui laisse des personnes marquées « animation réservée » sans table à
+  // animer les compte, en information, avec les gestes qui les désignent,
+  // « Créer les tables… » et la rangée « Animateurs » : l'import ne désigne
+  // personne (§ 10.1).
   //
   // Le rapport est une carte titrée ; ses comptes, des chiffres tabulaires
   // en tête de chaque libellé ; un import qui n'a rien écrit le dit en
   // information (Message). Ses commandes, celles de la section, viennent
   // en pied de carte (commandes, un snippet).
   //
-  // rapport : { nature, modele, source, resume, libelle } ; participants :
-  // ceux de la charge écrite.
+  // rapport : { nature, modele, source, resume, libelle, aDesigner } —
+  // aDesigner, le nombre de personnes à désigner de la charge écrite, 0 pour
+  // des objectifs ; participants : ceux de la charge écrite.
   import { getContext } from 'svelte';
   import Carte from '../primitives/Carte.svelte';
   import Apercu from './Apercu.svelte';
@@ -44,6 +49,14 @@
     <div class="contenu">
       {#if rapport.libelle === null}
         <Message bloc="rienEcrit"><p>{t(RIEN_ECRIT.get(rapport.nature))}</p></Message>
+      {/if}
+      {#if (rapport.aDesigner ?? 0) > 0}
+        <Message bloc="animations" titre={t('import.rapport.animations')}>
+          <p data-a-designer>
+            <span data-nombre>{format.nombre(rapport.aDesigner)}</span>
+            <span>{t('import.rapport.aDesigner', { n: rapport.aDesigner })}</span>
+          </p>
+        </Message>
       {/if}
       <ul class="comptes">
         {#each comptes as { nom, cle } (nom)}

@@ -170,13 +170,13 @@ const EN_TETE_LICENCE = [
 /**
  * Contenu exact de src/version.genere.js pour une version affichée :
  * l'en-tête de licence, une ligne vide, puis la constante VERSION sous ses
- * formes affichée, technique et Windows — celle que le panneau « À propos »
- * met en regard de l'affichée (§ 18.6), sans la recalculer. Le module ne
- * porte que la version ; la provenance de la construction vient du mode de
- * Vite.
+ * formes affichée et technique (§ 18.3). La forme Windows n'y est pas :
+ * l'application ne l'écrit nulle part, et electron-builder tire la
+ * ressource de version de package.json (§ 18.6). Le module ne porte que la
+ * version ; la provenance de la construction vient du mode de Vite.
  */
 export function engendrerModule(versionAffichee) {
-  const { affichee, technique, windows } = deriver(versionAffichee);
+  const { affichee, technique } = deriver(versionAffichee);
   return [
     ...EN_TETE_LICENCE,
     '',
@@ -184,7 +184,6 @@ export function engendrerModule(versionAffichee) {
     'export const VERSION = Object.freeze({',
     `  affichee: '${affichee}',`,
     `  technique: '${technique}',`,
-    `  windows: '${windows}',`,
     '});',
     '',
   ].join('\n');
@@ -293,10 +292,11 @@ const LIGNES_OBLIGATOIRES = [
 ];
 
 // Périmètre du balayage du point 6, posé ici et non après coup : les fichiers
-// de la racine, et les arbres des sources, des scripts, de la coquille et des
-// épreuves. Seuls ces arbres sont parcourus : les dépendances et les sorties
-// de construction (www/, dist*/, android/) n'en font pas partie, et un
-// répertoire node_modules n'est jamais descendu. En sont exclus :
+// de la racine, et les arbres des sources, des fichiers que la page sert tels
+// quels (public/), des scripts, de la coquille et des épreuves. Seuls ces
+// arbres sont parcourus : les dépendances et les sorties de construction
+// (www/, dist*/, android/) n'en font pas partie, et un répertoire
+// node_modules n'est jamais descendu. En sont exclus :
 // - version.json, package-lock.json, le module engendré et le changelog, où
 //   la version se recopie par construction et que les points 1 à 3
 //   contrôlent ;
@@ -312,7 +312,7 @@ const LIGNES_OBLIGATOIRES = [
 // balayé.
 // package.json reste balayé : la forme technique y est à sa place, la forme
 // affichée non.
-const ARBRES_BALAYES = ['src', 'scripts', 'electron', 'test'];
+const ARBRES_BALAYES = ['src', 'public', 'scripts', 'electron', 'test'];
 const FICHIERS_EXCLUS = new Set([
   'version.json',
   'package-lock.json',

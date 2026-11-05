@@ -50,12 +50,10 @@ import {
   verifierArbre,
 } from '../scripts/documentation.js';
 import {
-  A_VENIR,
   CAPTURES,
   CHEMIN_MANIFESTE,
   DOSSIER_CAPTURES,
   ETAPES,
-  REPORTEES,
   cheminImage,
   cheminsHorsRacine,
   fautesDImage,
@@ -181,7 +179,7 @@ describe('documentation : le guide d’usage suit les étapes et apparie ses ima
     assert.deepEqual(fautes, []);
   });
 
-  test('ordre : le manifeste range ses captures et ses reportées selon les étapes, chaque étape couverte', () => {
+  test('ordre : le manifeste range ses captures selon les étapes, chaque étape couverte d’une capture', () => {
     assert.deepEqual(verifierOrdre(lireManifeste()), []);
   });
 
@@ -203,14 +201,9 @@ describe('documentation : le guide d’usage suit les étapes et apparie ses ima
     }
   });
 
-  test('chaque capture publiée est citée ; une reportée ou à venir ne l’est pas : sans image, elle serait orpheline', () => {
+  test('chaque capture déclarée est publiée, donc citée par le guide', () => {
     const citees = new Set(imagesReferencees(lire(GUIDE_USAGE)));
-    // Sans reportée ni capture à venir, la première comparaison ne juge
-    // rien ; la seconde, sur toutes les captures publiées, juge le guide.
-    const absentes = [...REPORTEES.map((r) => r.fichier), ...A_VENIR].map(cheminImage);
-    assert.deepEqual(absentes.filter((chemin) => citees.has(chemin)), []);
-    // Chaque capture déclarée qui n'est pas à venir est publiée, donc citée.
-    const publiees = CAPTURES.filter((c) => !A_VENIR.includes(c.fichier)).map((c) => cheminImage(c.fichier));
+    const publiees = CAPTURES.map((c) => cheminImage(c.fichier));
     assert.ok(publiees.length > 0);
     assert.deepEqual(publiees.filter((chemin) => !citees.has(chemin)), []);
   });
@@ -256,7 +249,8 @@ const versionDuManifeste = (version) => {
 describe('documentation : les documents n’affichent que les captures, telles que le manifeste les inscrit (§ 19.1, § 19.7)', () => {
   test('le guide d’usage et README.md ne citent aucune image hors de doc/captures', () => {
     for (const document of [GUIDE_USAGE, README]) assert.deepEqual(fautesImagesCitees(document, lire(document)), [], document);
-    // Le relevé n'est pas vide : il voit chaque image que l'appariement voit.
+    // Le relevé n'est pas vide : il voit chaque image que l'appariement voit,
+    // une par capture déclarée, chacune publiée.
     const cibles = imagesCitees(lire(GUIDE_USAGE)).map((citee) => citee.cible);
     assert.deepEqual([...new Set(cibles)].sort(), [...imagesReferencees(lire(GUIDE_USAGE))].sort());
     assert.equal(new Set(cibles).size, CAPTURES.length);
@@ -318,7 +312,7 @@ describe('documentation : les documents n’affichent que les captures, telles q
 
   test('chaque image du manifeste a sur le disque l’empreinte et les dimensions qu’il inscrit', () => {
     const { captures } = lireManifeste();
-    assert.equal(captures.length, CAPTURES.length - A_VENIR.length);
+    assert.equal(captures.length, CAPTURES.length);
     for (const capture of captures) assert.deepEqual(fautesDImage(capture, lireOctets(cheminImage(capture.fichier))), [], capture.fichier);
   });
 
@@ -331,7 +325,7 @@ describe('documentation : les documents n’affichent que les captures, telles q
 
   test('verifier, sur l’arbre réel : chaque image citée par un porteur est contrôlée, aucune faute', () => {
     const bilan = verifierArbre();
-    assert.equal(bilan.images, CAPTURES.length - A_VENIR.length);
+    assert.equal(bilan.images, CAPTURES.length);
     assert.deepEqual(bilan.fautes, []);
     const lignes = [];
     assert.equal(executer(['verifier'], { sortie: (ligne) => lignes.push(ligne) }), 0);
@@ -399,7 +393,7 @@ describe('documentation : les documents n’affichent que les captures, telles q
     assert.deepEqual(horsManifeste.fautes, [{ chemin: inventee, faute: `citée par ${GUIDE_USAGE}, absente du manifeste` }]);
     assert.equal(horsManifeste.code, 1);
     assert.ok(!lus.includes(inventee));
-    assert.equal(lus.length, CAPTURES.length - A_VENIR.length);
+    assert.equal(lus.length, CAPTURES.length);
   });
 });
 
@@ -713,7 +707,8 @@ function configurationLivree(cle) {
  * l'ensemble des nombres cités ne change pas.
  *  - les façons d'asseoir la petite démonstration pour un tour, tables
  *    numérotées : n! divisé par le produit des factorielles des capacités ;
- *  - la plus petite puissance de dix que ce nombre dépasse sur tous les tours ;
+ *  - la plus grande puissance de dix que ce nombre atteint sur tous les
+ *    tours, 10 à la puissance (nombre de chiffres − 1) ;
  *  - le plafond a priori de la petite, tours × (capacité − 1) ;
  *  - le plafond d'un mobile de la grande, sur les tables de la plus grande capacité ;
  *  - le plafond des animateurs ancrés aux tables de la plus petite capacité.
@@ -796,20 +791,41 @@ function modulesSource(dossier = join(RACINE, 'src')) {
 const formeDeCode = (nom) => /[a-z][A-Z]/.test(nom) || /[_\d$]/.test(nom) || /^[A-Z]{2,}$/.test(nom);
 
 // Les familles d'algorithmes et les marques de complexité que la section ne
-// nomme pas (§ 19.9), cherchées sans égard à la casse.
+// nomme pas (§ 19.9), cherchées sans égard à la casse. La famille du moteur
+// admet entre ses deux mots un caractère quelconque ou aucun : le drapeau s
+// laisse le point prendre le retour à la ligne d'une prose repliée.
 const VOCABULAIRE_SAVANT = [
   /heuristique/i, /recuit/i, /tabou/i, /glouton/i, /génétique/i, /recherche locale/i, /local search/i,
-  /hill.?climbing/i, /annealing/i, /\bO\(/, /complexité/i, /NP-/,
+  /hill.?climbing/i, /annealing/i, /acceptations?.?tardives?/is, /late.?acceptance/is, /\bO\(/,
+  /complexité/i, /NP-/,
 ];
+
+// Les captures sur lesquelles la section s'appuie (§ 19.9) : le diagnostic,
+// les propositions classées, les dérivées, le profil trié, les collisions de
+// la variante « conflit inévitable », la course d'une recherche, « minimum
+// atteint » sur la petite démonstration, la vue de comparaison et son
+// escalier. Deux points ont leurs images à eux : la course, 15c, appartient
+// au point 3 ; 16 puis 13, le contraste de la variante, au point 7, puisque
+// c'est ce que relancer ne peut pas effacer.
+const IMAGES_ALGORITHME = Object.freeze([
+  '10-diagnostic', '11-propositions', '11b-propositions-derivees', '12-qualite-profil',
+  '13-qualite-collisions', '15c-qualite-performance', '16-minimum-atteint', '17-comparaison-manque',
+  '18-comparaison-escalier',
+]);
+const IMAGE_DU_POINT_3 = '15c-qualite-performance';
+const IMAGES_DU_POINT_7 = Object.freeze(['16-minimum-atteint', '13-qualite-collisions']);
+// Le numéro de point (le rang du titre « ### » dans la section) → les
+// captures que ce point doit citer lui-même.
+const IMAGES_DES_POINTS = Object.freeze({ 3: [IMAGE_DU_POINT_3], 7: IMAGES_DU_POINT_7 });
 
 /**
  * Les fautes de la section sur l'algorithme : absente ; pas neuf points ;
  * un nombre écrit en chiffres que l'arithmétique ne recalcule pas, ou un
  * nombre recalculé qu'elle ne cite pas ; une phrase qui affirme un nombre
- * absente ; un
- * bloc de code, un passage en code, un nom de fichier .js ou un chemin de
- * src/ ; un identifiant exporté de src/ ; un mot savant ; ni le diagnostic
- * ni les propositions en image.
+ * absente ; un bloc de code, un passage en code, un nom de fichier .js ou
+ * un chemin de src/ ; un identifiant exporté de src/ ; un mot savant ; une
+ * capture de IMAGES_ALGORITHME qu'elle ne cite pas, ou une capture de
+ * IMAGES_DES_POINTS que la section cite, mais pas dans son point.
  */
 function fautesAlgorithme(texteGuide, { attendus, exportes }) {
   const section = sectionNommee(texteGuide, TITRE_ALGORITHME);
@@ -835,8 +851,17 @@ function fautesAlgorithme(texteGuide, { attendus, exportes }) {
   for (const mot of [...releves].sort()) fautes.push(`identifiant exporté de src/ : ${mot}`);
   for (const motif of VOCABULAIRE_SAVANT) if (motif.test(lisible)) fautes.push(`vocabulaire savant : ${motif}`);
   const images = imagesReferencees(texte);
-  for (const fichier of ['10-diagnostic', '11-propositions']) {
+  for (const fichier of IMAGES_ALGORITHME) {
     if (!images.includes(cheminImage(fichier))) fautes.push(`la section ne s'appuie pas sur ${fichier}`);
+  }
+  const parPoint = texte.split(/^### /m);
+  for (const [rang, fichiers] of Object.entries(IMAGES_DES_POINTS)) {
+    const duPoint = imagesReferencees(parPoint[rang] ?? '');
+    for (const fichier of fichiers) {
+      if (images.includes(cheminImage(fichier)) && !duPoint.includes(cheminImage(fichier))) {
+        fautes.push(`le point ${rang} ne s'appuie pas sur ${fichier}`);
+      }
+    }
   }
   return fautes;
 }
@@ -858,6 +883,49 @@ describe('documentation : la section sur l’algorithme (§ 19.9)', () => {
 
   test('la section du guide : neuf points, les nombres recalculés, ni code, ni identifiant, ni module, ni mot savant', () => {
     assert.deepEqual(fautesAlgorithme(lire(GUIDE_USAGE), { attendus, exportes }), []);
+  });
+
+  test('les captures exigées sont publiées, et la section les cite toutes', () => {
+    const publiees = new Set(CAPTURES.map(({ fichier }) => fichier));
+    for (const fichier of IMAGES_ALGORITHME) assert.ok(publiees.has(fichier), fichier);
+    for (const fichier of Object.values(IMAGES_DES_POINTS).flat()) assert.ok(IMAGES_ALGORITHME.includes(fichier), fichier);
+  });
+
+  test('rouge : une capture exigée retirée de la section, ou la course citée hors du point 3', () => {
+    const texte = lire(GUIDE_USAGE);
+    const section = sectionNommee(texte, TITRE_ALGORITHME);
+    const debut = section.debut;
+    const fin = debut + section.texte.length;
+    for (const fichier of IMAGES_ALGORITHME) {
+      const sans = texte.slice(0, debut) + section.texte.replaceAll(cheminImage(fichier), 'doc/captures/autre.png') + texte.slice(fin);
+      const attendues = [`la section ne s'appuie pas sur ${fichier}`];
+      assert.deepEqual(fautesAlgorithme(sans, { attendus, exportes }), attendues, fichier);
+    }
+    // La course déplacée du point 3 au point 4 : citée, mais hors de sa place.
+    const points = section.texte.split(/^### /m);
+    const lien = points[3].match(/\(\[[^\]]*\]\(doc\/captures\/15c-qualite-performance\.png\)\)/)[0];
+    points[4] = points[4].replace(/\n\n/, ` ${lien}\n\n`);
+    points[3] = points[3].replace(lien, '');
+    const deplacee = texte.slice(0, debut) + points.join('### ') + texte.slice(fin);
+    assert.deepEqual(fautesAlgorithme(deplacee, { attendus, exportes }), [`le point 3 ne s'appuie pas sur ${IMAGE_DU_POINT_3}`]);
+  });
+
+  test('rouge : une image du contraste de la variante citée hors du point 7', () => {
+    const texte = lire(GUIDE_USAGE);
+    const section = sectionNommee(texte, TITRE_ALGORITHME);
+    const debut = section.debut;
+    const fin = debut + section.texte.length;
+    for (const fichier of IMAGES_DU_POINT_7) {
+      // Le lien retiré du point 7 et posé au point 8 : la section le cite
+      // encore, mais hors de sa place.
+      const points = section.texte.split(/^### /m);
+      const motif = new RegExp(`\\(\\[[^\\]]*\\]\\(${cheminImage(fichier).replace(/[.]/g, '\\.')}\\)\\)`);
+      const lien = points[7].match(motif)[0];
+      points[8] = points[8].replace(/\n\n/, ` ${lien}\n\n`);
+      points[7] = points[7].replace(lien, '');
+      const deplacee = texte.slice(0, debut) + points.join('### ') + texte.slice(fin);
+      assert.deepEqual(fautesAlgorithme(deplacee, { attendus, exportes }), [`le point 7 ne s'appuie pas sur ${fichier}`], fichier);
+    }
   });
 
   test('rouge : un nombre changé, un nombre de plus en chiffres, une phrase en lettres changée', () => {
@@ -894,6 +962,15 @@ describe('documentation : la section sur l’algorithme (§ 19.9)', () => {
     assert.deepEqual(avec('Le diagnostic vit dans le fichier diagnostic.js.'), ['nom de fichier .js']);
     assert.deepEqual(avec('```\nfaire tant que mieux\n```'), ['bloc de code', 'passage en code']);
     assert.deepEqual(avec('C’est une heuristique.'), ['vocabulaire savant : /heuristique/i']);
+    // La famille que le moteur emploie, en français comme en anglais.
+    assert.deepEqual(avec('Chaque proposition sort d’une Acceptation tardive.'), ['vocabulaire savant : /acceptations?.?tardives?/is']);
+    assert.deepEqual(avec('Le moteur suit le principe late acceptance.'), ['vocabulaire savant : /late.?acceptance/is']);
+    // Les deux mots se relèvent quel que soit le séparateur, retour à la
+    // ligne d'une prose repliée compris.
+    for (const separe of ['acceptation-tardive', 'acceptations\ntardives', 'acceptation_tardive']) {
+      assert.deepEqual(avec(`Une ${separe} décide.`), ['vocabulaire savant : /acceptations?.?tardives?/is'], separe);
+    }
+    assert.deepEqual(avec('Le principe late\nacceptance décide.'), ['vocabulaire savant : /late.?acceptance/is']);
     // Un mot de la langue qu'un module exporte aussi ne se relève pas en prose.
     assert.deepEqual(avec('Le logiciel sait diagnostiquer une configuration.'), []);
   });

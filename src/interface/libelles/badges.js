@@ -1,19 +1,26 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Les libellés de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8, Q3) :
-// ses réglages — modèle de badge, case du pied TechnoLibre et son texte, cases
-// de ce que le badge imprime, source, imposition, ordre —, ses commandes, les
-// phrases de l'annonce que rend phrasesAnnonce (badges/modele.js), logos des
-// participants compris, la planche et la liste produites, et la réédition.
-// Chaque clé commence par « badges. ». Les refus de la planche sont des
-// textes de l'application (application/libelles/planche.js), le nom d'un
-// papier un libellé de l'aperçu (impression.papier.nom.*), que l'annonce lit
-// par texte. Le chemin d'un fichier produit est une donnée : l'écran le pose
-// dans son propre nœud, à côté de son intitulé.
+// Les libellés de la section de l'impression (§ 11.2, § 11.5, § 11.6, § 11.8,
+// Q3) : les titres de ses deux parties, « Badges » et « Plan », l'aperçu de la
+// seconde ayant ses propres libellés (impression.*) ; les réglages de la
+// planche — modèle de badge, case du pied TechnoLibre et son texte, cases de ce
+// que le badge imprime, image des badges, source, imposition, ordre, colonnes
+// de la liste —, ses commandes, les phrases de l'annonce que rend
+// phrasesAnnonce (badges/modele.js), logos des participants compris, la planche
+// et la liste produites, et la réédition. Chaque clé commence par « badges. ».
+// Les refus de la planche sont des textes de l'application
+// (application/libelles/planche.js), le nom d'un papier un libellé de l'aperçu
+// (impression.papier.nom.*), que l'annonce lit par texte. Le chemin d'un
+// fichier produit est une donnée : l'écran le pose dans son propre nœud, à côté
+// de son intitulé.
 import { compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
+  // --- Les deux parties de la section de l'impression -----------------------
+  ['badges.partie.badges', 'Badges'],
+  ['badges.partie.plan', 'Plan'],
+
   [
     'badges.introduction',
     'Un badge par personne présente, sur des cartes Avery 5392 prédécoupées ou en A6 à découper, ' +
@@ -58,6 +65,35 @@ export const TABLE = new Map([
     'badges.donnees.nonRetenues',
     'Les cases valent pour cette séance, sans être retenues sur ce poste : les réglages locaux ne se sont pas écrits.',
   ],
+  // La case qui met l'organisation en gros au-dessus du nom (§ 8.5, § 11.4),
+  // dans le même groupe, et l'annonce d'une case que le poste ne retient pas.
+  ['badges.organisationEnGros.case', 'Organisation en gros, au-dessus du nom'],
+  [
+    'badges.organisationEnGros.nonRetenu',
+    'La case « Organisation en gros, au-dessus du nom » vaut pour cette séance, sans être retenue sur ce poste : les réglages locaux ne se sont pas écrits.',
+  ],
+  // L'image sur tous les badges (§ 8.9, § 11.4), réglage de l'événement :
+  // sa case, puis, cochée, la vignette de l'image ou sa phrase, ses deux
+  // commandes, et le groupe de sa position.
+  ['badges.image.case', 'Image sur tous les badges'],
+  ['badges.image.vignette', 'Image des badges'],
+  ['badges.image.aucune', 'Aucune image choisie.'],
+  ['badges.image.introuvable', 'Image introuvable : son fichier manque au dossier de l\u{2019}événement ou ne se lit pas.'],
+  ['badges.image.choisir', 'Choisir l\u{2019}image'],
+  ['badges.image.retirer', 'Retirer l\u{2019}image'],
+  ['badges.image.position', 'Position de l\u{2019}image'],
+  ['badges.image.position.haut', 'En haut'],
+  ['badges.image.position.centre', 'Au centre'],
+  ['badges.image.position.bas', 'En bas'],
+  // La case qui laisse en blanc le nom des doublons (§ 8.5, § 11.4), dans le
+  // même groupe, la note qui dit à quoi sert la place vide, et l'annonce
+  // d'une case que le poste ne retient pas.
+  ['badges.doublons.case', 'Laisser le nom des doublons en blanc'],
+  ['badges.doublons.note', 'La place du nom reste vide, pour l\u{2019}écrire à la main.'],
+  [
+    'badges.doublons.nonRetenu',
+    'La case « Laisser le nom des doublons en blanc » vaut pour cette séance, sans être retenue sur ce poste : les réglages locaux ne se sont pas écrits.',
+  ],
   ['badges.source.titre', 'Placement imprimé'],
   ['badges.source.retenu', 'Le placement retenu'],
   ['badges.source.proposition', ({ id }) => `La proposition n° ${id}`],
@@ -67,6 +103,16 @@ export const TABLE = new Map([
   ['badges.ordre.titre', 'Ordre des badges'],
   ['badges.ordre.alphabetique', 'Alphabétique'],
   ['badges.ordre.table', 'Par table du premier tour'],
+  // Les colonnes de la liste des badges en CSV (§ 8.5, § 11.6), une par
+  // forme de COLONNES_LISTE_BADGES, et l'annonce d'un choix que le poste ne
+  // retient pas.
+  ['badges.liste.colonnes.titre', 'Colonnes de la liste (CSV)'],
+  ['badges.liste.colonnes.parTour', 'Une colonne par tour'],
+  ['badges.liste.colonnes.unique', 'Une seule colonne'],
+  [
+    'badges.liste.colonnes.nonRetenu',
+    'Les colonnes choisies pour la liste valent pour cette séance, sans être retenues sur ce poste : les réglages locaux ne se sont pas écrits.',
+  ],
 
   // --- Les commandes ----------------------------------------------------------
   ['badges.commande.preparer', 'Préparer'],
@@ -118,6 +164,22 @@ export const TABLE = new Map([
       `Caractères absents de la police, imprimés sans glyphe et listés sur la feuille de contrôle : ${enumeration(
         caracteres.map(({ caractere, point }) => `« ${caractere} » (${point})`),
       )}.`,
+  ],
+  // L'image des badges, sa case cochée : aucune image choisie, son fichier
+  // qui manque au dossier de l'événement ou ne se lit pas, ou le compte des
+  // badges où elle ne trouve pas de place. Aucune ne bloque.
+  ['badges.annonce.imageAucune', 'Image des badges : aucune image choisie, les badges s\u{2019}impriment sans image.'],
+  [
+    'badges.annonce.imageIntrouvable',
+    'Image des badges introuvable dans le dossier de l\u{2019}événement : les badges s\u{2019}impriment sans image.',
+  ],
+  ['badges.annonce.imageIllisible', 'Image des badges illisible : les badges s\u{2019}impriment sans image.'],
+  [
+    'badges.annonce.imageSansPlace',
+    ({ n }) =>
+      n === 1
+        ? 'Image des badges : retirée d\u{2019}un badge, faute de place.'
+        : `Image des badges : retirée de ${n} badges, faute de place.`,
   ],
   // Les logos des participants : ceux dont le fichier manque au dossier de
   // l'événement, ceux qui ne se lisent pas, nommés par leur personne, et le

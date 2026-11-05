@@ -30,6 +30,7 @@
   import { lireEntier } from '../../application/capacite.js';
   import { ErreurCommande } from '../../application/erreurs.js';
   import { aDesAbsences } from '../../application/places.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
@@ -42,6 +43,8 @@
   const t = getContext('t');
   const seance = getContext('seance');
   const ui = getContext('ui') ?? null;
+  // Les noms des tours, que le texte d'un avertissement lit (aides.js).
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
 
   // Le défaut demandé, pas encore appliqué ; le rang du champ, qui le
   // remonte ; la fenêtre du réalignement ; le rendu du dernier geste.
@@ -196,7 +199,7 @@
       {#if avertissement.numero !== null}
         <p><span>{t('tables.liste.table')}</span> <span>{avertissement.numero}</span></p>
       {/if}
-      <p>{t(avertissement.code, avertissement.details)}</p>
+      <p>{t(avertissement.code, { nomsTours, ...avertissement.details })}</p>
       {#if avertissement.noms.length > 0}
         <ul>
           {#each avertissement.noms as nom, rangNom (rangNom)}

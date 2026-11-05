@@ -6,14 +6,16 @@
 // les constantes de src/csv dont un écran a besoin, telles quelles — la
 // jointure des étiquettes comprise, qu'un écran écrit comme l'export, le
 // CSV des objectifs de table, son aperçu, son export et ce que remplacer y
-// touche, et les noms que « Rendre les noms uniques » donne aux doublons —,
-// et lie le motif du CSV des refus au libellé français : l'interface ne
-// choisit pas ce motif, qui est une donnée du fichier écrit, jamais un texte
-// de la langue témoin. Les deux modèles à télécharger se lisent sur la
-// charge de l'événement : celui des participants suit son nombre de tours ;
-// celui des objectifs, ses tables et ses tours, et se refuse, avec son
-// remède, quand il n'a aucune table ou que chacun de ses numéros de table
-// est partagé.
+// touche, les noms que « Rendre les noms uniques » donne aux doublons, et
+// les deux tables d'en-têtes, que lit le guide de l'import —, et lie le
+// motif du CSV des refus au libellé français : l'interface ne choisit pas
+// ce motif, qui est une donnée du fichier écrit, jamais un texte de la
+// langue témoin. Le compte des inclusions qui visent un homonyme, que
+// l'écran annonce à l'export, vient de src/csv avec l'export. Les deux
+// modèles à télécharger se lisent sur la charge de l'événement : celui des
+// participants suit son nombre de tours ; celui des objectifs, ses tables et
+// ses tours, et se refuse, avec son remède, quand il n'a aucune table ou que
+// chacun de ses numéros de table est partagé.
 import { modeleParticipants as modeleParticipantsCsv } from '../csv/export.js';
 import { exporterRefus as exporterRefusCsv } from '../csv/import.js';
 import { modeleObjectifs as modeleObjectifsCsv } from '../csv/objectifs.js';
@@ -21,13 +23,19 @@ import { refus } from './erreurs.js';
 import { libelle } from './libelles.js';
 
 export { apercevoir } from '../csv/apercu.js';
-export { CHAMPS } from '../csv/colonnes.js';
+export { CHAMPS, ENTETES_DES_CHAMPS } from '../csv/colonnes.js';
 export { decoder } from '../csv/encodage.js';
-export { JOINTURE_ETIQUETTES, exporterParticipants } from '../csv/export.js';
+export { JOINTURE_ETIQUETTES, exporterParticipants, inclusionsVersHomonymes } from '../csv/export.js';
 export { bilanRemplacement } from '../csv/import.js';
 export { rendreNomsUniques } from '../csv/noms_uniques.js';
 export { cleNormalisee } from '../csv/normalisation.js';
-export { CHAMPS_OBJECTIFS, apercevoirObjectifs, bilanRemplacementObjectifs, exporterObjectifs } from '../csv/objectifs.js';
+export {
+  CHAMPS_OBJECTIFS,
+  ENTETES_DES_OBJECTIFS,
+  apercevoirObjectifs,
+  bilanRemplacementObjectifs,
+  exporterObjectifs,
+} from '../csv/objectifs.js';
 
 /**
  * Le CSV des refus d'un aperçu (exporterRefus de src/csv), chaque motif

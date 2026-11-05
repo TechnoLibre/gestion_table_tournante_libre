@@ -54,15 +54,16 @@ restent utilisables en lecture.
 Le premier écran est la liste des événements. Quand elle est vide, elle n’est
 jamais une page blanche : elle offre de créer un événement et de charger l’une
 des démonstrations livrées. Elle affiche aussi le dossier de travail, avec la
-commande qui l’ouvre dans l’explorateur.
+commande qui l’ouvre dans l’explorateur. Si l’explorateur ne s’ouvre pas, un
+message le dit à côté de la commande, avec la raison que donne le système.
 
 ![Le premier écran : le dossier de travail, la création d’un événement, les démonstrations](doc/captures/01-premier-ecran.png)
 
 *Regardez la partie « Démonstrations » : chacune se charge comme un nouvel
 événement, ouvert en lecture, sans toucher aux autres. Sous « Créer un
 événement », seul le nom est exigé ; la date est facultative, choisie dans le
-calendrier du champ ; une date commencée doit être complète et exister au
-calendrier.*
+calendrier du champ ; une date commencée doit être complète, exister au
+calendrier et ne pas précéder 1900.*
 
 Ouvrir un événement existant ne réécrit jamais son fichier. Créer un événement,
 ou charger une démonstration, en écrit un nouveau. Le nom d’un événement compte
@@ -116,7 +117,8 @@ Vérifiez ces trois lignes avant d’importer.*
 Le mode de l’import se choisit au même endroit : « Ajouter » ajoute des
 personnes, « Mettre à jour » met à jour celles que le fichier reconnaît sans
 effacer les champs qu’il ne porte pas, « Remplacer » remplace la liste et
-annonce d’abord ce qu’il détruit.
+annonce d’abord ce qu’il détruit, les inclusions des personnes retirées
+comprises.
 
 Deux lignes au même nom, prénom et organisation — ou une ligne qui reprend une
 personne déjà dans la liste — se signalent en doublons : chacun nomme la
@@ -127,7 +129,10 @@ logiciel ne fusionne jamais deux personnes : s’il s’agit bien de deux conviv
 un numéro, « Galet 01 », « Galet 02 », en sautant un numéro déjà pris. Votre
 fichier n’est pas modifié : l’aperçu se recalcule sur ces noms, et le rapport
 compte les noms rendus uniques. En mise à jour, une ligne qui met à jour une
-personne de la liste garde son nom.
+personne de la liste garde son nom. Le logiciel retient, sans l’afficher, que
+ce numéro vient de l’import, et les badges laissent par défaut la place de
+ce nom en blanc (étape 12) ; renommer ensuite la personne dans sa fiche ou
+dans la grille efface ce souvenir, et « Défaire » le rend.
 
 Un fichier enregistré par un tableur sous Windows n’est souvent pas en UTF-8.
 Le logiciel le reconnaît et le dit :
@@ -155,7 +160,10 @@ reconnue (annexe B). Sa colonne « présence » suit le nombre de tours de
 l’événement. Une présence s’écrit en tours et en plages — « 1-3 », « 2, 3 »,
 « tours 1 et 2 » — ; « tous » vaut tous les tours, et une cellule vide aussi,
 pour une personne que l’import crée. Le modèle s’importe tel quel, sans
-qu’aucune ligne soit refusée.
+qu’aucune ligne soit refusée. Juste dessous, « Guide import » déplie, pour le
+contenu coché, chaque colonne reconnue : son en-tête, si elle est
+obligatoire, ce qu’elle contient, comment séparer plusieurs valeurs dans une
+cellule, et ses synonymes.
 
 ![L’aperçu du modèle de participants d’un événement de quatre tours, plus la ligne d’une personne déjà inscrite : la colonne « présence » lue en tours](doc/captures/02c-import-presence.png)
 
@@ -186,6 +194,36 @@ organisation que seule apporterait une ligne refusée — elle désigne plusieur
 personnes, ou une personne qu’une ligne plus haut désigne déjà — n’existe
 pas pour les conflits.
 
+Deux colonnes portent les inclusions (étape 3). « Inclusion organisation » nomme
+les organisations que la personne doit rencontrer au moins une fois, écrites et
+séparées comme les conflits. « Inclusion participant » nomme les personnes à
+rencontrer, chacune par son prénom puis son nom — « Iris Ombrelle », ou le nom
+seul pour une personne sans prénom —, séparées de même. Une personne se cherche
+parmi celles de la liste et celles du fichier, même plus bas, sous le nom
+qu’elle aura après l’import ; casse, accents et blancs ne comptent pas. Une
+ligne refusée ne crée personne : une inclusion qui nomme sa personne ne la
+trouve pas tant que la ligne n’est pas corrigée. Un nom que personne ne porte,
+un nom que portent deux personnes, ou le nom de la personne elle-même **refusent
+le fichier entier**, comme une organisation inconnue ou la sienne : l’aperçu
+nomme la ligne et le nom, et dit quoi corriger. Deux homonymes ne se départagent
+jamais au hasard : distinguez-les d’abord par leur nom, dans le fichier ou dans
+leur fiche — un nom numéroté par « Rendre les noms uniques »,
+« Roger Galet 01 », en est un autre. Ces colonnes ne paraissent dans l’aperçu
+que lorsque le fichier les porte ; le tableau peut alors défiler en largeur dans
+son cadre.
+
+Une colonne « Animation réservée » dit qui doit animer une table : « oui »,
+« o », « vrai », « 1 » ou « x » marque la personne à désigner ; « non » ou une
+cellule vide ne la marque pas, et toute autre valeur refuse la ligne, avec son
+motif. Un titre pressenti comme « animation de la table d’honneur » reste
+informatif : c’est cette colonne qui dit que la personne doit animer. L’import
+ne désigne personne, les tables n’étant pas encore connues ; le rapport compte
+les personnes marquées qui n’animent encore aucune table. « Créer les tables… »
+les désigne sur les tables qu’il crée (étape 4) ; sinon, vous les désignez dans
+« Tables et tours », à la rangée « Animateurs » d’une table (étape 6) ; une
+personne absente à un tour s’y désigne une fois sa présence rendue. En mise à
+jour, une cellule vide garde la marque de la personne.
+
 Un import est refusé sur un plan bloqué ; le message nomme la commande qui
 débloque. Un aperçu ouvert avant un changement du nombre de tours ne
 s’importe pas : rechoisissez le fichier pour refaire l’aperçu.
@@ -194,8 +232,11 @@ s’importe pas : rechoisissez le fichier pour refaire l’aperçu.
 
 Dans la section « Participants », la grille se modifie directement. Seul le nom
 est exigé ; le logiciel n’invente aucune valeur manquante. La ligne « Ajouter
-une personne » ajoute quelqu’un ; une plage de cellules copiée d’un tableur et
-collée dans la grille passe par l’aperçu d’import.
+une personne » ajoute quelqu’un : après « Ajouter », un message nomme la
+personne ajoutée pendant quelques secondes, et tous les champs se vident,
+organisation comprise, le curseur dans le nom, prêts pour la suivante. Une
+plage de cellules copiée d’un tableur et collée dans la grille passe par
+l’aperçu d’import.
 
 ![La grille des participants, triée par nom, avec une personne exclue](doc/captures/04-grille-participants.png)
 
@@ -208,7 +249,11 @@ pour trier, tapez dans « Filtrer » pour réduire la liste.*
 chaque valeur telle qu’elle a été saisie, sans rien y ajouter : un tableur qui
 l’ouvre peut prendre pour une formule une cellule qui commence par « = »,
 « + », « - » ou « @ ». Si une valeur commence ainsi, ouvrez le fichier par la
-commande d’import de texte du tableur, colonnes en texte.
+commande d’import de texte du tableur, colonnes en texte. Les inclusions
+s’écrivent dans leurs deux colonnes, chaque personne par son nom ; quand une
+inclusion vise une personne dont une autre porte le même nom, un avis le dit
+sous l’en-tête de la liste : distinguez ces personnes par leur nom, dans leur
+fiche, avant de réimporter le fichier, sinon l’import le refusera.
 
 La fiche d’une personne, ouverte par « Fiche » dans la grille, montre en tête
 son nom, son prénom, son organisation, son courriel, son titre pressenti et ses
@@ -221,6 +266,16 @@ referme sans rien écrire. Tapée « FINANCE » quand une autre personne porte
 Un nom vidé est refusé sous le champ, le formulaire gardé. En lecture et sur
 un plan bloqué, « Modifier » refuse à côté du bouton, en nommant le geste qui
 lève le refus.
+
+La fiche dit aussi si la personne porte une **animation réservée** : « oui »
+quand elle est à désigner animatrice d’une table. Dans le formulaire de
+« Modifier », la case « Animation réservée » la pose ou la retire, et
+« Enregistrer » l’écrit avec les autres champs changés, en un seul geste. Dans
+la grille, la colonne « Animation », juste après le titre pressenti, écrit les
+numéros des tables que la personne anime — « 3 », « 3, 5 » —, ou « à
+désigner » quand elle porte la marque sans animer encore aucune table. Cette
+colonne se lit seulement, ne se trie pas, et l’export n’en écrit rien : la
+marque s’exporte dans sa propre colonne, « animation_reservee ».
 
 Chaque personne peut porter des **étiquettes** — « finance », « bénévole »,
 « Montréal » —, que les objectifs des tables attendent (étape 4). Une colonne
@@ -290,6 +345,38 @@ d’organisation », avec « Appliquer ». Ce n’est pas une interdiction : la
 recherche les évite autant qu’elle peut (étape 9), et un placement qui en garde
 le dit.
 
+Une personne peut aussi nommer des **inclusions** : les organisations et les
+personnes qu’elle doit rencontrer au moins une fois dans la soirée, à n’importe
+quel tour. Sa fiche porte deux rubriques, sous ses conflits : « Inclusions
+d’organisation », une case par organisation de l’événement, la sienne exceptée,
+et « Inclusions de participant », une case par personne, elle-même exceptée, une
+personne exclue marquée « (exclue) », un homonyme suivi de son numéro. Au-dessus
+des personnes, « Chercher une personne » ne montre que celles dont le nom
+contient ce que vous tapez, sans égard à la casse ni aux accents ; une case
+cochée que la recherche cache reste cochée, et Échap vide la recherche. Chaque
+rubrique a son « Appliquer », qui enregistre sa liste en un seul geste, que
+« Défaire » reprend. Dans la grille, la colonne « Inclusions », juste après les
+conflits du placement, est masquée tant que vous ne cochez pas « Montrer les
+inclusions », dans la barre au-dessus de la grille : elle écrit les
+organisations incluses, puis les personnes incluses, et Entrée ou F2 l’ouvre
+avec les mêmes cases et la même recherche. Tab passe des organisations à la
+recherche, puis aux personnes ; depuis les personnes, il enregistre et passe à
+la cellule suivante. Une saisie qui change les deux listes ne fait qu’un geste,
+que « Défaire » reprend d’un coup ; une saisie refusée, restée ouverte,
+s’abandonne quand vous masquez la colonne. Montrée, la colonne peut faire
+défiler la grille en largeur dans une fenêtre étroite. Les inclusions
+s’importent et s’exportent aussi en CSV (étape 2). Ce n’est pas une
+réservation : la recherche cherche à faire chaque rencontre demandée (étape 9),
+juste après éviter les conflits d’organisation, et une rencontre demandée des
+deux côtés ne compte qu’une fois. Une liste qui demande plus de personnes que la
+soirée n’en fait rencontrer à la personne ne compte pas, ni une inclusion qu’un
+conflit d’organisation contredit ou que les réservations rendent impossible. Une
+telle inclusion reste dans sa liste : sous elle, la fiche dit qu’elle est hors
+d’atteinte, et pourquoi — « Théo Pervenche : les deux ne sont jamais présentes
+au même tour ». Un geste qui fait contredire une inclusion par un conflit
+d’organisation — l’inclusion posée, le conflit posé — s’enregistre, et un
+avertissement la nomme.
+
 Une fois des propositions générées (étape 9), la colonne « Conflits du
 placement », juste après celle des conflits d’organisation, dit pour chaque
 personne ce qui cloche dans le placement que le plan montre — la proposition que
@@ -304,6 +391,17 @@ toutes les règles ; la colonne se lit seulement, ne se trie pas, et l’export
 n’en écrit rien. La fiche de la personne les détaille sous « Conflits du
 placement », juste avant « Rencontres » : une ligne par conflit, « Tour 2,
 table 5 : avec Iris Ombrelle — même organisation ».
+
+Ses inclusions se lisent de même sous « Inclusions du placement », juste après :
+combien de ses inclusions le placement montré satisfait — « 1 inclusion
+satisfaite sur 2. » —, puis chaque rencontre demandée qu’il ne fait pas et qui
+la nomme, qu’elle la demande ou qu’on la lui demande : « Iris Ombrelle n’a pas
+rencontré Théo Pervenche ». Une liste qui demande plus de personnes qu’elle
+n’en peut rencontrer le dit, avec le nombre d’inclusions encore possibles que
+le placement n’atteint pas : ce n’est pas une erreur. Dans la grille, la
+colonne « Inclusions du placement », montrée avec la colonne « Inclusions », en
+écrit le résumé : « 1 sur 2 », puis « sans » et la personne ou l’organisation
+qui manque.
 
 Une personne peut enfin porter un **logo** — celui de son organisation, par
 exemple —, que son badge imprime (étape 12). Il se pose dans sa fiche, sous la
@@ -342,8 +440,9 @@ dans le sous-dossier `logo`, elle paraît quand on rouvre la fiche.
 
 Le fichier des participants ne porte pas de logo : l’export n’en écrit pas, et
 un import « Mettre à jour » garde ceux des personnes. « Remplacer » retire
-chaque personne avec son logo ; après l’import, un avertissement compte les
-logos retirés, et « Défaire » les rend.
+chaque personne avec son logo : la fenêtre à confirmer dit combien de logos
+seront retirés, après l’import un avertissement les compte encore, et
+« Défaire » les rend.
 
 ## Étape 4 — Préparer les tables
 
@@ -409,14 +508,32 @@ Quand il y a plus de participants que de places, inutile de compter les
 tables à ajouter : « Créer les tables… », offert dans la section tant que des
 places manquent, et à côté de « Ouvrir les tables » dans l’avis des places
 manquantes, déplie un petit formulaire. Saisissez le nombre de places par
-table — le défaut y est déjà —, et le formulaire dit ce que la création fera,
-par exemple « 22 tables de 8 places : 176 places pour 171 participants ».
-« Créer » ajoute juste assez de tables de cette taille, numérotées à la suite
-des vôtres, rondes, en une seule entrée de l’historique : « Défaire » ou
-Ctrl+Z les retire toutes. Des tables à la taille du défaut le suivent ; d’une
-autre taille, elles sont surchargées. Sous une présence partielle, le compte
-est celui des personnes présentes au plus à un même tour. « Annuler » replie
-le formulaire sans rien créer.
+table — le défaut y est déjà —, choisissez la forme, « Rondes » ou
+« Carrées » — celle de votre dernière table créée est déjà cochée, et
+« Rondes » si vous n’en avez aucune —, et le formulaire dit ce que la
+création fera, par exemple « 22 tables de 8 places : 176 places pour
+171 participants ». « Créer » ajoute juste assez de tables de cette taille
+et de cette forme, numérotées à la suite des vôtres, en une seule entrée de
+l’historique : « Défaire » ou Ctrl+Z les retire toutes. Des tables à la
+taille du défaut le suivent ; d’une autre taille, elles sont surchargées.
+Sous une présence partielle, le compte est celui des personnes présentes au
+plus à un même tour. « Annuler » replie le formulaire sans rien créer.
+
+Les personnes marquées « Animation réservée » qui n’animent encore aucune
+table sont désignées sur les tables créées, dans la même entrée : une seconde
+phrase du formulaire le dit avant, par exemple « 2 personnes à l’animation
+réservée y seront désignées animatrices », et l’annonce des tables créées
+compte les animateurs désignés. Chacune reçoit son titre pressenti, ou
+« animateur » si elle n’en a pas, sur la table qui a le moins d’animateurs,
+en évitant d’y réunir deux animateurs d’une même organisation quand c’est
+possible ; chaque table garde au moins une chaise qui tourne. Une personne
+absente à un tour, une personne à qui une place est déjà réservée, ou celle
+qui ne trouve plus de place d’animateur n’est pas désignée : un avertissement
+la nomme, avec sa raison, et vous la désignez à la rangée « Animateurs » d’une
+table (étape 6) — une personne absente, une fois sa présence rendue à tous les
+tours ; une personne déjà réservée, à la table de sa réservation ou une fois
+celle-ci retirée. « Ajouter une table ronde » ou « carrée » ne désigne
+personne.
 
 La section « Plan » montre les tables à l’échelle :
 
@@ -440,6 +557,28 @@ visés un par un, et c’est la table entière qui reçoit le geste :
 
 *Ici, un dépôt vise la table ; zoomez pour choisir un siège précis.*
 
+Pour trouver une personne sur un grand plan, cliquez « Voir sur le plan » sur
+sa ligne de la grille des participants : le plan s’ouvre au tour où elle est
+assise, sa chaise marquée au centre, au zoom où les sièges se dessinent. Si
+vous étiez déjà plus près, le zoom reste. Le tableau des paires répétées, à
+la page « Qualité », mène au plan de la même façon.
+
+La barre au-dessus du plan règle ce qu’il montre, sans rien modifier : « Listes
+de noms » montre ou masque la liste de chaque table, et « Organisation », juste
+à sa droite, ajoute après chaque nom l’organisation de la personne, en gris :
+« 3. Iris Ombrelle · Club des Merles ». « Organisation » est éteinte à chaque
+ouverture de l’événement. Une liste garde sa largeur : une organisation trop
+longue pour la ligne passe dessous, en retrait, sur autant de lignes qu’il
+faut, sans jamais s’abréger, et la liste s’allonge d’autant, à l’écran comme
+sur le papier. Pour qu’une liste ainsi allongée ne couvre pas celle de la
+table posée dessous, le plan écarte ses rangées de tables juste assez, sans
+rien enregistrer : éteignez « Organisation », et chaque table revient à sa
+place. L’écart suit les listes du tour montré : d’un tour à l’autre, une
+table peut se dessiner un peu plus haut ou plus bas. Une table glissée sur ce
+plan écarté et lâchée sur une rangée la rejoint ; lâchée entre deux rangées,
+elle se pose entre elles, et le plan s’écarte de nouveau. Listes masquées, le
+bouton « Organisation » reste à sa place, inactif.
+
 ## Étape 5 — Fixer le nombre de tours
 
 Le nombre de tours se règle dans la même section. Retirer un tour puis le
@@ -455,11 +594,26 @@ son tour. « Annuler » ne change rien.*
 Les placements déjà générés ne sont pas tronqués : ils restent entiers, mais ne
 décrivent plus la soirée, et le logiciel nomme ceux que le changement touche.
 
+Chaque tour peut aussi porter un **nom** — « Apéritif », « Plat principal ».
+Sous le nombre de tours, « Noms des tours » offre un champ par tour, vide tant
+que le tour n’a pas de nom, qui montre en gris « Tour 1 », « Tour 2 »… Saisissez
+le nom puis Entrée, ou quittez le champ ; videz-le, ou écrivez « Tour 2 » dans
+celui du tour 2, pour revenir au nom par défaut. Un nom compte soixante
+caractères au plus, et « Défaire » le reprend. Le nom remplace « Tour 2 »
+partout où le logiciel nomme ce tour : sur les badges, « Plat principal —
+table 3 », et dans leur liste en CSV, dans les têtes de colonnes et le pied des
+pages imprimées, dans le choix du tour du plan et de l’aperçu, et dans les
+phrases des écrans et de l’historique, où il suit le numéro : « absente au
+tour 2 (Plat principal) ». Les fichiers CSV des participants et des objectifs
+gardent les numéros, « 1-3 » par exemple : c’est ce que l’import relit. Retirer
+un tour retire son nom, et l’annonce le nomme ; un tour ajouté vient sans nom.
+
 ## Étape 6 — Désigner les animateurs, table par table
 
-Cette étape est facultative : une soirée sans animateur est valide. Le
-logiciel ne répartit pas les animateurs : vous désignez vous-même **quelle
-personne anime quelle table**.
+Cette étape est facultative : une soirée sans animateur est valide. Hors de
+« Créer les tables… », qui désigne les personnes marquées « Animation réservée »
+sur les tables qu’il crée (étape 4), le logiciel ne répartit pas les
+animateurs : vous désignez vous-même **quelle personne anime quelle table**.
 
 Choisissez la personne — dans la « Réserve » du plan, ou par « Voir sur le
 plan » depuis la grille —, puis la place : « Désigner » pose d’un seul geste une
@@ -488,13 +642,20 @@ organisation, sans égard aux majuscules ni aux accents, et les groupe par
 organisation tant que « Grouper par organisation » est cochée. Chaque personne
 porte son statut en toutes lettres — elle anime déjà une table, elle est
 absente à un tour, une place lui est réservée, elle est exclue, ou elle est
-placée au plan retenu — et la case
-de celles qu’on ne peut pas choisir est désactivée. Cochez les personnes,
-gardez ou changez le titre, « animateur » par défaut, puis « Ajouter » : elles
-sont désignées ensemble, en une seule entrée de l’historique. Si une seule est
+placée au plan retenu — et la case de celles qu’on ne peut pas choisir est
+désactivée. Cochez les personnes, gardez ou changez le titre, « animateur »
+par défaut, puis « Ajouter » : elles sont désignées ensemble, en une seule
+entrée de l’historique. Ce titre ne vaut que pour les personnes sans titre
+pressenti, comme le dit son champ : une personne pressentie « animateur VIP »
+reçoit ce titre-là, sur sa place comme sur son badge. Si une seule est
 refusée, aucune ne l’est, et le refus la nomme dans la fenêtre. Le bouton de
 retrait d’une pastille retire à la fois la réservation et le titre de cet
-animateur.
+animateur. Ce retrait emporte aussi la réservation « tous les tours » que vous
+aviez posée vous-même à cette personne avant de la désigner en lot, au siège
+où le lot a mis son titre : aucun message ne le signale, et « Défaire » la
+rend. Un animateur devenu absent à un tour garde sa pastille, suivie de ses
+tours d’absence, « Absence au tour 3 », et son bouton de retrait, tant que sa
+réservation et son titre existent.
 
 Une table peut avoir zéro, un ou plusieurs animateurs, mais jamais plus
 d’animateurs que de sièges. Une table dont tous les sièges sont réservés est
@@ -587,32 +748,46 @@ plan ne peut éviter tout conflit d’organisation au tour 2 » —, avec ce qui
 le changerait : des tables de plus, lever un conflit ou retirer une
 réservation.
 
+Quand des personnes portent des inclusions, une carte « Inclusions » nomme
+celles qu’aucun placement ne peut satisfaire, et pourquoi : « inclusion hors
+d’atteinte : Iris Ombrelle → Théo Pervenche, les deux ne sont jamais présentes
+au même tour », avec ce qui la rendrait possible — les rendre présentes à un
+même tour, déplacer une réservation, lever le conflit qui la contredit. Elle
+nomme aussi chaque personne dont la liste demande plus de personnes que la
+soirée ne lui en fait rencontrer : « Ondine Lacasse : 9 inclusions demandent
+8 personnes ; la soirée lui en fait rencontrer au plus 6, donc au plus 7
+satisfaites, et 2 restent hors de portée ». Ce n’est pas une erreur : ces
+inclusions ne comptent jamais parmi les inclusions non satisfaites.
+
 Sous la carte « Tout l’événement », une dernière carte, **« La proposition
 choisie »**, explique un placement : la proposition que vous montrez au plan,
-sinon le placement retenu, sinon la meilleure du classement ; elle dit
-laquelle. Ses phrases reprennent les chiffres de sa ligne au tableau des
-propositions, en trois blocs. **Ce qui est atteint** : le moins bien servi et
-son plafond a priori — par exemple « Le moins bien servi rencontre 23
-personnes différentes, sur les 28 que son plafond a priori permet » —, puis,
-pour chaque règle cochée, les collisions, les retours choisis, la diversité,
-les objectifs et les animateurs ; une collision sans retrouvailles se dit
-« toujours des paires différentes », et des collisions au plancher des
-organisations en conflit ou au plancher exact, sans aucun conflit, se disent
-au minimum : aucune relance ne les fera baisser sans créer de conflit. Quand
-aucun plan ne peut éviter tout conflit, une proposition qui en compte le dit
-aussi : une relance ne les fera pas tomber à zéro. **Ce qui manque, et
-pourquoi** : ce qui sépare quelqu’un de son plafond a priori, partagé entre la
-place — une table incomplète, le nombre de places vides à chaque tour — et les
-revoirs — les personnes à qui il manque une rencontre, les paires qui se
-croisent deux fois. Quand le diagnostic prouve qu’aucun placement n’atteint le
-plafond a priori de tout le monde, la carte le dit « hors d’atteinte ».
-**Ce qu’on peut tenter** : « Repartir d’elle » avec un compte d’arrêt plus
-élevé quand des revoirs, la place ou une règle cochée coûtent plus que
-l’inévitable, les tables quand ce sont les places vides — des tables pleines
-les retirent, et si leurs capacités diffèrent alors, le diagnostic dit ce
-qui demeure —, et « Rien pour les rencontres » quand la proposition atteint
-le plafond de chacun. Sans proposition, comme sur la capture, la carte invite
-à en générer une ; une proposition en dérive le dit, sans chiffres.
+sinon le placement retenu, sinon la meilleure du classement ; elle dit laquelle.
+Ses phrases reprennent les chiffres de sa ligne au tableau des propositions, en
+trois blocs. **Ce qui est atteint** : le moins bien servi et son plafond a
+priori — par exemple « Le moins bien servi rencontre 23 personnes différentes,
+sur les 28 que son plafond a priori permet » —, puis, pour chaque règle cochée,
+les conflits d’organisation, les inclusions — les rencontres demandées qui ne se
+font pas, puis, pour les listes qui dépassent ce que leur personne peut
+rencontrer, combien d’inclusions encore possibles le placement n’atteint pas —,
+les collisions, les retours choisis, la diversité, les objectifs et les
+animateurs ; une collision sans retrouvailles se dit « toujours des paires
+différentes », et des collisions au plancher des organisations en conflit ou au
+plancher exact, sans aucun conflit, se disent au minimum : aucune relance ne les
+fera baisser sans créer de conflit. Quand aucun plan ne peut éviter tout
+conflit, une proposition qui en compte le dit aussi : une relance ne les fera
+pas tomber à zéro. **Ce qui manque, et pourquoi** : ce qui sépare quelqu’un de
+son plafond a priori, partagé entre la place — une table incomplète, le nombre
+de places vides à chaque tour — et les revoirs — les personnes à qui il manque
+une rencontre, les paires qui se croisent deux fois. Quand le diagnostic prouve
+qu’aucun placement n’atteint le plafond a priori de tout le monde, la carte le
+dit « hors d’atteinte ». **Ce qu’on peut tenter** : « Repartir d’elle » avec un
+compte d’arrêt plus élevé que celui qui a produit la proposition quand des
+revoirs, la place ou une règle cochée coûtent plus que l’inévitable, les tables
+quand ce sont les places vides — des tables pleines les retirent, et si leurs
+capacités diffèrent alors, le diagnostic dit ce qui demeure —, et « Rien pour
+les rencontres » quand la proposition atteint le plafond de chacun. Sans
+proposition, comme sur la capture, la carte invite à en générer une ; une
+proposition en dérive le dit, sans chiffres.
 
 Le même diagnostic s’affiche à côté du plan, pendant que vous préparez les
 tables : chaque organisation trop nombreuse pour ses tables y annonce les
@@ -662,7 +837,7 @@ referme.
 ![L’ordre des priorités : un palier de deux critères et leurs poids, les animateurs décochés](doc/captures/10a-ordre-priorites.png)
 
 *Ici, l’excédent de collisions et les tours hors objectif partagent le
-palier 2, aux poids 1 et 3 : le classement y compare l’excédent plus trois
+palier 3, aux poids 1 et 3 : le classement y compare l’excédent plus trois
 fois les tours hors objectif. « Animateurs non rencontrés » est marqué
 « décoché » : la case « Rencontrer le plus d’animateurs différents » ne l’est
 pas. Au-dessus de la liste, hors de l’image, le choix « Objectifs des
@@ -779,8 +954,15 @@ cherche », plus bas). « Imposé par les réservations » sépare ce que vos
 réservations imposent de ce que la recherche a choisi. Quand des personnes
 nomment des organisations en conflit, une colonne compte les conflits
 d’organisation de chaque proposition, et une ligne qui en garde le dit sous son
-numéro : « 2 conflits restants ». Pour deux placements précis, la vue
-« Comparaison » de la page « Qualité », plus bas, les met côte à côte.
+numéro : « 2 conflits restants ». Quand des personnes portent des inclusions qui
+comptent, la colonne « Inclusions non satisfaites », juste après, compte les
+rencontres demandées que la proposition ne fait pas, une rencontre demandée des
+deux côtés comptant une fois, et la ligne le dit sous son numéro : « 2
+inclusions non satisfaites ». La vue « Inclusions » de la page « Qualité » les
+nomme une à une, et, sur le plan, la liste de travail « Inclusions non
+satisfaites » aussi : un clic y choisit la personne qui la demande, pour la
+déplacer. Pour deux placements précis, la vue « Comparaison » de la page
+« Qualité », plus bas, les met côte à côte.
 
 Les commandes d’une ligne sont dans son menu : cliquez « Actions », au bout de
 la ligne, puis la commande ; au clavier, Entrée ou les flèches ouvrent le menu.
@@ -863,9 +1045,11 @@ son départ, n° 4, sur la grande démonstration sans exception. Le minimum brut
 s’écrit 88 % et 85 %, chacun avec le compte du pire dessous, « minimum 24 sur
 27 » et « minimum 23 sur 27 » ; suivent le plus grand manque, 3 et 4, les
 personnes à qui il en manque, 143 et 141, et l’écart d’itinéraire, 3 des deux
-côtés. Aucun écart n’est calculé entre les deux colonnes, et aucune n’est mise
-en évidence. « Tous les indicateurs », replié dessous, garde les autres
-chiffres. La question de la vue, juste au-dessus, est hors de l’image.*
+côtés, chacun avec, dessous, la même mesure sur les mobiles et sur les ancrés.
+Aucun écart n’est calculé entre les deux colonnes, et aucune n’est mise en
+évidence. « Tous les indicateurs », replié dessous, garde les autres
+chiffres. La ligne qui nomme les deux placements et la question de la vue,
+juste au-dessus, sont hors de l’image.*
 
 ![Le manque de deux propositions superposé sur un même axe : les courbes se croisent](doc/captures/17-comparaison-manque.png)
 
@@ -925,6 +1109,17 @@ tableau des paires.*
 dessinée : 260 personnes dépassent son seuil, et la phrase renvoie à la
 fiche de chaque personne. Au-dessus, la fin du tableau des paires
 répétées.*
+
+La vue « Inclusions » répond à « quelles rencontres demandées ce placement ne
+fait-il pas ? ». Une phrase les compte — « 2 inclusions non satisfaites sur
+5 rencontres demandées. » —, puis chacune se nomme, en tête : « Iris Ombrelle
+n’a pas rencontré Théo Pervenche », « …, une rencontre demandée des deux
+côtés » quand les deux se demandent. Viennent ensuite, quand il y en a, les
+listes qui dépassent ce que leur personne peut rencontrer, avec leurs
+inclusions satisfaites et celles encore possibles que le placement n’atteint
+pas, puis les inclusions hors d’atteinte et leur raison : ni les unes ni les
+autres ne sont des erreurs. Sans inclusion active, une phrase prend sa place,
+et les inclusions hors d’atteinte la suivent quand les listes en portent.
 
 ![Les objectifs des tables, tour par tour](doc/captures/15a-qualite-objectifs.png)
 
@@ -1020,9 +1215,10 @@ pour un plan qui assoit chacun à chaque tour, et une phrase le dit.*
 *Cinq personnes, une table de quatre et une de deux, deux tours ; quatre
 sont réservées à la table de quatre. La cinquième, assise seule à la table
 de deux, ne peut rencontrer personne : son plafond réalisé est nul. Au
-premier rang du profil, son infobulle écrit le plafond réalisé 0 et le
-pourcentage « — » ; au second graphique, plus bas, ce rang n’a pas de
-point.*
+premier rang du profil, son infobulle écrit le plafond réalisé 0, le
+pourcentage « — » et, dans sa marque, son écart d’itinéraire, nul ici : son
+plafond a priori l’est aussi, aucun plan ne l’assied avec quelqu’un. Au
+second graphique, plus bas, ce rang n’a pas de point.*
 
 Une personne absente à un tour ne compte pas ce tour : ses rencontres, son
 plafond et ses tours servis se lisent sur ses tours de présence. Le profil la
@@ -1105,13 +1301,38 @@ saisie, Ctrl+Z défait le dernier geste, Ctrl+Maj+Z ou Ctrl+Y le refait
 
 ## Étape 12 — Imprimer
 
-La commande « Imprimer… », en haut de l’événement, ouvre l’**aperçu
-d’impression**, qui montre les pages telles qu’elles sortiront : le **plan**
-de salle, la **liste d’accueil** et la **feuille par table**. Le plan se
+Tout s’imprime depuis la section « Impression » de l’événement, la dernière de
+la navigation. Sous son titre « Badges », la planche de badges, sa liste en CSV
+et la réédition ; sous son titre « Plan », l’**aperçu d’impression**, qui montre
+les pages telles qu’elles sortiront : le **plan** de salle, la **liste
+d’accueil** et la **feuille par table**, et le bouton « Imprimer ». Le plan se
 découpe en pages quand il ne tient pas lisiblement sur une seule ; chaque page
-porte son repère et ses voisines. Au premier aperçu, le logiciel demande le
-format du papier, A4 ou Lettre, puis le garde pour ce poste ; il se change
-ensuite à tout moment.
+porte son repère et ses voisines. À la première ouverture de la section,
+l’aperçu demande le format du papier, A4 ou Lettre, puis le garde pour ce
+poste ; il se change ensuite à tout moment. Les badges, eux, partent sur Lettre
+sans rien demander. Seules les pages s’impriment : ni la section, ni la
+navigation.
+
+Les réglages du plan, dans la barre de l’aperçu, ne changent que le papier.
+« Organisation » reprend à l’ouverture le choix de l’écran. « Une colonne par
+page », éteinte par défaut, imprime chaque colonne de tables sur ses propres
+pages : aucune page ne mêle deux colonnes. Toutes les pages gardent la même
+échelle, et chacune son repère.
+
+La feuille par table, celle de l’animateur, donne une page à chaque table où
+quelqu’un est assis — une table vide n’en a pas — et écrit l’organisation de
+chacun après son nom, en gris. Son texte grandit pour remplir la page, sans
+dépasser 18 points ; une table trop longue pour une page garde la taille
+ordinaire et se poursuit sur la suivante. « Dessiner la table », décochée par
+défaut, met en tête de chaque page le dessin de la table — sa forme, ses
+chaises, son numéro et son libellé — à la place de son titre.
+
+La liste d’accueil s’ouvre triée par organisation : chaque organisation
+commence par son nom en intertitre, en gras, puis ses personnes, par prénom puis
+par nom ; celles qui n’en ont pas viennent à la fin, sous « Sans organisation ».
+Un intertitre ne reste jamais seul au bas d’une page : il passe sur la suivante
+avec la première personne de son organisation. « Trier par », dans la barre de
+l’aperçu, la range plutôt par nom ou par prénom, sans intertitre.
 
 La **planche de badges** est le seul document produit en PDF. Par défaut, elle
 s’imprime sur des **cartes Avery 5392** prédécoupées, six par feuille Lettre,
@@ -1146,27 +1367,27 @@ Revenu au placement retenu, l’aperçu sort sans filigrane :
 porte l’instant de ce placement. C’est cette page qui part à l’imprimante pour
 le montage de la salle.*
 
-La planche se produit dans la section « Badges » de l’événement. On y choisit le
-**modèle de badge** — Avery 5392, ou A6 à découper —, que le poste garde d’une
-fois à l’autre, et l’ordre des badges, alphabétique ou par table du premier
-tour. Avec l’A6 seulement, la section montre aussi le papier — Lettre tant que
-le poste n’en a pas choisi d’autre, « Changer » le remplace — et l’imposition —
-feuille par feuille, ou en pile pour un massicot qui tranche toute la rame. Une
-case, cochée tant que vous ne la décochez pas, ajoute sous le pied de chaque
-badge le **pied TechnoLibre** : une invitation à demander un développement
-logiciel personnalisé, suivie du logo de TechnoLibre en couleurs ; le poste
-garde ce choix, comme le modèle. Le pied TechnoLibre ne prend que la place
-libre : il rapetisse sur un badge chargé, et s’en retire quand même sa plus
-petite taille ne tient pas, ou que le badge a dû perdre le nom de l’événement.
-Sous la case, un champ porte le **texte du pied TechnoLibre**, prérempli de
-cette invitation : remplacez-le par le vôtre, et le poste le garde, comme la
-case ; « Texte par défaut » remet l’invitation d’origine. Un dossier de
-travail où vous n’avez rien saisi imprime l’invitation d’origine. Le texte
-s’enregistre quand vous quittez le champ. Il se replie seul sur le badge : un
-retour à la ligne saisi y devient une espace. Laissé vide, le pied ne porte
-que le logo. Un texte plus long rapetisse et se retire plus tôt, faute de
-place, et un caractère que la police ne dessine pas s’annonce comme dans un
-nom.
+La planche se produit sous le titre « Badges » de la section « Impression ». On
+y choisit le **modèle de badge** — Avery 5392, ou A6 à découper —, que le poste
+garde d’une fois à l’autre, et l’ordre des badges, alphabétique ou par table du
+premier tour. Avec l’A6 seulement, la section montre aussi le papier — Lettre
+tant que le poste n’en a pas choisi d’autre, « Changer » le remplace — et
+l’imposition — feuille par feuille, ou en pile pour un massicot qui tranche
+toute la rame. Une case, cochée tant que vous ne la décochez pas, ajoute sous le
+pied de chaque badge le **pied TechnoLibre** : une invitation à demander un
+développement logiciel personnalisé, suivie du logo de TechnoLibre en couleurs ;
+le poste garde ce choix, comme le modèle. Le pied TechnoLibre ne prend que la
+place libre : il rapetisse sur un badge chargé, et s’en retire quand même sa
+plus petite taille ne tient pas, ou que le badge a dû perdre le nom de
+l’événement ; sur un badge qui a dû se resserrer, la place manque souvent. Sous
+la case, un champ porte le **texte du pied TechnoLibre**, prérempli de cette
+invitation : remplacez-le par le vôtre, et le poste le garde, comme la case ;
+« Texte par défaut » remet l’invitation d’origine. Un dossier de travail où vous
+n’avez rien saisi imprime l’invitation d’origine. Le texte s’enregistre quand
+vous quittez le champ. Il se replie seul sur le badge : un retour à la ligne
+saisi y devient une espace. Laissé vide, le pied ne porte que le logo. Un texte
+plus long rapetisse et se retire plus tôt, faute de place, et un caractère que
+la police ne dessine pas s’annonce comme dans un nom.
 À côté, cinq autres cases, cochées elles aussi tant que vous ne les décochez
 pas, disent ce que chaque badge imprime en plus du nom et des tours :
 « Organisation », « Nom de l’événement », « Date de l’événement », « Date du
@@ -1177,6 +1398,46 @@ libérée revient au reste ; le nom et la date de l’événement partagent une
 ligne, qui disparaît quand les deux sont décochés. La feuille de contrôle
 ajoute alors une ligne « Données retirées des badges : … » qui les nomme ; la
 liste en CSV, elle, ne change pas.
+Sous elles, la case « Organisation en gros, au-dessus du nom », cochée tant
+que vous ne la décochez pas, et gardée par le poste, met l’organisation en
+gros, à la place du nom, et le nom de la personne en petit, dessous.
+Décochée, le nom revient en gros, au-dessus de l’organisation en petit. Un
+badge sans organisation garde son nom en gros ; la case « Organisation »
+décochée, plus aucune organisation ne s’imprime, et cette case se grise. Sur
+un badge chargé, le nom en petit part après le nom de l’événement, comme
+l’organisation quand la case est décochée. Une organisation trop longue pour
+le gros texte arrête la planche en nommant la personne : raccourcissez-la, ou
+décochez la case.
+Juste avant la case du pied TechnoLibre, la case « Laisser le nom des
+doublons en blanc », cochée elle aussi tant que vous ne la décochez pas, et
+gardée par le poste, vise les personnes que « Rendre les noms uniques » a
+numérotées à l’import (étape 2) : leur badge n’imprime aucun nom, prénom
+compris, et la place du nom reste vide, de la hauteur exacte du nom entier,
+pour l’écrire à la main ; le reste du badge ne bouge pas. Décochée, le badge
+imprime « Roger Galet 01 ». Le plan, les listes, la liste en CSV et la
+feuille de contrôle gardent le nom entier, et les badges restent rangés sur
+lui, sans ligne « Identifiant n° … ». Un nom que vous avez renommé depuis
+l’import s’imprime toujours, chiffres compris.
+
+Sous ces cases, la case « Image sur tous les badges », décochée tant que vous ne
+la cochez pas, pose la même image sur chaque badge : l’emblème de la soirée,
+d’un congrès ou d’une association. Elle n’est pas gardée par le poste mais par
+l’événement, avec l’image et sa position : passez en écriture pour la changer,
+et « Défaire » reprend chaque changement. Cochée, elle montre l’image choisie,
+ou « Aucune image choisie. » ; « Choisir l’image » accepte les mêmes images que
+le logo d’une personne (étape 3), « Retirer l’image » l’enlève, et la position
+se choisit parmi « En haut », au-dessus du nom et de l’organisation, « Au
+centre », entre le nom et l’organisation d’une part et les tours de l’autre, et
+« En bas », au-dessus du pied. L’image ne prend que la place que le texte, le
+logo de la personne et le pied TechnoLibre laissent, jusqu’à 30 mm de haut sur
+l’A6 et 15 mm sur une carte Avery 5392 : le logo ne lui cède que ce qui dépasse
+sa plus petite taille. Sur un badge chargé, elle rapetisse, puis s’en retire, la
+première, sans jamais réduire un texte ni arrêter la planche ; sur un badge qui
+se resserre, elle ne prend que la place que le resserrement laisse, rarement
+assez. Une image très haute et étroite peut ainsi ne tenir sur aucune carte.
+Décochée, la case garde l’image et la position pour la prochaine fois. L’image
+suit l’événement copié ou importé, comme les logos des personnes, et
+l’avertissement d’un logo qui ne se recopie pas dit quand c’est elle.
 
 Le badge d’une personne qui porte un logo (étape 3) le pose entre ses tours et
 le pied, dans la place que le texte laisse : le logo ne rapetisse ni ne retire
@@ -1184,22 +1445,35 @@ jamais un texte. Il s’y pose le plus grand possible, proportions gardées ; le
 pied TechnoLibre lui cède d’abord de la place en rapetissant, puis s’en retire
 quand le logo ne tient qu’ainsi. Un logo dont la plus petite dimension
 n’atteindrait pas 8 mm ne se pose pas, et le badge sort tel qu’il serait sans
-logo ; un badge qui a perdu le nom de l’événement n’en porte pas non plus. Une
-image introuvable ou illisible n’arrête rien : son badge s’imprime sans logo.
+logo ; sur un badge resserré, il ne prend que la place que le resserrement
+laisse. Un badge qui a perdu faute de place le nom de l’événement, ou le texte
+en petit — l’organisation, ou le nom quand l’organisation est en gros —, n’en
+porte pas non plus, mais la case « Nom de l’événement » décochée ne l’en prive
+pas. Une image introuvable ou illisible n’arrête rien : son badge s’imprime sans
+logo.
 « Préparer » annonce ce qui sortira : le nombre de badges et de feuilles, les
-homonymes, les caractères que la police ne dessine pas, les personnes dont le
-logo est introuvable ou illisible, les badges sans place pour leur logo, les
-badges d’où le pied TechnoLibre se retire, le nom des fichiers.
-« Produire la planche (PDF) » écrit le PDF dans le dossier de l’événement et
-en affiche le chemin ; « Ouvrir le dossier » montre ce dossier dans
-l’explorateur ; dans un navigateur, le PDF se télécharge. « Produire la
-liste (CSV) » écrit au même endroit la liste des mêmes badges, pour un tableur :
-une ligne par personne, avec son nom, son prénom, son organisation et, dans une
-seule cellule, ses lignes de tour telles que le badge les compose, jamais
-abrégées, et jamais le logo ; tirée d’une proposition, son nom de fichier porte
-« BROUILLON ». Avec l’A6, la feuille de contrôle est la première page de la
-planche ; avec Avery 5392, elle est un **second PDF**, écrit à côté du premier,
-à imprimer sur papier ordinaire pour ne pas gâcher une feuille de cartes :
+homonymes, les caractères que la police ne dessine pas, l’image des badges pas
+encore choisie, introuvable ou illisible, et les badges sans place pour elle,
+les personnes dont le logo est introuvable ou illisible, les badges sans place
+pour leur logo, les badges d’où le pied TechnoLibre se retire, le nom des
+fichiers.
+« Produire la planche (PDF) » écrit le PDF dans le dossier de l’événement et en
+affiche le chemin ; « Ouvrir le dossier » montre ce dossier dans l’explorateur ;
+dans un navigateur, le PDF se télécharge. « Produire la liste (CSV) » écrit au
+même endroit la liste des mêmes badges, pour un tableur : une ligne par
+personne, avec son nom, son prénom, son organisation et ses tours, jamais
+abrégés, et jamais le logo ; tirée d’une proposition, son nom de fichier porte
+« BROUILLON ». Le réglage « Colonnes de la liste (CSV) », que le poste garde
+comme le modèle, choisit la forme des tours. « Une colonne par tour », par
+défaut, donne à chaque tour sa colonne, sous le nom du tour, et met dans sa
+cellule la place de la personne, « table 5 (Terrasse) », « pas de table » ou
+« absente », pour trier et filtrer tour par tour. « Une seule colonne » met dans
+la même cellule les lignes de tour telles que le badge les compose, séparées par
+« ; » : « Entrée — table 3 ; Dessert — table 5 », ou « Toute la soirée —
+table 3 » quand rien ne change. Avec l’A6, la feuille de contrôle est la
+première page de la planche ; avec Avery 5392, elle est un **second PDF**, écrit
+à côté du premier, à imprimer sur papier ordinaire pour ne pas gâcher une
+feuille de cartes :
 
 ![La feuille de contrôle de la planche : la règle de 100 mm, puis les comptes de la soirée](doc/captures/24-badges-controle.png)
 
@@ -1227,6 +1501,23 @@ l’instant du placement, puis le pied TechnoLibre et son logo en couleurs, que 
 case de la section retire. Les cartes étant prédécoupées, la feuille ne porte
 aucun trait de coupe ; avec l’A6, des traits fins marquent la coupe.*
 
+Rien ne s’abrège sur un badge : une organisation, un titre ou un libellé de
+table trop long pour sa ligne se replie sur la suivante, coupé au dernier
+espace, et la suite d’une ligne de tour descend en retrait sous son début,
+pour qu’on retrouve chaque tour d’un coup d’œil ; un numéro de table ou de
+siège reste sur la ligne de son mot. Sur un badge chargé, une organisation
+repliée rapetisse d’abord, pour laisser au nom et aux tours leur taille. Les
+lignes repliées prennent de la place. Avant de perdre le nom de l’événement,
+puis son organisation, un badge chargé se resserre, juste assez, sans changer de
+papier : ses lignes se rapprochent, puis son pied rapetisse. Sur une carte
+Avery 5392, un libellé de soixante caractères garde ainsi l’un et l’autre
+jusqu’à sept tours ; sans son organisation ni le nom de l’événement, resserré,
+il tient jusqu’à huit tours. Quand même ainsi un badge ne tient pas, son nom
+passe en dernier recours sous sa taille habituelle, sans jamais devenir plus
+petit que les tours, qui gardent la leur. Au-delà, la section refuse de produire
+la planche, nomme la personne dont les tours débordent et offre « Ouvrir les
+tables », où raccourcir le libellé ou le titre.
+
 Une personne absente à un tour garde la ligne de ce tour sur son badge, qui
 dit « absente » au lieu d’une table :
 
@@ -1234,7 +1525,7 @@ dit « absente » au lieu d’une table :
 
 *Sur la petite démonstration, la meilleure dérivée de l’étape 9 retenue :
 les badges de la personne partie après le tour 2 et de celle arrivée au
-tour 3, réédités seuls dans la section « Badges ». Chaque tour garde sa
+tour 3, réédités seuls dans la section « Impression ». Chaque tour garde sa
 ligne ; une personne absente à un tour n’a jamais la ligne « Toute la
 soirée ».*
 
@@ -1265,7 +1556,8 @@ elle reste en surbrillance tant qu’il est ouvert. « Fermer », ou un second
 clic sur la commande, rend l’écran d’où vous l’avez ouvert. Le panneau donne
 la ligne de version à copier dans un signalement, l’éditeur et l’auteur,
 l’attribution demandée, la licence du logiciel et ses deux textes complets, et
-le sommaire des fonctionnalités.
+le sommaire des fonctionnalités. Ses liens s’ouvrent dans votre navigateur ; un
+lien qui ne s’ouvre pas le dit sous les liens de sa carte, avec la raison.
 
 Sa carte **« Composants tiers et leurs licences »** nomme chaque œuvre que le
 logiciel incorpore — Svelte, pdf-lib, le solveur HiGHS, la police Noto Sans,
@@ -1313,6 +1605,13 @@ points différents s’arrêtent sur deux placements différents, et aucun des d
 n’est « le bon ». La même graine, sur la même configuration et les mêmes
 réglages, redonne exactement les mêmes propositions ; une autre graine en donne
 d’autres. Cette phrase est vérifiée par une épreuve du logiciel.
+
+Quand des personnes portent des inclusions, une partie des échanges est
+dirigée : tant qu’une rencontre demandée n’est pas faite, un mouvement sur deux
+assied l’une des deux personnes à la table de l’autre, à un tour où elle n’est
+ni réservée ni figée. Il est gardé ou défait comme tout autre échange ; une
+fois toutes les rencontres demandées faites, les échanges sont de nouveau tous
+tirés au hasard.
 
 La page « Qualité » montre la course d’une recherche
 ([la performance du calcul](doc/captures/15c-qualite-performance.png)) :
@@ -1371,6 +1670,20 @@ la recherche ce qui est hors d’atteinte, et quel changement de configuration l
 lèverait : une table de plus, un tour de moins, une organisation mieux
 répartie.
 
+Deux images le montrent sur la petite démonstration. Ses trois organisations
+comptent quatre personnes chacune, autant que de tables : chacun peut changer
+de voisins à chaque tour sans jamais retrouver quelqu’un de son organisation,
+et la page « Qualité » écrit « minimum atteint », sans aucune collision
+([« minimum atteint » sur la petite démonstration](doc/captures/16-minimum-atteint.png)).
+Faites passer une seule personne d’une organisation à une autre : c’est la
+variante « conflit inévitable », dont les organisations comptent cinq, quatre
+et trois personnes. Cinq personnes ne se répartissent pas sur quatre tables
+sans que deux se retrouvent, à chaque tour : quatre collisions sur la soirée,
+quel que soit le placement. La page « Qualité » les dessine en gris, dans le
+segment « prouvé inévitable »
+([les collisions de la variante « conflit inévitable »](doc/captures/13-qualite-collisions.png)),
+et aucune relance ne les efface.
+
 ### Comparer deux propositions
 
 Comparez par le **manque** : pour chaque personne, l’écart entre ce que son
@@ -1391,6 +1704,15 @@ C’est la troisième colonne qui évite le contresens : une personne laissée e
 réserve pendant presque toute la soirée a un manque nul, puisqu’elle n’avait
 presque personne à rencontrer. Un manque nul sur un itinéraire bas n’est pas
 une bonne nouvelle.
+
+Sous le plus grand manque, en petit, le tableau écrit le plafond réalisé de la
+personne la plus privée : manquer une rencontre sur trois possibles n’est pas
+en manquer une sur vingt-huit. Quand des réservations ancrent des personnes à
+leur table, une autre ligne donne la même mesure sur les mobiles et sur les
+ancrés, sous le plus grand manque, les personnes à qui il en manque, l’écart
+d’itinéraire, les organisations rencontrées et le taux de diversité : elle dit
+si le chiffre vient du placement, qu’une relance peut améliorer, ou de vos
+réservations. Les tuiles de la page « Qualité » portent les mêmes lignes.
 
 La page « Qualité » pose la même question pour deux placements à la fois :
 le manque de chacun, rang par rang, sur un même axe
@@ -1435,7 +1757,7 @@ réglage du poste, pour la séance, automatique par défaut (étape 9).
 | Rencontrer le plus d'animateurs différents | Génération | décochée |
 | Attribuer les sièges | Génération | décochée |
 | Objectifs des tables : chercher d'abord | Génération | le plus de places servies |
-| Ordre des priorités | Génération | conflits d'organisation, puis excédent de collisions, puis rencontres répétées et retours, puis collisions cumulées, puis écart au plafond a priori, puis tours hors objectif, puis animateurs non rencontrés, puis redondance d'organisation |
+| Ordre des priorités | Génération | conflits d'organisation, puis inclusions non satisfaites, puis excédent de collisions, puis rencontres répétées et retours, puis collisions cumulées, puis écart au plafond a priori, puis tours hors objectif, puis animateurs non rencontrés, puis redondance d'organisation |
 
 <!-- engendre:fin reglages -->
 
@@ -1459,6 +1781,9 @@ majuscules ni aux accents.
 | `etiquettes` | `étiquette`, `mots-clés` |
 | `presence` | `présence`, `tours de présence` |
 | `conflit_organisation` | `conflits`, `conflit d'organisation`, `conflit d’organisation` |
+| `animation_reservee` | `animation réservée`, `animation réservé` |
+| `inclusion_organisation` | `inclusions d'organisation`, `inclusions d’organisation` |
+| `inclusion_participant` | `inclusions de participant` |
 
 <!-- engendre:fin colonnes-csv -->
 
@@ -1492,7 +1817,11 @@ l’historique ; les noms des exemples sont inventés.
 | `ajouterConflit` | Conflits de Iris Ombrelle : ajouté « Atelier Ressac » |
 | `retirerConflit` | Conflits de Iris Ombrelle : retiré « Atelier Ressac » |
 | `changerConflits` | Conflits de Iris Ombrelle : ajouté « Atelier Ressac » et « Club des Merles » |
+| `changerInclusionsOrganisation` | Inclusions d'organisation de Iris Ombrelle : ajouté « Atelier Ressac » |
+| `changerInclusionsParticipant` | Inclusions de participant de Iris Ombrelle : ajouté Théo Pervenche et Ondine Lacasse |
+| `changerInclusions` | Inclusions d'organisation de Iris Ombrelle : ajouté « Atelier Ressac » ; inclusions de participant : ajouté Théo Pervenche |
 | `changerLogo` | Logo de Iris Ombrelle : posé |
+| `changerImageBadges` | Image des badges : case cochée |
 | `exclureParticipant` | Exclu Théo Pervenche |
 | `reintegrerParticipant` | Réintégré Théo Pervenche |
 | `supprimerParticipant` | Supprimé Ondine Lacasse |
@@ -1512,6 +1841,7 @@ l’historique ; les noms des exemples sont inventés.
 | `realignerTable` | Table 5 : suit le défaut (8 places) |
 | `changerDefaut` | Sièges par défaut : 10 ; 4 tables réalignées |
 | `changerTours` | Nombre de tours : 3 ; 2 réservations retirées |
+| `changerNomTour` | Tour 2 : nom « Plat principal » |
 | `modifierReglage` | Séparer les organisations : désactivé |
 | `poserObjectif` | Table 3 : objectif de la soirée « finance », règle par défaut |
 | `retirerObjectif` | Table 3, tour 2 : objectif retiré |
@@ -1569,7 +1899,7 @@ l’historique ; les noms des exemples sont inventés.
 | Menu ouvert | Fin | Va à la dernière action. |
 | Menu ouvert | Échap | Ferme le menu et rend le focus à son bouton. |
 | Menu ouvert | Tab | Ferme le menu ; le focus passe au contrôle suivant. |
-| Geste en cours | Échap | Annule le geste en cours : la table revient où elle était. |
+| Geste en cours | Échap | Annule le geste en cours : table ou personne déplacée, capacité changée à la poignée, vue glissée, tout reprend sa place et rien ne s'écrit. |
 | Écran de l’événement, hors saisie | Ctrl+Z | Défait le dernier geste. |
 | Écran de l’événement, hors saisie | Ctrl+Maj+Z ou Ctrl+Y | Refait le dernier retour. |
 | Panneau ou infobulle | Échap | Ferme le panneau ou l'infobulle. |

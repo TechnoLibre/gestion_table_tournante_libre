@@ -13,7 +13,16 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import configuration from '../vitest.config.js';
-import { ARGUMENTS_NAVIGATEUR, MODE_AFFICHAGE, horsBoucle, optionsChromium, optionsNavigateur, suivreRequetes } from './chromium.js';
+import {
+  ARGUMENTS_NAVIGATEUR,
+  MODE_AFFICHAGE,
+  MODE_CHROMIUM_COMPLET,
+  horsBoucle,
+  modeAffichage,
+  optionsChromium,
+  optionsNavigateur,
+  suivreRequetes,
+} from './chromium.js';
 import { describe, test } from './lanceur.js';
 import * as commandesDocumentation from './navigateur/commandes_documentation.js';
 import * as commandesImpression from './navigateur/commandes_impression.js';
@@ -178,13 +187,28 @@ describe('chromium : aucun réseau hors de la boucle locale, le facteur d’éch
 describe('le projet navigateur : les commandes et le mode des captures d’écran (§ 19.5)', () => {
   const navigateur = configuration.test.projects.find(({ test: { name } }) => name === 'navigateur');
 
-  // Un seul mode d'affichage, nommé au manifeste (§ 19.4) : le projet
+  // Le mode d'affichage réel, nommé au manifeste (§ 19.4) : le projet
   // navigateur lance Chromium sans tête, et photographier refuse une page
   // dont le userAgent ne le dit pas.
-  test('le projet navigateur tourne sans tête, et MODE_AFFICHAGE le nomme', () => {
+  test('le projet navigateur tourne sans tête, et MODE_AFFICHAGE nomme le Chromium de Playwright', () => {
     assert.equal(navigateur.test.browser.headless, true);
     assert.deepEqual(navigateur.test.browser.instances, [{ browser: 'chromium' }]);
     assert.equal(MODE_AFFICHAGE, 'chromium-headless-shell');
+    assert.equal(MODE_CHROMIUM_COMPLET, 'chromium-headless');
+  });
+
+  // Sous GTT_CHROMIUM, Playwright lance l'exécutable désigné avec
+  // --headless : un Chromium complet y tourne dans son propre mode sans
+  // tête, un shell sans tête reste un shell.
+  test('modeAffichage : le shell de Playwright sans GTT_CHROMIUM ; sous GTT_CHROMIUM, le mode que le nom de l’exécutable désigne', () => {
+    assert.equal(modeAffichage({}), MODE_AFFICHAGE);
+    assert.equal(modeAffichage({ GTT_CHROMIUM: '' }), MODE_AFFICHAGE);
+    assert.equal(modeAffichage({ GTT_CHROMIUM: '/nix/store/abc-chromium/bin/chromium' }), MODE_CHROMIUM_COMPLET);
+    assert.equal(modeAffichage({ GTT_CHROMIUM: '/opt/essai/chrome' }), MODE_CHROMIUM_COMPLET);
+    // Un dossier qui porte le nom du shell ne fait pas un shell.
+    assert.equal(modeAffichage({ GTT_CHROMIUM: '/opt/chrome-headless-shell/chrome' }), MODE_CHROMIUM_COMPLET);
+    assert.equal(modeAffichage({ GTT_CHROMIUM: '/opt/essai/chrome-headless-shell-linux64/chrome-headless-shell' }), MODE_AFFICHAGE);
+    assert.equal(modeAffichage({ GTT_CHROMIUM: '/opt/essai/headless_shell' }), MODE_AFFICHAGE);
   });
 
   test('modeCaptures : verifier par défaut, ecrire sous GTT_CAPTURES=ecrire ; une autre valeur lève en la nommant', () => {
@@ -195,8 +219,10 @@ describe('le projet navigateur : les commandes et le mode des captures d’écra
     assert.throws(() => commandesDocumentation.modeCaptures({ GTT_CAPTURES: 'ecrir' }), /GTT_CAPTURES.*« ecrir »/);
   });
 
-  test('vitest.config.js fournit le mode à la page par provide, et déclare chaque commande de commandes_documentation.js et de commandes_impression.js, et elles seules', () => {
-    assert.deepEqual(navigateur.test.provide, { captures: { mode: commandesDocumentation.modeCaptures(process.env) } });
+  test('vitest.config.js fournit à la page le mode des captures et le mode d’affichage par provide, et déclare chaque commande de commandes_documentation.js et de commandes_impression.js, et elles seules', () => {
+    assert.deepEqual(navigateur.test.provide, {
+      captures: { mode: commandesDocumentation.modeCaptures(process.env), affichage: modeAffichage(process.env) },
+    });
     const declarees = navigateur.test.browser.commands;
     const modules = [commandesDocumentation, commandesImpression];
     const noms = modules.flatMap(({ COMMANDES }) => COMMANDES);

@@ -18,19 +18,24 @@
 // exacts du solveur que le Diagnostic reçoit (planchers_exacts.js) : aucune
 // mesure ne se refait ici. Les seules opérations sont des comparaisons de
 // ces chiffres entre eux, un minimum et un maximum sur les plafonds a priori
-// des personnes au minimum, la soustraction présents − places du diagnostic
-// et le plancher retenu des collisions (plancherRetenu) : pour un plan sans
-// conflit d'organisation, le plus fort de la somme par groupe renforcée par
-// les étoiles et du plancher exact ; pour un plan qui en a, la somme par
-// groupe seule, ces deux planchers ne valant que sans conflit. Aucune phrase
-// ne promet que le moteur atteindra le plancher exact. Trois blocs :
+// des personnes au minimum, la soustraction présents − places du diagnostic,
+// la somme des inclusions atteignables moins satisfaites des personnes
+// au-delà de leur plafond, et le plancher retenu des collisions
+// (plancherRetenu) : pour un plan sans conflit d'organisation, le plus fort
+// de la somme par groupe renforcée par les étoiles et du plancher exact ;
+// pour un plan qui en a, la somme par groupe seule, ces deux planchers ne
+// valant que sans conflit. Aucune phrase ne promet que le moteur atteindra
+// le plancher exact. Trois blocs :
 // - atteint : les rencontres minimales, puis, chacun quand sa règle compte
 //   — cochée et avec un objet, comme l'état des critères de la table le dit
-//   —, les conflits d'organisation, les collisions, les retours choisis, la
-//   diversité, les objectifs et les animateurs ; des collisions au minimum
-//   quand elles égalent le plancher retenu, au-dessus de la somme par
-//   groupe, sans aucun conflit — sous une limite de temps aussi : des
-//   collisions égales à une borne valide sont minimales ;
+//   —, les conflits d'organisation, les inclusions — les rencontres
+//   demandées qui ne se font pas, puis, quand des listes dépassent ce que
+//   leurs personnes peuvent rencontrer, les inclusions encore possibles
+//   qu'elles n'atteignent pas, qui ne sont pas des avis —, les collisions,
+//   les retours choisis, la diversité, les objectifs et les animateurs ; des
+//   collisions au minimum quand elles égalent le plancher retenu, au-dessus
+//   de la somme par groupe, sans aucun conflit — sous une limite de temps
+//   aussi : des collisions égales à une borne valide sont minimales ;
 // - manque : l'écart au plafond a priori décomposé en ses deux parts, la
 //   place — écart d'itinéraire, places vides, plancher prouvé — et les
 //   revoirs — plus grand manque, rencontres répétées —, puis ce qui se sait
@@ -139,6 +144,17 @@ function atteint(ligne, table, charge, comptent, etoiles, exacts) {
     const imposes = honore && conflits > 0 && conflits === table.diagnostic.conflitsImposes;
     liste.push(conflits === 0 ? phrase('conflits.aucun') : phrase('conflits', { conflits, imposes }));
   }
+  if (comptent.has('inclusionsNonSatisfaites') && mesures.inclusions !== null) {
+    // cible nulle, chaque liste active dépasse ce que sa personne peut
+    // rencontrer : seule la phrase des listes au-delà du plafond parle.
+    const { avis, cible, parPersonne } = mesures.inclusions;
+    if (cible > 0) liste.push(avis === 0 ? phrase('inclusions.aucune') : phrase('inclusions', { avis, cible }));
+    const auDela = parPersonne.filter(({ auDelaDuPlafond }) => auDelaDuPlafond);
+    if (auDela.length > 0) {
+      const possibles = auDela.reduce((somme, { atteignables, satisfaites }) => somme + atteignables - satisfaites, 0);
+      liste.push(phrase('inclusions.auDela', { personnes: auDela.length, possibles }));
+    }
+  }
   if (comptent.has('collisionsCumulees') && mesures.parGroupe.some(({ effectif }) => effectif >= 2)) {
     const { collisionsCumulees: collisions, pairesDistinctes: paires, excedentCollisions: excedent } = mesures;
     const plancher = plancherCollisionsTotal(table.diagnostic.collisions, []);
@@ -244,14 +260,20 @@ function reglesAuDessus(ligne, table, comptent, etoiles, exacts) {
   return false;
 }
 
+// Le compte d'arrêt qui a produit la proposition id de la charge : celui
+// que « Repartir d'elle » doit dépasser, quels que soient les réglages
+// courants.
+const arretDe = (charge, id) => charge.propositions.find((proposition) => proposition.id === id).arret;
+
 // Ce qu'on peut tenter. Une recherche plus longue vise ce qu'un placement
 // peut reprendre : les revoirs, l'écart d'itinéraire au-dessus de ce qui
 // est inévitable, et les règles actives au-dessus de leur plancher. Est
 // inévitable le plancher prouvé ; sinon, une perte de 1 quand des places
 // restent vides, car qui s'assoit à une table incomplète y perd au moins
 // une rencontre et chaque tour en compte une. Une proposition se reprend
-// par « Repartir d'elle », le retenu, qui ne l'offre pas, par une
-// génération. Des tables pleines retirent les places vides ; le plancher
+// par « Repartir d'elle », au-delà du compte d'arrêt qui l'a produite ; le
+// retenu, qui ne l'offre pas, par une génération, au-delà du compte des
+// réglages. Des tables pleines retirent les places vides ; le plancher
 // prouvé tient aux capacités et aux ancrages, qu'aucune relance ne
 // franchit. Au minimum atteint, « rien » ne vaut que pour les rencontres.
 function tenter(choisie, ligne, table, charge, parts, vides, comptent, etoiles, exacts) {
@@ -262,8 +284,8 @@ function tenter(choisie, ligne, table, charge, parts, vides, comptent, etoiles, 
   const parLaPlace = itineraire > inevitable;
   const liste = ligne.minimumAtteint === true ? [phrase('tenter.rien')] : [];
   if (plusGrand > 0 || parLaPlace || reglesAuDessus(ligne, table, comptent, etoiles, exacts)) {
-    const { arret } = charge.reglages.generation;
-    liste.push(choisie.genre === 'retenu' ? phrase('tenter.generer', { arret }) : phrase('tenter.repartir', { proposition: choisie.id, arret }));
+    if (choisie.genre === 'retenu') liste.push(phrase('tenter.generer', { arret: charge.reglages.generation.arret }));
+    else liste.push(phrase('tenter.repartir', { proposition: choisie.id, arret: arretDe(charge, choisie.id) }));
   }
   if (ligne.minimumAtteint === true) return liste;
   if (itineraire > 0 && vides.plus > 0) liste.push(phrase('tenter.tables'));

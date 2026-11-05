@@ -21,15 +21,20 @@ import {
   PLANCHER_DIAMETRE,
   RAYON_CHAISE,
   RAYON_POIGNEE,
+  blocNoms,
   caseLibre,
   cote,
+  dessinDepuisPosition,
   diametre,
+  ecarterRangees,
   ecartsGrille,
   englobant,
   englobantImpression,
+  geometrieEcartee,
   geometrieTable,
   listeSurTable,
   placesSousPoignee,
+  positionDepuisDessin,
 } from './tables.js';
 
 const EPSILON = 1e-9;
@@ -396,6 +401,210 @@ describe('englobantImpression : l’englobant du plan imprimé, ses listes compr
     assert.throws(() => englobantImpression(geometries(), { listes: { largeur: Infinity, hauteurs: deux } }), RangeError);
     const negative = new Map([[1, 300], [2, -5]]);
     assert.throws(() => englobantImpression(geometries(), { listes: { largeur: 500, hauteurs: negative } }), RangeError);
+  });
+});
+
+describe('ecarterRangees : le plan écarté, aucun bloc de noms sur celui du dessous (§ 7.4, § 11.7)', () => {
+  // Carrées de 8, de côté 120 et d'emprise 104 : le bloc d'une table
+  // centrée en (x, y) va de x + 140 à x + 640 en largeur, de y − 60 à
+  // y − 60 + h en hauteur, h sa hauteur. Deux blocs d'une même colonne,
+  // centres à 300 l'un de l'autre, sont à 300 − h l'un de l'autre ; il
+  // manque h + ECART_LISTE − 300 à leur écart, 136 pour h = 400.
+  const carree = (id, x, y) => geometrieTable(table(id, 'carree', x, y), 8);
+  const listes = (hauteurs) => ({ largeur: 500, hauteurs: new Map(hauteurs) });
+
+  test('aucune rangée sans table', () => {
+    assert.deepEqual(ecarterRangees([], listes([])), []);
+  });
+
+  test('deux blocs assez écartés : aucune rangée, le plan n’a rien à écarter', () => {
+    assert.deepEqual(ecarterRangees([carree(1, 0, 0), carree(2, 0, 300)], listes([[1, 200], [2, 200]])), []);
+  });
+
+  test('un bloc qui descend sur celui du dessous : la rangée du dessous descend de ce qui manque, juste assez', () => {
+    const rangees = ecarterRangees([carree(1, 0, 0), carree(2, 0, 300)], listes([[1, 400], [2, 200]]));
+    assert.deepEqual(rangees, [{ y: 0, decalage: 0 }, { y: 300, decalage: 400 + ECART_LISTE - 300 }]);
+    // À la limite, il ne manque rien.
+    const limite = ecarterRangees([carree(1, 0, 0), carree(2, 0, 300)], listes([[1, 300 - ECART_LISTE], [2, 200]]));
+    assert.deepEqual(limite, []);
+  });
+
+  test('deux colonnes : des blocs qui ne se recouvrent pas en largeur ne s’écartent pas', () => {
+    // Le bloc de la table 1 finit où commence celui d'une table centrée à
+    // 500 : ils se touchent sans se recouvrir.
+    const hauteurs = listes([[1, 900], [2, 200]]);
+    for (const x of [813, 500]) {
+      assert.deepEqual(ecarterRangees([carree(1, 0, 0), carree(2, x, 300)], hauteurs), [], `table 2 à x = ${x}`);
+    }
+    for (const x of [499, -499]) {
+      const rangees = ecarterRangees([carree(1, 0, 0), carree(2, x, 300)], hauteurs);
+      assert.deepEqual(rangees.map(({ decalage }) => decalage), [0, 900 + ECART_LISTE - 300], `table 2 à x = ${x}`);
+    }
+    assert.deepEqual(ecarterRangees([carree(1, 0, 0), carree(2, -500, 300)], hauteurs), [], 'table 2 à x = −500');
+  });
+
+  test('deux tables de même ordonnée ne se séparent pas, même quand leurs blocs se recouvrent', () => {
+    assert.deepEqual(ecarterRangees([carree(1, 0, 0), carree(2, 100, 0)], listes([[1, 900], [2, 900]])), []);
+  });
+
+  test('trois rangées : les écarts s’additionnent en descendant, la rangée entière avec eux', () => {
+    const geometries = [carree(1, 0, 0), carree(2, 813, 0), carree(3, 0, 300), carree(4, 813, 300), carree(5, 0, 600), carree(6, 813, 600)];
+    const hauteurs = [[1, 400], [2, 200], [3, 400], [4, 200], [5, 400], [6, 200]];
+    const rangees = ecarterRangees(geometries, listes(hauteurs));
+    assert.deepEqual(rangees, [{ y: 0, decalage: 0 }, { y: 300, decalage: 136 }, { y: 600, decalage: 272 }]);
+  });
+
+  test('l’écart passe dans le plus grand intervalle : deux tables presque alignées restent alignées', () => {
+    // Rangées 0, 2, 300 et 302 ; la colonne de gauche manque de 136 entre 0
+    // et 300, celle de droite de 136 entre 2 et 302. Le plus grand
+    // intervalle, de 2 à 300, prend l'écart des deux paires.
+    const geometries = [carree(1, 0, 0), carree(2, 813, 2), carree(3, 0, 300), carree(4, 813, 302)];
+    const rangees = ecarterRangees(geometries, listes([[1, 400], [2, 400], [3, 200], [4, 200]]));
+    assert.deepEqual(rangees, [
+      { y: 0, decalage: 0 },
+      { y: 2, decalage: 0 },
+      { y: 300, decalage: 136 },
+      { y: 302, decalage: 136 },
+    ]);
+  });
+
+  test('à intervalles égaux, l’écart passe dans le plus haut : une table entre les deux rangées descend avec la seconde', () => {
+    // La table 3, centrée à 150, est loin à droite : son bloc ne recouvre
+    // aucun autre ; les intervalles de 0 à 150 et de 150 à 300 sont égaux.
+    const geometries = [carree(1, 0, 0), carree(2, 0, 300), carree(3, 3000, 150)];
+    const rangees = ecarterRangees(geometries, listes([[1, 400], [2, 200], [3, 200]]));
+    assert.deepEqual(rangees, [{ y: 0, decalage: 0 }, { y: 150, decalage: 136 }, { y: 300, decalage: 136 }]);
+  });
+
+  test('un écart ajouté compte pour les paires qui l’enjambent : un bloc de deux rangées ne descend qu’une fois', () => {
+    // Le bloc de la table 1, haut de 800, manque de 536 sur celui de la
+    // table 2 et de 236 sur celui de la table 3, que l'écart de 536,
+    // ajouté entre 0 et 300, couvre déjà.
+    const geometries = [carree(1, 0, 0), carree(2, 0, 300), carree(3, 0, 600)];
+    const rangees = ecarterRangees(geometries, listes([[1, 800], [2, 200], [3, 200]]));
+    assert.deepEqual(rangees, [{ y: 0, decalage: 0 }, { y: 300, decalage: 536 }, { y: 600, decalage: 536 }]);
+  });
+
+  test('l’ordre des tables reçues ne change pas les rangées, dont l’ordonnée croît', () => {
+    const geometries = [carree(1, 0, 600), carree(2, 0, 0), carree(3, 0, 300)];
+    const hauteurs = listes([[1, 400], [2, 400], [3, 400]]);
+    const rangees = ecarterRangees(geometries, hauteurs);
+    assert.deepEqual(rangees, [{ y: 0, decalage: 0 }, { y: 300, decalage: 136 }, { y: 600, decalage: 272 }]);
+    assert.deepEqual(ecarterRangees([...geometries].reverse(), hauteurs), rangees);
+  });
+
+  test('sur des plans irréguliers, deux blocs qui se recouvrent en largeur finissent à ECART_LISTE au moins l’un de l’autre', () => {
+    // Des tables de 2 à 20 places, rondes et carrées, posées sur une grille
+    // serrée et décalée, les blocs de hauteurs variées.
+    const geometries = [];
+    const hauteurs = [];
+    for (let id = 1; id <= 24; id += 1) {
+      const forme = id % 3 === 0 ? 'carree' : 'ronde';
+      const x = ((id * 7) % 5) * 260;
+      const y = Math.floor(id / 2) * 170 + (id % 4) * 13;
+      geometries.push(geometrieTable(table(id, forme, x, y), 2 + (id % 19)));
+      hauteurs.push([id, 100 + ((id * 37) % 11) * 60]);
+    }
+    const blocs = listes(hauteurs);
+    const rangees = ecarterRangees(geometries, blocs);
+    assert.ok(rangees.some(({ decalage }) => decalage > 0), 'le plan s’écarte');
+    for (const [rang, rangee] of rangees.entries()) {
+      if (rang > 0) assert.ok(rangee.decalage >= rangees[rang - 1].decalage, `décalage croissant à ${rangee.y}`);
+    }
+    const decalageDe = (y) => rangees.find((rangee) => rangee.y === y).decalage;
+    const ecartes = geometries.map((g) => {
+      const bloc = blocNoms(g, blocs);
+      const decalage = decalageDe(g.centre.y);
+      return { y: g.centre.y, bloc: { ...bloc, minY: bloc.minY + decalage, maxY: bloc.maxY + decalage } };
+    });
+    for (const haut of ecartes) {
+      for (const bas of ecartes) {
+        if (haut.y >= bas.y || haut.bloc.minX >= bas.bloc.maxX || bas.bloc.minX >= haut.bloc.maxX) continue;
+        assert.ok(bas.bloc.minY - haut.bloc.maxY >= ECART_LISTE - EPSILON, `blocs en ${haut.y} et ${bas.y}`);
+      }
+    }
+  });
+
+  test('avec des références : l’écart exigé est le plus petit d’ECART_LISTE et de l’écart des blocs de référence', () => {
+    const deux = [carree(1, 0, 0), carree(2, 0, 300)];
+    const avec = (hauteurs, references) => ({ ...listes(hauteurs), references: new Map(references) });
+    // Des blocs de référence à 18 cm l'un de l'autre, plus proches
+    // qu'ECART_LISTE : à la même hauteur, rien ne bouge ; allongé de 50, le
+    // bloc du haut fait descendre la rangée du dessous de 50, juste assez
+    // pour garder les 18 cm.
+    assert.deepEqual(ecarterRangees(deux, avec([[1, 282], [2, 200]], [[1, 282], [2, 200]])), []);
+    assert.deepEqual(ecarterRangees(deux, avec([[1, 332], [2, 200]], [[1, 282], [2, 200]])), [
+      { y: 0, decalage: 0 },
+      { y: 300, decalage: 50 },
+    ]);
+    // Des blocs de référence plus écartés qu'ECART_LISTE : ECART_LISTE
+    // borne l'écart exigé, comme sans référence.
+    assert.deepEqual(ecarterRangees(deux, avec([[1, 300 - ECART_LISTE], [2, 200]], [[1, 100], [2, 200]])), []);
+    assert.deepEqual(
+      ecarterRangees(deux, avec([[1, 400], [2, 200]], [[1, 100], [2, 200]])),
+      ecarterRangees(deux, listes([[1, 400], [2, 200]])),
+    );
+    // Des blocs de référence qui se recouvrent déjà : l'allongement seul
+    // s'écarte.
+    assert.deepEqual(ecarterRangees(deux, avec([[1, 380], [2, 200]], [[1, 320], [2, 200]])), [
+      { y: 0, decalage: 0 },
+      { y: 300, decalage: 60 },
+    ]);
+  });
+
+  test('une table sans hauteur de liste, ou sans référence : RangeError, celle de blocNoms', () => {
+    assert.throws(() => ecarterRangees([carree(1, 0, 0), carree(2, 0, 300)], listes([[1, 400]])), RangeError);
+    const sansReference = { ...listes([[1, 400], [2, 200]]), references: new Map([[1, 300]]) };
+    assert.throws(() => ecarterRangees([carree(1, 0, 0), carree(2, 0, 300)], sansReference), RangeError);
+  });
+});
+
+describe('dessinDepuisPosition et positionDepuisDessin : d’une position enregistrée au plan écarté, et retour (§ 7.4)', () => {
+  const rangees = [{ y: 0, decalage: 0 }, { y: 300, decalage: 136 }, { y: 600, decalage: 272 }];
+
+  test('sans rangée, le point est la position, dans les deux sens', () => {
+    assert.deepEqual(dessinDepuisPosition({ x: 3, y: -7 }, []), { x: 3, y: -7 });
+    assert.deepEqual(positionDepuisDessin({ x: 3, y: -7 }, []), { x: 3, y: -7 });
+  });
+
+  test('une rangée descend de son décalage ; l’abscisse ne change pas', () => {
+    assert.deepEqual(dessinDepuisPosition({ x: 40, y: 0 }, rangees), { x: 40, y: 0 });
+    assert.deepEqual(dessinDepuisPosition({ x: 40, y: 300 }, rangees), { x: 40, y: 436 });
+    assert.deepEqual(dessinDepuisPosition({ x: 40, y: 600 }, rangees), { x: 40, y: 872 });
+  });
+
+  test('entre deux rangées, le décalage interpolé ; au-dessus de la première et au-dessous de la dernière, le leur', () => {
+    proche(dessinDepuisPosition({ x: 0, y: 150 }, rangees).y, 150 + 68, 'à mi-chemin');
+    proche(dessinDepuisPosition({ x: 0, y: 375 }, rangees).y, 375 + 136 + 34, 'au quart');
+    assert.equal(dessinDepuisPosition({ x: 0, y: -50 }, rangees).y, -50);
+    assert.equal(dessinDepuisPosition({ x: 0, y: 700 }, rangees).y, 972);
+    const seule = [{ y: 10, decalage: 5 }];
+    assert.deepEqual([dessinDepuisPosition({ x: 0, y: -10 }, seule).y, dessinDepuisPosition({ x: 0, y: 30 }, seule).y], [-5, 35]);
+  });
+
+  test('un point posé sur une rangée du dessin ramène à son ordonnée enregistrée exacte', () => {
+    assert.deepEqual(positionDepuisDessin({ x: 40, y: 436 }, rangees), { x: 40, y: 300 });
+    assert.deepEqual(positionDepuisDessin({ x: 40, y: 872 }, rangees), { x: 40, y: 600 });
+    assert.deepEqual(positionDepuisDessin({ x: 40, y: 0 }, rangees), { x: 40, y: 0 });
+  });
+
+  test('geometrieEcartee : la géométrie de la table au point du dessin de sa position, à sa position sans rangée', () => {
+    const ronde = table(4, 'ronde', 40, 300);
+    assert.deepEqual(geometrieEcartee(ronde, 6, rangees), geometrieTable({ ...ronde, position: { x: 40, y: 436 } }, 6));
+    assert.deepEqual(geometrieEcartee(ronde, 6, []), geometrieTable(ronde, 6));
+  });
+
+  test('l’aller-retour rend la position, et le dessin croît au moins aussi vite qu’elle, sans saut', () => {
+    let precedente = null;
+    for (let y = -120; y <= 900; y += 3) {
+      const dessin = dessinDepuisPosition({ x: 1, y }, rangees);
+      proche(positionDepuisDessin(dessin, rangees).y, y, `retour de ${y}`);
+      if (precedente !== null) {
+        assert.ok(dessin.y - precedente >= 3 - EPSILON, `croissance à ${y}`);
+        assert.ok(dessin.y - precedente <= 3 * (1 + 136 / 300) + EPSILON, `sans saut à ${y}`);
+      }
+      precedente = dessin.y;
+    }
   });
 });
 

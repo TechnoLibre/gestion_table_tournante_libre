@@ -5,7 +5,9 @@
 // opérations de fichiers, la corbeille, le dossier de travail et la
 // récupération (§ 14.6). Chaque clé commence par « accueil. ». Les codes que
 // l'accueil affiche — avis et questions du dossier de travail, refus, état
-// illisible — gardent leur texte dans les tables de l'application.
+// illisible — gardent leur texte dans les tables de l'application, sauf le
+// refus d'une année avant le minimum du sélecteur, que la création lève
+// seule et dont le code est une clé de cette table.
 
 // Une donnée — un chemin, une base — n'entre dans aucun libellé d'écran :
 // le composant la rend dans son propre nœud, à côté du texte traduit
@@ -139,6 +141,15 @@ export const TABLE = new Map([
   // Le sélecteur de date montre son propre format, celui du poste.
   ['accueil.creation.date', 'Date, facultative'],
   ['accueil.creation.creer', 'Créer l\u{2019}événement'],
+  // Le refus d'une date que le sélecteur lit sous son minimum, une année
+  // tapée sur deux ou trois chiffres : la création le lève avant la façade
+  // (refusDeLaDate, accueil/modele.js), et la clé est son code. minimum :
+  // l'année la plus ancienne qu'admet le sélecteur, écrite sans séparateur.
+  [
+    'accueil.creation.anneeAvantMinimum',
+    ({ minimum }) =>
+      `L\u{2019}année de la date est ${minimum} au plus tôt : corrigez-la, ou videz le champ pour créer sans date.`,
+  ],
 
   // --- Les opérations de fichiers (§ 8.7) ----------------------------------
   ['accueil.operation.importer', 'Importer un événement depuis un fichier\u{2026}'],

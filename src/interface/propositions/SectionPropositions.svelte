@@ -25,25 +25,27 @@
   // aucune saisie — chaque proposition se régénère de sa graine, et le geste
   // se défait — : il s'exécute sans fenêtre.
   //
-  // « Garder les N meilleures » garde les N premières lignes du tableau, et
-  // la proposition du retenu quand elle vient après elles, par la commande
+  // « Garder les N meilleures » garde les N premières lignes du tableau, et la
+  // proposition du retenu quand elle vient après elles, par la commande
   // garderMeilleures {n}. N se saisit dans le champ étroit qui précède le
   // bouton, dix au départ : une saisie de la section, que ni le fichier ni le
   // journal ne portent, vivante en lecture, et qui repart de dix quand la
-  // section se remonte. La saisie se valide à la sortie du champ ou par
-  // Entrée, lue par lireGardees ; refusée, son refus se pose contre le champ,
-  // la saisie gardée, et le bouton garde le dernier nombre accepté ; Échap
-  // rend celui-ci. Le geste efface d'un coup des lignes que l'opérateur ne
-  // voit pas toutes : la fenêtre à confirmer dit combien s'effacent et ce
-  // qui reste (demandeNettoyage), sur la table même que le tableau montre.
-  // Ouverte, elle se recalcule sur chaque état publié : une génération
-  // enregistrée en arrière-plan pendant qu'elle attend change son compte,
-  // celui que Confirmer applique. Un geste que la séance refuserait, ou qui
-  // n'effacerait rien, part sans fenêtre, et son refus se pose à côté du
-  // bouton. Abouti, une région role="status" annonce le nombre d'effacées
-  // que la commande rend dans son résumé, tant que l'événement reste à la
-  // révision du nettoyage, et la page montrée qui n'existe plus ramène à la
-  // première (pageApresNettoyage).
+  // section se remonte. La saisie se valide à la sortie du champ ou par Entrée,
+  // lue par lireGardees ; refusée, son refus se pose contre le champ, la saisie
+  // gardée, et le bouton garde le dernier nombre accepté ; Échap rend celui-ci.
+  // Tant que le texte du champ n'est pas le dernier nombre accepté, la saisie
+  // n'est pas validée : un geste ouvert (geste.js), qui suspend le compte
+  // d'inactivité de la séance (§ 8.4). « Garder » efface d'un coup des lignes
+  // que l'opérateur ne voit pas toutes : la fenêtre à confirmer dit combien
+  // s'effacent et ce qui reste (demandeNettoyage), sur la table même que le
+  // tableau montre. Ouverte, elle se recalcule sur chaque état publié : une
+  // génération enregistrée en arrière-plan pendant qu'elle attend change son
+  // compte, celui que Confirmer applique. Un geste que la séance refuserait, ou
+  // qui n'effacerait rien, part sans fenêtre, et son refus se pose à côté du
+  // bouton. Abouti, une région role="status" annonce le nombre d'effacées que
+  // la commande rend dans son résumé, tant que l'événement reste à la révision
+  // du nettoyage, et la page montrée qui n'existe plus ramène à la première
+  // (pageApresNettoyage).
   //
   // La phrase de l'ordre se met bout à bout, morceau par morceau (modele.js) :
   // les paliers appliqués, chaque nom celui de la valeur que son palier
@@ -97,10 +99,11 @@
   // titrée, le nombre à garder, « Garder les N meilleures » et « Effacer les
   // propositions » à droite de son en-tête ; le message d'une liste vide
   // dans sa carte.
-  import { getContext, tick, untrack } from 'svelte';
+  import { getContext, onDestroy, tick, untrack } from 'svelte';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
+  import { creerGeste } from '../primitives/geste.js';
   import Infobulle from '../primitives/Infobulle.svelte';
   import Pages from '../primitives/Pages.svelte';
   import Refus from '../primitives/Refus.svelte';
@@ -236,6 +239,11 @@
   let gardees = $state(GARDEES_PAR_DEFAUT);
   let saisieGardees = $state(String(GARDEES_PAR_DEFAUT));
   let refusGardees = $state(null);
+
+  // Le geste suit la saisie que le dernier nombre accepté ne rend pas.
+  const gesteGardees = creerGeste(seance);
+  $effect(() => gesteGardees.tenir(saisieGardees !== String(gardees)));
+  onDestroy(() => gesteGardees.liberer());
 
   // Rend au champ le dernier nombre accepté, sans refus.
   function rendreGardees() {

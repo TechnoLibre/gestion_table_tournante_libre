@@ -22,6 +22,9 @@
 // les distributions qui le livrent avant ; l'environnement reçu reste tel
 // quel.
 //
+// Le mode d'affichage que les captures inscrivent au manifeste suit le
+// Chromium réellement lancé : modeAffichage le lit de GTT_CHROMIUM.
+//
 // Le projet navigateur reçoit optionsNavigateur : les mêmes options, plus
 // trois arguments de lancement et un contexte au facteur d'échelle 1
 // (§ 19.2, § 19.4). Le résolveur de Chromium ne résout que localhost ; un
@@ -66,9 +69,36 @@ export const ARGUMENTS_NAVIGATEUR = Object.freeze([
   '--force-device-scale-factor=1',
 ]);
 
-/** Le mode d'affichage du navigateur des captures, nommé au manifeste
- *  (§ 19.4) : une valeur de la configuration, jamais lue de la machine. */
+/** Le mode d'affichage du Chromium que Playwright télécharge : sans tête,
+ *  Playwright lance son shell sans tête, chrome-headless-shell. */
 export const MODE_AFFICHAGE = 'chromium-headless-shell';
+
+/** Le mode d'affichage d'un Chromium complet lancé avec --headless : le mode
+ *  sans tête du navigateur entier, dont les métriques de texte diffèrent de
+ *  celles du shell. */
+export const MODE_CHROMIUM_COMPLET = 'chromium-headless';
+
+// Le nom de fichier d'un shell sans tête : chrome-headless-shell, ou
+// headless_shell, extension .exe facultative.
+const NOM_SHELL = /headless[-_]shell(\.exe)?$/i;
+
+/**
+ * Le mode d'affichage des captures, nommé au manifeste (§ 19.4) : une
+ * valeur de la configuration, jamais lue du navigateur lancé. Sans
+ * GTT_CHROMIUM, celui du Chromium de Playwright, MODE_AFFICHAGE. Sous
+ * GTT_CHROMIUM, Playwright lance l'exécutable désigné avec --headless, et
+ * le nom de ce fichier décide : un shell sans tête garde MODE_AFFICHAGE,
+ * tout autre est un Chromium complet, MODE_CHROMIUM_COMPLET. Le nom du
+ * dossier qui le contient ne compte pas.
+ *
+ * @param {Record<string, string|undefined>} env
+ * @returns {string}
+ */
+export function modeAffichage(env) {
+  if (!env.GTT_CHROMIUM) return MODE_AFFICHAGE;
+  const nom = env.GTT_CHROMIUM.split(/[\\/]/).pop();
+  return NOM_SHELL.test(nom) ? MODE_AFFICHAGE : MODE_CHROMIUM_COMPLET;
+}
 
 /**
  * Les options du fournisseur Playwright du projet navigateur : celles de

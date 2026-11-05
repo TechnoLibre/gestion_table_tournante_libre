@@ -9,10 +9,11 @@
 // entre deux renommages et le signal aux processus y sont injectés de même.
 // Suivent la page, src/stockage/fichiers_electron.js, derrière le vrai
 // préchargement, et les définitions que la coquille recopie de src/stockage
-// faute de pouvoir les importer. La suite de contrat se joue sur un vrai
-// dossier, dans test/fichiers_electron.long.test.js, avec le lanceur de
-// l'ouvreur du bureau sur de vrais processus. Les noms d'épreuve sont
-// inventés.
+// faute de pouvoir les importer, et le chemin de l'adresse d'un lien
+// d'« À propos » vers le navigateur du système, l'ouvreur injecté. La suite
+// de contrat se joue sur un vrai dossier, dans
+// test/fichiers_electron.long.test.js, avec le lanceur de l'ouvreur du
+// bureau sur de vrais processus. Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { posix } from 'node:path';
@@ -33,6 +34,7 @@ import {
   TEMOIN,
   creerFichiers,
   decrireSysteme,
+  ouvrirAdresse,
   processusVivant,
   repondre,
   segmentsAdmis,
@@ -41,7 +43,7 @@ import {
 import { ErreurStockage } from '../src/stockage/erreurs.js';
 import { creerFichiersElectron } from '../src/stockage/fichiers_electron.js';
 import { NOMS_RESERVES_RACINE, SUFFIXE_ECRITURE as SUFFIXE_DU_STOCKAGE } from '../src/stockage/noms.js';
-import { FILTRES_DIALOGUE_IMPORT } from '../src/application/libelles/stockage.js';
+import { FILTRES_DIALOGUE_IMPORT, TABLE as TEXTES_DU_STOCKAGE } from '../src/application/libelles/stockage.js';
 import { LOGO_SOURCE_MAX_OCTETS } from '../src/stockage/logos.js';
 import { GENRES_A_IMPORTER as GENRES_DU_STOCKAGE, exigerCheminRelatif } from '../src/stockage/systeme_fichiers.js';
 import { describe, test } from './lanceur.js';
@@ -1614,14 +1616,15 @@ describe("coquille, fichiers : la sonde d'écriture (§ 8.6)", () => {
     }
   });
 
-  test('un témoin relu autrement qu\u{2019}écrit fait échouer la sonde : RELECTURE', async () => {
+  test('un témoin relu autrement qu\u{2019}écrit fait échouer la sonde : RELECTURE_DIFFERENTE, la cause des deux autres systèmes, dont la table des textes a la phrase', async () => {
     const disque = creerDisque();
     const fs = {
       ...disque.fs,
       readFile: async (chemin) => (chemin.endsWith(TEMOIN) ? Buffer.from('autre chose') : disque.fs.readFile(chemin)),
     };
     const { fichiers } = preparer({ disque, fs });
-    assert.deepEqual(await fichiers.sonder(PORTABLE), { inscriptible: false, cause: 'RELECTURE' });
+    assert.deepEqual(await fichiers.sonder(PORTABLE), { inscriptible: false, cause: 'RELECTURE_DIFFERENTE' });
+    assert.ok(TEXTES_DU_STOCKAGE.has('RELECTURE_DIFFERENTE'));
     assert.deepEqual(disque.noms(DATA), []);
   });
 
@@ -1889,6 +1892,64 @@ describe('coquille, fichiers : dialogues et explorateur', () => {
   });
 });
 
+describe("coquille : les liens d'« À propos », vers le navigateur du système (§ 18.6)", () => {
+  // Une adresse inventée : ouvrirAdresse ne juge pas la liste blanche, que
+  // le processus principal applique avant elle.
+  const ADRESSE = 'https://exemple.invalid/';
+
+  // Un shell d'épreuve : openExternal relève chaque adresse, puis rejette par
+  // refus quand il est donné.
+  function shellDEpreuve(refus = undefined) {
+    const externes = [];
+    return {
+      externes,
+      async openExternal(adresse) {
+        externes.push(adresse);
+        if (refus !== undefined) throw refus;
+      },
+    };
+  }
+
+  // Un ouvreur d'épreuve : relève chaque lancement, et rend raison.
+  function ouvreurDEpreuve(raison) {
+    const lancements = [];
+    return {
+      lancements,
+      lancer: async (...appel) => {
+        lancements.push(appel);
+        return raison;
+      },
+    };
+  }
+
+  test("sous Linux, l'adresse passe par l'ouvreur du bureau, comme un dossier, et son issue revient : '' ou la raison de son échec ; openExternal n'est jamais appelé", async () => {
+    for (const raison of ['', `xdg-open: no method available for opening '${ADRESSE}'`]) {
+      const shell = shellDEpreuve();
+      const ouvreur = ouvreurDEpreuve(raison);
+      assert.equal(await ouvrirAdresse(ADRESSE, { plateforme: 'linux', shell, lancerOuvreur: ouvreur.lancer }), raison);
+      assert.deepEqual(ouvreur.lancements, [
+        [OUVREUR_BUREAU, [ADRESSE], { variables: { MM_NOTTTY: '1' }, delai: DELAI_OUVREUR_MS }],
+      ]);
+      assert.deepEqual(shell.externes, []);
+    }
+  });
+
+  test("sous Windows et macOS, l'adresse passe par shell.openExternal : '' quand il réussit, son message quand il rejette, jamais '' pour un rejet muet ; l'ouvreur du bureau n'est jamais lancé", async () => {
+    for (const plateforme of ['win32', 'darwin']) {
+      const ouvreur = ouvreurDEpreuve('jamais rendu');
+      const avec = (shell) => ouvrirAdresse(ADRESSE, { plateforme, shell, lancerOuvreur: ouvreur.lancer });
+      const reussi = shellDEpreuve();
+      assert.equal(await avec(reussi), '', plateforme);
+      assert.deepEqual(reussi.externes, [ADRESSE], plateforme);
+      const refuse = shellDEpreuve(new Error('Failed to open: no handler'));
+      assert.equal(await avec(refuse), 'Failed to open: no handler', plateforme);
+      assert.equal(await avec(shellDEpreuve(new Error(''))), 'openExternal : Error', plateforme);
+      assert.equal(await avec(shellDEpreuve(null)), 'openExternal : null', plateforme);
+      assert.deepEqual(ouvreur.lancements, [], plateforme);
+    }
+  });
+});
+
 describe('coquille, fichiers : emplacements et racines du système (§ 8.6)', () => {
   // app.getPath d'un poste d'épreuve, par plateforme.
   const CHEMINS = {
@@ -2111,6 +2172,9 @@ function parLePrechargement(fichiers) {
         }
         return structuredClone(reponse);
       },
+      // Le canal des liens, que le processus principal emprunte vers la page,
+      // s'éprouve dans test/fichiers_electron.long.test.js.
+      on() {},
     },
   };
   const module = { exports: {} };

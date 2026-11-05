@@ -125,7 +125,7 @@ function bouger(etat, point, contexte) {
 function achever(etat, point, contexte) {
   const { source, depart, vue, cadre } = etat;
   if (source.genre === 'table') {
-    const position = deplacer(source.position, depart, point, vue.k);
+    const position = contexte.positionDe(deplacer(source.position, depart, point, vue.k));
     return [
       {
         type: 'executer',
@@ -162,15 +162,18 @@ function achever(etat, point, contexte) {
  *
  * Événements, chacun par son type :
  *   presser {source, pointeur, point, vue, cadre} — source {genre: 'table'|'personne'|'poignee'|'sol',
- *     table, siege, participant}, plus position (le centre de la table, cm) pour une table et
- *     places (sa capacité) pour une poignée ; participant null pour une chaise vide, qui se
- *     sélectionne et ne glisse rien ; point en px de la fenêtre ;
+ *     table, siege, participant}, plus position (le centre de la table sur le dessin, cm) pour
+ *     une table et places (sa capacité) pour une poignée ; participant null pour une chaise
+ *     vide, qui se sélectionne et ne glisse rien ; point en px de la fenêtre ;
  *   bouger {point, pointeur}, relacher {point, pointeur} — un autre pointeur ne fait rien ;
  *   annuler {cause: 'pointercancel'|'echap'|'lecture'}.
  * Contexte : controlerPlaces(table, places) → {refus, avertissements}, le contrôle de
  * capacité d'origine 'poignee' sur la charge du geste ; deposer(source, point) → {resultat,
  * place}, le dépôt d'une personne au point de dessin (depot.js) ; surLeSol(point) → boolean,
- * vrai quand le point de dessin tombe sur le sol, là où le dépôt retire ou refuse.
+ * vrai quand le point de dessin tombe sur le sol, là où le dépôt retire ou refuse ;
+ * positionDe(point) → {x, y}, la position enregistrée d'un point de dessin, celle que
+ * deplacerTable reçoit pour le centre où la table est lâchée — le point même sur un plan
+ * qui n'est pas écarté (positionDepuisDessin).
  * Effets, chacun par son type : capturer {pointeur}, debuterGeste, finirGeste,
  * ecrireTransform {cible, transform}, montrerFantome {participant, depuis, surLeSol} — au
  * franchissement du seuil, puis chaque fois que le pointeur passe sur le sol ou le quitte —,

@@ -115,9 +115,9 @@ function ecartsDeLOrdre(appels) {
 
 // Les écarts du rejeu seul des délais déclarés équivalents, dans les appels
 // d'auditer : la passe parallèle est le premier enParallele de largeur
-// « largeur », le rejeu seul l'enParallele de largeur 1, la ligne de base de
-// la série longue le dernier ligneDeBase, la première étant celle de la
-// série node. Le rejeu seul vient après la passe et avant cette ligne de
+// « largeur », le rejeu seul le premier enParallele de largeur 1, la ligne
+// de base de la série longue le dernier ligneDeBase, la première étant
+// celle de la série node. Le rejeu seul vient après la passe et avant cette ligne de
 // base ; les délais à rejouer se choisissent entre la passe et le rejeu, par
 // delaisARejouerSeuls ; le rejeu joue executerMutant ; issuesApresRejeu
 // reporte les issues rejouées entre le rejeu et cette ligne de base. Une
@@ -448,7 +448,12 @@ describe('audit par mutation : un délai déclaré équivalent se rejoue seul', 
   });
 
   test('la garde relève, sur le source modifié en mémoire, une largeur autre, un choix absent, un autre exécutant, un report absent, un rejeu déplacé', () => {
-    assert.deepEqual(ecartsDe(source.replace(/(enParallele\(\s*seuls,\s*)1,/, '$1largeur,')), ['aucun rejeu de largeur 1']);
+    // Élargi, le rejeu seul des délais laisse pour premier enParallele(1)
+    // celui de la série longue, qui suit sa ligne de base.
+    assert.deepEqual(ecartsDe(source.replace(/(enParallele\(\s*seuls,\s*)1,/, '$1largeur,')), [
+      'issues rejouées non reportées avant la ligne de base de la série longue',
+      'rejeu seul après la ligne de base de la série longue',
+    ]);
     assert.deepEqual(ecartsDe(source.replace('delaisARejouerSeuls(paralleles', 'rangsDe(paralleles')), [
       'délais à rejouer non choisis entre la passe et le rejeu seul',
     ]);
@@ -588,6 +593,130 @@ describe('audit par mutation : un délai déclaré équivalent se rejoue seul', 
       'rejeu seul : avancement non signalé',
       'rejeu seul : compte des rejoués imprimé hors de « if (seuls.length > 0) »',
       'rejeu seul : aucune fonction de rejeu',
+    ]);
+  });
+});
+
+// Les écarts du rejeu seul des équivalents déclarés que la série longue tue,
+// dans auditer : la ligne de base de la série longue est le dernier
+// ligneDeBase, son rejeu parallèle le dernier enParallele(largeur), le rejeu
+// seul le dernier enParallele(1). Le rejeu seul vient après le rejeu
+// parallèle ; les rangs se choisissent entre les deux par
+// tuesLongsARejouerSeuls, sur les issues longues, les tâches et les
+// équivalences ; le rejeu joue executerMutant sous delaiLong, le délai de la
+// série longue, contre les épreuves longues de la tâche. Une liste vide quand
+// tout tient. Le câblage aussi : le choix va dans longsSeuls, le rejeu seul
+// joue longsSeuls, reçoit arreter tel quel et range ses issues dans
+// longsRejoues, que « longues[rang] = longsRejoues[i] » reporte dans les
+// issues longues après le rejeu et avant le calcul des résultats.
+function ecartsDuRejeuLongSeul(source) {
+  const appels = appelsDans(source, 'auditer');
+  const baseLongue = appels.lastIndexOf('ligneDeBase');
+  const parallele = appels.lastIndexOf('enParallele(largeur)');
+  const seul = appels.lastIndexOf('enParallele(1)');
+  const choix = appels.indexOf('tuesLongsARejouerSeuls');
+  const ecarts = [];
+  if (parallele < baseLongue) ecarts.push('aucun rejeu parallèle après la ligne de base de la série longue');
+  if (seul < parallele) ecarts.push('aucun rejeu seul après le rejeu parallèle de la série longue');
+  if (choix === -1 || choix < parallele || choix > seul) {
+    ecarts.push('tués à rejouer non choisis entre le rejeu parallèle et le rejeu seul');
+  }
+  if (appels[seul + 1] !== 'executerMutant') ecarts.push('rejeu long seul sans executerMutant');
+
+  const { noeuds, parents } = arbre(declarationDe(source, 'auditer').body);
+  const appel = (nom, rang) =>
+    noeuds.filter((n) => n.type === 'CallExpression' && n.callee.type === 'Identifier' && nomAppele(n) === nom).at(rang);
+  const arguments_ = appel('tuesLongsARejouerSeuls', 0)?.arguments.map(nomLu) ?? [];
+  if (arguments_.join(', ') !== 'longues, taches, equivalents') {
+    ecarts.push(`tuesLongsARejouerSeuls(${arguments_.join(', ')}) : longues, taches, equivalents attendus`);
+  }
+  const rejeu = appel('enParallele(1)', -1)?.arguments[2];
+  const interieur = rejeu ? arbre(rejeu.body).noeuds : [];
+  const execution = interieur.find((n) => n.type === 'CallExpression' && nomLu(n.callee) === 'executerMutant');
+  const delai = execution?.arguments[0]?.properties?.find((p) => p.type === 'Property' && p.key.name === 'delaiMs');
+  if (nomLu(delai?.value) !== 'delaiLong') ecarts.push('rejeu long seul : delaiMs autre que delaiLong');
+  const reprise = interieur.find((n) => n.type === 'VariableDeclarator' && nomLu(n.init?.object) === 'taches');
+  const epreuves = reprise?.id.properties?.find((p) => p.type === 'Property' && p.key.name === 'longues');
+  if (nomLu(epreuves?.value) !== 'tests') ecarts.push('rejeu long seul : épreuves autres que les longues de la tâche');
+
+  const recuPar = (noeud) => {
+    const valeur = parents.get(noeud)?.type === 'AwaitExpression' ? parents.get(noeud) : noeud;
+    const declarateur = parents.get(valeur);
+    return declarateur?.type === 'VariableDeclarator' && declarateur.init === valeur ? nomLu(declarateur.id) : null;
+  };
+  const choisi = appel('tuesLongsARejouerSeuls', 0);
+  if (choisi && recuPar(choisi) !== 'longsSeuls') ecarts.push('tuesLongsARejouerSeuls : reçu ailleurs que dans longsSeuls');
+  const replay = appel('enParallele(1)', -1);
+  if (nomLu(replay?.arguments[0]) !== 'longsSeuls') ecarts.push('rejeu long seul : autre liste que longsSeuls');
+  if (!reprendTelQuel(replay?.arguments[3], 'arreter')) ecarts.push('rejeu long seul : arreter non passé tel quel à enParallele');
+  if (replay && recuPar(replay) !== 'longsRejoues') ecarts.push('rejeu long seul : issues reçues ailleurs que dans longsRejoues');
+  const resultats = noeuds.find((n) => n.type === 'VariableDeclarator' && nomLu(n.id) === 'resultats');
+  const report = noeuds.find(
+    (n) =>
+      n.type === 'AssignmentExpression' &&
+      n.operator === '=' &&
+      n.left.type === 'MemberExpression' &&
+      n.left.computed &&
+      nomLu(n.left.object) === 'longues' &&
+      n.right.type === 'MemberExpression' &&
+      n.right.computed &&
+      nomLu(n.right.object) === 'longsRejoues',
+  );
+  if (report === undefined || replay === undefined || report.start < replay.end || resultats === undefined || report.start > resultats.start) {
+    ecarts.push('issues rejouées seules non reportées dans longues avant les résultats');
+  }
+  return ecarts;
+}
+
+describe('audit par mutation : un équivalent déclaré que la série longue tue se rejoue seul', () => {
+  const source = readFileSync(join(RACINE, AUDIT), 'utf8');
+  const modifie = (avant, apres) => {
+    assert.ok(source.includes(avant), avant);
+    return ecartsDuRejeuLongSeul(source.replace(avant, () => apres));
+  };
+
+  test('auditer rejoue seuls, largeur 1, sous le délai de la série longue, les équivalents déclarés qu’elle a tués en parallèle', () => {
+    assert.deepEqual(ecartsDuRejeuLongSeul(source), []);
+  });
+
+  test('la garde relève un rejeu long seul élargi, choisi ailleurs, sourd à l’arrêt, sous un autre délai, contre d’autres épreuves, ou dont l’issue ne se reporte pas', () => {
+    assert.deepEqual(modifie('      longsSeuls,\n      1,', '      longsSeuls,\n      largeur,'), [
+      'aucun rejeu seul après le rejeu parallèle de la série longue',
+      'tués à rejouer non choisis entre le rejeu parallèle et le rejeu seul',
+      'rejeu long seul : delaiMs autre que delaiLong',
+      'rejeu long seul : épreuves autres que les longues de la tâche',
+      'rejeu long seul : autre liste que longsSeuls',
+      'rejeu long seul : issues reçues ailleurs que dans longsRejoues',
+    ]);
+    assert.deepEqual(modifie('tuesLongsARejouerSeuls(longues, taches, equivalents)', 'delaisARejouerSeuls(longues, taches, equivalents)'), [
+      'tués à rejouer non choisis entre le rejeu parallèle et le rejeu seul',
+      'tuesLongsARejouerSeuls() : longues, taches, equivalents attendus',
+    ]);
+    assert.deepEqual(modifie('tuesLongsARejouerSeuls(longues, taches, equivalents)', 'tuesLongsARejouerSeuls(longues, taches, new Map())'), [
+      'tuesLongsARejouerSeuls(longues, taches, ) : longues, taches, equivalents attendus',
+    ]);
+    assert.deepEqual(modifie('return (await executerMutant({ mutant, tests, delaiMs: delaiLong, racine })).issue;\n      },', 'return (await executerMutant({ mutant, tests, delaiMs, racine })).issue;\n      },'), [
+      'rejeu long seul : delaiMs autre que delaiLong',
+    ]);
+    assert.deepEqual(modifie('const { mutant, longues: tests } = taches[rang];', 'const { mutant, tests } = taches[rang];'), [
+      'rejeu long seul : épreuves autres que les longues de la tâche',
+    ]);
+ 
+    assert.deepEqual(modifie('longues[rang] = longsRejoues[i];', 'void longsRejoues[i];'), [
+      'issues rejouées seules non reportées dans longues avant les résultats',
+    ]);
+    assert.deepEqual(modifie('      longsSeuls,\n      1,', '      seuls,\n      1,'), ['rejeu long seul : autre liste que longsSeuls']);
+    assert.deepEqual(modifie("{ arreter, signaler: avancement('tués par", "{ arreter: () => false, signaler: avancement('tués par"), [
+      'rejeu long seul : arreter non passé tel quel à enParallele',
+    ]);
+    assert.deepEqual(modifie('const longsRejoues = await enParallele(', 'await enParallele('), [
+      'rejeu long seul : issues reçues ailleurs que dans longsRejoues',
+    ]);
+    assert.deepEqual(modifie('    longsSeuls.forEach((rang, i) => {\n      longues[rang] = longsRejoues[i];\n    });\n', ''), [
+      'issues rejouées seules non reportées dans longues avant les résultats',
+    ]);
+    assert.deepEqual(modifie('const longsSeuls = tuesLongsARejouerSeuls(', 'const longsSeuls = [];\n    tuesLongsARejouerSeuls('), [
+      'tuesLongsARejouerSeuls : reçu ailleurs que dans longsSeuls',
     ]);
   });
 });

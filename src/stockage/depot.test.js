@@ -3737,6 +3737,27 @@ describe('dépôt : un événement d’un format plus ancien se refuse, FORMAT_T
     assert.notEqual(suite.baseJournal, BASE);
     assert.equal(fs.contenu('documents', dans(JOURNAL)), texteDe(poses, JOURNAL));
   });
+
+  test('un .precedent trop ancien à côté d’un état et d’un journal au format courant : l’état s’ouvre sans avertissement, le secours du .precedent se refuse FORMAT_TROP_ANCIEN, et le premier geste le remplace par l’état d’avant', async () => {
+    const { fichiers, courants } = await troisRevisionsAuFormat(FORMAT - 1);
+    const poses = remplacer(courants, PRECEDENT, texteDe(fichiers, PRECEDENT));
+    assert.notEqual(texteDe(poses, PRECEDENT), texteDe(courants, PRECEDENT));
+    const { disque, fs } = disqueAvec(poses);
+    const ouvert = await ouvrir(fs, DOC, dans(BASE));
+    assert.equal(fs.compteurs.ecritures, 0);
+    assert.deepEqual([ouvert.revision, ouvert.baseJournal, ouvert.journalAReecrire, ouvert.avertissements], [3, BASE, false, []]);
+    assert.deepEqual(await resumes(fs), [[BASE, 'evt-lucioles', null, BASE]]);
+    const refus = await echec(ouvrirSecours(fs, DOC, dans(BASE), 'precedent'), 'ETAT_ILLISIBLE');
+    assert.deepEqual(refus.details, { raison: 'FORMAT_TROP_ANCIEN', chemin: 'entete.format', format: FORMAT - 1 });
+    assert.equal(fs.compteurs.ecritures, 0);
+
+    const etatAvant = fs.contenu('documents', dans(ETAT));
+    const suite = await enregistrer(ouvert, modifier(ouvert.charge, 4), geste(4));
+    assert.equal(suite.baseJournal, BASE);
+    assert.equal(fs.contenu('documents', dans(PRECEDENT)), etatAvant);
+    const rouvert = await rouvrir(disque, BASE);
+    assert.deepEqual([rouvert.revision, rouvert.avertissements], [4, []]);
+  });
 });
 
 describe('dépôt : la présence par tour (§ 8.8, § 8.9)', () => {
@@ -3906,7 +3927,7 @@ describe('dépôt : les logos recopiés dans un autre dossier (§ 8.7)', () => {
     assert.deepEqual(appels, [['lister', 'documents', 'Fête des Ifs/logo']]);
   });
 
-  test("un refus ne lève jamais : LOGOS_NON_COPIES {evenement, logos, personnes} compte les fichiers non recopiés et les personnes qui en désignent un — lecture ou écriture d'un fichier refusée, la suite continuant ; logo/ refusé là-bas, tous ; liste de logo/ refusée, chaque logo que désigne une personne, sans rien écrire ; toute autre erreur remonte", async () => {
+  test("un refus ne lève jamais : LOGOS_NON_COPIES {evenement, logos, personnes, imageBadges} compte les fichiers non recopiés et les personnes qui en désignent un — lecture ou écriture d'un fichier refusée, la suite continuant ; logo/ refusé là-bas, tous ; liste de logo/ refusée, chaque logo que désigne une personne, sans rien écrire ; toute autre erreur remonte", async () => {
     const cas = [
       ['lireOctets', dans(logoDe(DEUX)), refusLecture, { logos: 1, personnes: 1 }, [logoDe(UN)]],
       ['ecrireOctetsAtomique', `${CIBLE}/${logoDe(UN)}`, refusEcriture, { logos: 1, personnes: 2 }, [logoDe(DEUX)]],
@@ -3922,7 +3943,7 @@ describe('dépôt : les logos recopiés dans un autre dossier (§ 8.7)', () => {
       refuserSur(fs, primitive, 'documents', chemin, refus);
       assert.deepEqual(
         await copierLogos(ouvert, vers, ouvert.charge),
-        { code: 'LOGOS_NON_COPIES', details: { evenement: BASE, ...comptes } },
+        { code: 'LOGOS_NON_COPIES', details: { evenement: BASE, ...comptes, imageBadges: false } },
         message,
       );
       assert.deepEqual(
@@ -3951,7 +3972,10 @@ describe('dépôt : les logos recopiés dans un autre dossier (§ 8.7)', () => {
     };
     const appels = journaliser(fs, ['lister', 'lireOctets', 'creerDossier', 'ecrireOctetsAtomique']);
     const absent = (chemin) => new ErreurStockage('ABSENT', { chemin });
-    const nonLu = () => ({ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 3, personnes: 4 } });
+    const nonLu = () => ({
+      code: 'LOGOS_NON_COPIES',
+      details: { evenement: BASE, logos: 3, personnes: 4, imageBadges: false },
+    });
 
     // Retirée : le dossier de l'événement et tout ce qu'il porte.
     refus = (chemin) => (chemin === BASE || chemin.startsWith(`${BASE}/`) ? absent(chemin) : null);
@@ -3986,6 +4010,49 @@ describe('dépôt : les logos recopiés dans un autre dossier (§ 8.7)', () => {
     appels.length = 0;
     assert.equal(await copierLogos(sans, vers, sans.charge), null);
     assert.deepEqual(appels, [['lister', 'documents', 'Fête des Ifs/logo']]);
+  });
+
+  test("l'image des badges est un logo désigné : sa liste refusée la compte, une fois avec le logo d'une personne qui la partage, imageBadges vrai ; un événement qui n'en désigne pas d'autre relit son dossier, et l'avertissement de sa liste refusée ne compte qu'elle", async () => {
+    const { fs, ouvert, vers } = await disqueAvecLogos();
+    refuserSur(fs, 'lister', 'documents', dans('logo'), refusLecture);
+    const partagee = { ...ouvert.charge, evenement: { ...ouvert.charge.evenement, imageBadges: { active: true, chemin: logoDe(UN), position: 'haut' } } };
+    assert.deepEqual(await copierLogos(ouvert, vers, partagee), {
+      code: 'LOGOS_NON_COPIES',
+      details: { evenement: BASE, logos: 3, personnes: 4, imageBadges: true },
+    });
+    const autre = { ...partagee, evenement: { ...partagee.evenement, imageBadges: { active: false, chemin: logoDe(imageEssai(7)), position: 'bas' } } };
+    assert.deepEqual(await copierLogos(ouvert, vers, autre), {
+      code: 'LOGOS_NON_COPIES',
+      details: { evenement: BASE, logos: 4, personnes: 4, imageBadges: true },
+    });
+
+    // Le fichier de l'image refusé à la lecture : imageBadges vrai.
+    const lu = await disqueAvecLogos();
+    refuserSur(lu.fs, 'lireOctets', 'documents', dans(logoDe(DEUX)), refusLecture);
+    const imageDeux = { ...partagee, evenement: { ...partagee.evenement, imageBadges: { active: true, chemin: logoDe(DEUX), position: 'haut' } } };
+    assert.deepEqual(await copierLogos(lu.ouvert, lu.vers, imageDeux), {
+      code: 'LOGOS_NON_COPIES',
+      details: { evenement: BASE, logos: 1, personnes: 1, imageBadges: true },
+    });
+
+    // Seule l'image désignée : logo/ absent, le dossier se relit ; présent,
+    // rien ne manquait.
+    const charge = chargeEssai({ id: 'evt-ifs', nom: 'Fête des Ifs' });
+    charge.evenement.imageBadges = { active: true, chemin: logoDe(UN), position: 'centre' };
+    const seule = await creer(fs, DOC, charge, CREATION);
+    const appels = journaliser(fs, ['lister']);
+    assert.equal(await copierLogos(seule, vers, seule.charge), null);
+    assert.deepEqual(appels, [
+      ['lister', 'documents', 'Fête des Ifs/logo'],
+      ['lister', 'documents', 'Fête des Ifs'],
+    ]);
+
+    // Sa liste refusée : l'image seule reste en arrière, sans personne.
+    refuserSur(fs, 'lister', 'documents', 'Fête des Ifs/logo', refusLecture);
+    assert.deepEqual(await copierLogos(seule, vers, seule.charge), {
+      code: 'LOGOS_NON_COPIES',
+      details: { evenement: 'Fête des Ifs', logos: 1, personnes: 0, imageBadges: true },
+    });
   });
 
   test("enregistrerAilleurs, logos vrai, recopie logo/ dans le dossier neuf de l'autre racine après l'état ; un logo refusé finit les avertissements de l'Ouvert rendu, LOGOS_NON_COPIES, sans refuser l'écriture ; sans l'option, logo/ ne se lit pas", async () => {
@@ -4024,7 +4091,7 @@ describe('dépôt : les logos recopiés dans un autre dossier (§ 8.7)', () => {
     refuserSur(refuse.fs, 'ecrireOctetsAtomique', 'documents', dans(logoDe(DEUX)), refusEcriture);
     const partiel = await enregistrerAilleurs(refuse.ouvert, refuse.documents, { existantes: [], logos: true });
     assert.deepEqual(partiel.avertissements, [
-      { code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1 } },
+      { code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1, imageBadges: false } },
     ]);
     const rouvert = await rouvrir(refuse.disque, BASE);
     assert.equal(rouvert.charge.participants[1].logo, logoDe(DEUX));

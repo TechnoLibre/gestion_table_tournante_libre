@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La liste des participants dans un vrai moteur de rendu (§ 4, § 4.2, § 4.4,
-// § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, l'organisation
-// collante, la grille au clavier, le tri, le filtre et le compte,
+// § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, le message d'ajout et
+// le formulaire vidé, la grille au clavier, le tri, le filtre et le compte,
 // l'exclusion, la présence par tour saisie en cases dans la grille, les
-// conflits d'organisation saisis par un choix multiple, le
-// manque de places à l'ajout et à la réintégration, la fiche
+// conflits d'organisation saisis par un choix multiple, la colonne des
+// inclusions, masquée par défaut, et ses deux choix multiples sous une
+// recherche, le manque de places à l'ajout et à la réintégration, la fiche
 // et l'itinéraire, les étiquettes de la fiche et leur légende, l'export, le
 // collage, et la liste groupée par une colonne ou plusieurs, ses groupes
 // imbriqués, repliés et dépliés, et les conflits du placement montré sous
@@ -22,12 +23,18 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cdp } from 'vitest/browser';
 import { flushSync, tick } from 'svelte';
 import { bilanChangementDefaut } from '../../application/bilans.js';
+import { appliquerCommande } from '../../application/commandes.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { apercevoir, cleNormalisee, decoder, exporterParticipants } from '../../application/csv.js';
-import { statuts } from '../../application/places.js';
+import { etatPlaces, statuts } from '../../application/places.js';
+import { texteLivre } from '../../demo/livrees.js';
+import { kSieges } from '../../geometrie/designation.js';
+import { geometrieTable } from '../../geometrie/tables.js';
+import { ajuster, vueDepuisTransform } from '../../geometrie/vue.js';
 import { STATUT, nombrePlacesManquantes, normaliser } from '../../moteur/configuration.js';
-import { configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
+import { rechercher } from '../../moteur/recherche.js';
+import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { serialiser } from '../../stockage/canonique.js';
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
@@ -36,12 +43,25 @@ import { VERSION } from '../../version.genere.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { actionDe, boutonActions } from '../../../test/navigateur/menus.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
-import { composantes, rangeesDeTexte, sousTheme, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, contraste, rangeesDeTexte, sousTheme, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import CAS_LIMITES from '../../../exemples/participants_cas_limites.csv?url';
 import { RANGS_ORGANISATION, teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { cadreDepuisRect, englobantDuTour } from '../plan/vue_plan.js';
 import { comptesEntete } from './entete.js';
-import { COLONNES, GROUPEMENTS, cheminDe, cleDeGroupement, cleDeStatut, groupesGrille, lignesGrille, lignesVisibles } from './grille.js';
+import {
+  COLONNES,
+  DUREE_MESSAGE_AJOUT_MS,
+  GROUPEMENTS,
+  MASQUABLES,
+  cheminDe,
+  cleDeGroupement,
+  cleDeStatut,
+  colonnesMontrees,
+  groupesGrille,
+  lignesGrille,
+  lignesVisibles,
+} from './grille.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 // Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
@@ -154,6 +174,9 @@ const idsAffiches = (m) => lignes(m).map((ligne) => Number(ligne.dataset.partici
 const ligne = (m, id) => grille(m).querySelector(`[data-participant="${id}"]`);
 const cellule = (m, id, colonne) => ligne(m, id).querySelector(`[data-champ="${colonne}"]`);
 const commandeDeLigne = (m, id, nom) => ligne(m, id).querySelector(`[data-commande="${nom}"]`);
+// Le <svg> du plan, et la vue que porte son groupe [data-vue].
+const svgDe = (m) => m.racine.querySelector('svg[data-plan]');
+const vueDe = (m) => vueDepuisTransform(m.racine.querySelector('[data-vue]').getAttribute('transform'));
 const fiche = (m) => section(m).querySelector('[data-fiche]');
 
 const centre = (element) => {
@@ -281,6 +304,7 @@ describe('la saisie (§ 4, § 10.2)', () => {
     expect(ajout().getAttribute('aria-busy')).toBeNull();
     expect(ajout().getAttribute('aria-disabled')).toBeNull();
     await saisir(champ(m, 'nom'), 'Ombrelle');
+    await saisir(champ(m, 'organisation'), CLUB);
     await saisir(champ(m, 'notes'), 'arrive tard');
     champ(m, 'nom').focus();
     await touche('Enter');
@@ -292,9 +316,11 @@ describe('la saisie (§ 4, § 10.2)', () => {
     expect(getComputedStyle(ajout()).borderTopStyle).not.toBe(styleRepos);
     await touche('Enter');
     await rendu();
-    // La personne suivante se tape pendant l'écriture de la première.
+    // La personne suivante se tape pendant l'écriture de la première, son
+    // organisation comprise.
     await saisir(champ(m, 'prenom'), 'Théo');
     await saisir(champ(m, 'nom'), 'Pervenche');
+    await saisir(champ(m, 'organisation'), 'Atelier Ressac');
     liberer();
     await vi.waitFor(() => expect(participants(m)).toHaveLength(1));
     await attendreSeance(m);
@@ -303,18 +329,19 @@ describe('la saisie (§ 4, § 10.2)', () => {
     expect(ajout().getAttribute('aria-disabled')).toBeNull();
     expect(getComputedStyle(ajout()).borderTopStyle).toBe(styleRepos);
     expect(participants(m)).toHaveLength(1);
-    expect(participants(m)[0]).toMatchObject({ nom: 'Ombrelle', prenom: null, notes: 'arrive tard' });
+    expect(participants(m)[0]).toMatchObject({ nom: 'Ombrelle', prenom: null, organisation: CLUB, notes: 'arrive tard' });
     expect(entrees(m)).toHaveLength(avant + 1);
     expect(champ(m, 'nom').value).toBe('Pervenche');
     expect(champ(m, 'prenom').value).toBe('Théo');
+    expect(champ(m, 'organisation').value).toBe('Atelier Ressac');
     expect(champ(m, 'notes').value).toBe('');
     // La saisie gardée s'envoie à son tour.
     champ(m, 'nom').focus();
     await touche('Enter');
     await attendreSeance(m);
-    expect(participants(m).map((p) => [p.nom, p.prenom])).toEqual([
-      ['Ombrelle', null],
-      ['Pervenche', 'Théo'],
+    expect(participants(m).map((p) => [p.nom, p.prenom, p.organisation])).toEqual([
+      ['Ombrelle', null, CLUB],
+      ['Pervenche', 'Théo', 'Atelier Ressac'],
     ]);
   });
 
@@ -336,43 +363,126 @@ describe('la saisie (§ 4, § 10.2)', () => {
     expect(participants(m)).toHaveLength(0);
   });
 
-  test('organisation collante : trois personnes portent « Club des Merles » ; le champ vidé, la quatrième n’en porte aucune', async () => {
+  test('après un ajout, tous les champs se vident, organisation comprise, le focus au nom ; un message nomme la personne, puis se retire seul', async () => {
     const m = await evenementOuvert();
-    await ajouter(m, { nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB });
-    expect(champ(m, 'organisation').value).toBe(CLUB);
-    expect(champ(m, 'prenom').value).toBe('');
+    const message = () => formulaire(m).querySelector('[data-enonce="participantAjoute"]');
+    expect(message()).toBeNull();
+    // La région d'état est montée avant le message, vide : le texte qui y
+    // paraît s'annonce.
+    const region = formulaire(m).querySelector('h3').parentElement.querySelector('[role="status"]');
+    expect(region).not.toBeNull();
+    expect(region.textContent.trim()).toBe('');
+    const champs = { nom: 'Ombrelle', prenom: ' Iris ', organisation: CLUB, courriel: 'iris@exemple.test', titrePressenti: 'Hôtesse', notes: 'arrive tôt' };
+    // Envoyé par un clic sur « Ajouter », le focus loin du nom.
+    for (const [cle, valeur] of Object.entries(champs)) await saisir(champ(m, cle), valeur);
+    await cliquer(formulaire(m).querySelector('[data-commande="ajouter"]'));
+    await attendreSeance(m);
+    expect(participants(m).at(-1)).toMatchObject({ nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB });
+    for (const cle of Object.keys(champs)) expect(champ(m, cle).value, cle).toBe('');
+    expect(document.activeElement).toBe(champ(m, 'nom'));
+    // Le message, dans une région d'état, nomme la personne comme la
+    // commande l'enregistre ; il se voit avec le nom qui a le focus, sur la
+    // ligne du titre de la bande, au-dessus du nom.
+    expect(message()).not.toBeNull();
+    expect(message().closest('[role="status"]')).toBe(region);
+    expect(message().textContent.trim()).toBe(tEcran('participants.formulaire.ajoutee', { nom: 'Iris Ombrelle' }));
+    expect(visible(message())).toBe(true);
+    expect(visible(champ(m, 'nom'))).toBe(true);
+    expect(message().getBoundingClientRect().bottom).toBeLessThanOrEqual(champ(m, 'nom').getBoundingClientRect().top);
+    expect(ecart(message(), formulaire(m).querySelector('h3'))).toBeLessThanOrEqual(16);
+    m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS - 1);
+    await rendu();
+    expect(message()).not.toBeNull();
+    m.horloge.avancer(1);
+    await rendu();
+    expect(message()).toBeNull();
+    // La personne suivante ne porte rien de la précédente.
     await ajouter(m, { nom: 'Pervenche' });
-    await ajouter(m, { nom: 'Lacasse' });
-    expect(participants(m).map((p) => [p.nom, p.prenom, p.organisation])).toEqual([
-      ['Ombrelle', 'Iris', CLUB],
-      ['Pervenche', null, CLUB],
-      ['Lacasse', null, CLUB],
-    ]);
-    await saisir(champ(m, 'organisation'), '');
-    await ajouter(m, { nom: 'Grisaille' });
-    expect(participants(m).at(-1).organisation).toBeNull();
+    expect(participants(m).at(-1)).toMatchObject({ nom: 'Pervenche', prenom: null, organisation: null, courriel: null, titrePressenti: null, notes: null });
+    expect(message().textContent.trim()).toBe(tEcran('participants.formulaire.ajoutee', { nom: 'Pervenche' }));
   });
 
-  test('l’organisation collante survit à un aller-retour par le plan et par « À propos » ; un autre événement repart d’un champ vide', async () => {
+  test('un second ajout remplace le message et relance son délai ; un envoi refusé le retire', async () => {
+    const m = await evenementOuvert();
+    const message = () => formulaire(m).querySelector('[data-enonce="participantAjoute"]');
+    await ajouter(m, { nom: 'Ombrelle', prenom: 'Iris' });
+    m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS - 1);
+    await ajouter(m, { nom: 'Pervenche', prenom: 'Théo' });
+    expect(formulaire(m).querySelectorAll('[data-enonce="participantAjoute"]')).toHaveLength(1);
+    expect(message().textContent.trim()).toBe(tEcran('participants.formulaire.ajoutee', { nom: 'Théo Pervenche' }));
+    m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS - 1);
+    await rendu();
+    expect(message()).not.toBeNull();
+    await ajouter(m, { nom: '  ' });
+    expect(champ(m, 'nom').getAttribute('aria-invalid')).toBe('true');
+    expect(message()).toBeNull();
+    // Le délai du message retiré ne retire rien d'autre.
+    m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS);
+    await rendu();
+    expect(champ(m, 'nom').getAttribute('aria-invalid')).toBe('true');
+  });
+
+  test('une organisation seule tient le geste, que le formulaire vidé par l’ajout rend ; Défaire retire le message de la personne retirée', async () => {
+    const m = await evenementOuvert();
+    const message = () => formulaire(m).querySelector('[data-enonce="participantAjoute"]');
+    expect(m.seance.gesteEnCours).toBe(false);
+    await saisir(champ(m, 'organisation'), CLUB);
+    expect(m.seance.gesteEnCours).toBe(true);
+    await ajouter(m, { nom: 'Ombrelle' });
+    for (const cle of ['nom', 'organisation']) expect(champ(m, cle).value, cle).toBe('');
+    expect(m.seance.gesteEnCours).toBe(false);
+    expect(message()).not.toBeNull();
+    await m.seance.defaire();
+    await attendreSeance(m);
+    await rendu();
+    expect(participants(m)).toHaveLength(0);
+    expect(message()).toBeNull();
+  });
+
+  test('à 1366 × 700, le message paraît à droite du titre de la bande et se retire sans déplacer les champs', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    try {
+      await fixerCadre(1366, 700);
+      const m = await evenementOuvert();
+      const message = () => formulaire(m).querySelector('[data-enonce="participantAjoute"]');
+      // La position du nom dans la bande, que le défilement ne change pas.
+      const placeDuNom = () => champ(m, 'nom').getBoundingClientRect().top - formulaire(m).getBoundingClientRect().top;
+      const sansMessage = placeDuNom();
+      await ajouter(m, { nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB });
+      expect(message()).not.toBeNull();
+      const titre = formulaire(m).querySelector('h3').getBoundingClientRect();
+      const boite = message().getBoundingClientRect();
+      expect(boite.left).toBeGreaterThan(titre.right);
+      expect(boite.top).toBeLessThan(titre.bottom);
+      expect(boite.bottom).toBeGreaterThan(titre.top);
+      expect(placeDuNom()).toBeCloseTo(sansMessage, 1);
+      m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS);
+      await rendu();
+      expect(message()).toBeNull();
+      expect(placeDuNom()).toBeCloseTo(sansMessage, 1);
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+
+  test('le formulaire remonté — retour du plan, fermeture d’« À propos » — repart vide, sans message', async () => {
     const m = await evenementOuvert();
     await ajouter(m, { nom: 'Ombrelle', organisation: CLUB });
     m.ui.allerA('plan');
     await rendu();
     m.ui.allerA('participants');
     await rendu();
-    expect(champ(m, 'organisation').value).toBe(CLUB);
+    expect(champ(m, 'organisation').value).toBe('');
+    expect(formulaire(m).querySelector('[data-enonce="participantAjoute"]')).toBeNull();
+    await saisir(champ(m, 'organisation'), CLUB);
     m.ui.ouvrirApropos();
     await rendu();
     m.ui.fermerApropos();
     await rendu();
-    expect(champ(m, 'organisation').value).toBe(CLUB);
-    await ajouter(m, { nom: 'Pervenche' });
-    expect(participants(m).at(-1).organisation).toBe(CLUB);
-    await m.seance.fermer();
-    await m.seance.creer({ nom: 'Bal des Grisailles', date: null, siegesParDefaut: 8, tours: 2 });
-    m.ui.allerA('participants');
-    await rendu();
     expect(champ(m, 'organisation').value).toBe('');
+    // Le délai d'un message démonté ne lève rien.
+    m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS);
+    await rendu();
   });
 
   test('une organisation qui ne diffère d’une existante que par la casse et les blancs est signalée sur le champ, l’orthographe existante à reprendre ; rien ne fusionne seul', async () => {
@@ -404,7 +514,7 @@ describe('la grille (§ 10.2, § 19.3)', () => {
     const m = await evenementOuvert({ personnes: TROIS });
     const ondine = idDe(m, 'Lacasse');
     const rang = idsAffiches(m).indexOf(ondine);
-    const colonne = COLONNES.indexOf('courriel');
+    const colonne = colonnesMontrees([]).indexOf('courriel');
     expect(rang).toBeGreaterThan(0);
     expect(colonne).toBeGreaterThan(0);
 
@@ -1182,6 +1292,294 @@ describe("les conflits d'organisation dans la grille (§ 4, § 10.2)", () => {
   });
 });
 
+describe('les inclusions dans la grille (§ 4, § 10.2)', () => {
+  // Quatre personnes, trois organisations ; Grisaille n'en porte aucune,
+  // Lacasse est exclue.
+  const QUATRE = [
+    { nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB },
+    { nom: 'Pervenche', prenom: 'Théo', organisation: 'Atelier Ressac' },
+    { nom: 'Lacasse', prenom: 'Ondine', organisation: 'cercle des Hérons', exclu: true },
+    { nom: 'Grisaille' },
+  ];
+
+  const editeurDe = (m, id) => cellule(m, id, 'inclusions').querySelector('[data-editeur-inclusions]');
+  const groupes = (m, id) => [...cellule(m, id, 'inclusions').querySelectorAll('[data-editeur-choix]')];
+  const casesDe = (groupe) => [...groupe.querySelectorAll('[data-choix]')];
+  const nomsDe = (groupe) => casesDe(groupe).map((c) => c.closest('label').textContent.trim());
+  const coches = (groupe) => casesDe(groupe).map((c) => c.checked);
+  const recherche = (m, id) => cellule(m, id, 'inclusions').querySelector('[data-recherche-choix]');
+  const personneDe = (m, id) => participants(m).find((p) => p.id === id);
+  const affichees = (m, id) => [...cellule(m, id, 'inclusions').querySelectorAll('[data-inclusions-personne] li')].map((li) => li.textContent.trim());
+
+  const bascule = (m) => section(m).querySelector('[data-champ="montrerInclusions"]');
+
+  // Un événement des quatre personnes, la colonne des inclusions montrée.
+  async function ouvert() {
+    const m = await evenementOuvert({ personnes: QUATRE });
+    await cliquer(bascule(m));
+    return m;
+  }
+
+  async function ouvrir(m, id) {
+    cellule(m, id, 'inclusions').focus();
+    await touche('Enter');
+    await rendu();
+  }
+
+  test('masquée par défaut ; la case « Montrer les inclusions » la montre et la masque sans rien écrire, et masquée, son tri tombe ; la cellule active garde sa colonne', async () => {
+    const m = await evenementOuvert({ personnes: QUATRE });
+    const trace = m.trace.length;
+    const active = () => grille(m).querySelector('td[tabindex="0"]');
+    expect(bascule(m).checked).toBe(false);
+    expect(bascule(m).closest('label').textContent.trim()).toBe(t('participants.grille.montrerInclusions'));
+    expect(grille(m).querySelector('[data-champ="inclusions"]')).toBeNull();
+    expect(grille(m).querySelector('[data-champ="inclusionsPlacement"]')).toBeNull();
+    expect(grille(m).tHead.rows[0].cells).toHaveLength(COLONNES.length - MASQUABLES.length + 1);
+    const id = idDe(m, 'Pervenche');
+    cellule(m, id, 'courriel').focus();
+    await rendu();
+    await cliquer(bascule(m));
+    expect(grille(m).tHead.rows[0].cells).toHaveLength(COLONNES.length + 1);
+    for (const colonne of MASQUABLES) {
+      expect(lignes(m).every((rangee) => rangee.querySelector(`[data-champ="${colonne}"]`) !== null)).toBe(true);
+    }
+    // Montrer une colonne devant la cellule active ne la déplace pas ; masquer
+    // la colonne active la cède à sa voisine, et la remontrer la rend.
+    expect(active()).toBe(cellule(m, id, 'courriel'));
+    cellule(m, id, 'inclusions').focus();
+    await rendu();
+    await cliquer(bascule(m));
+    expect(active()).toBe(cellule(m, id, 'courriel'));
+    await cliquer(bascule(m));
+    expect(active()).toBe(cellule(m, id, 'inclusions'));
+    await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="inclusions"]'));
+    expect(section(m).querySelector('[data-cible="inclusions"]').closest('th').getAttribute('aria-sort')).toBe('ascending');
+    await cliquer(bascule(m));
+    expect(grille(m).querySelector('[data-champ="inclusions"]')).toBeNull();
+    expect([...grille(m).tHead.rows[0].cells].some((th) => th.getAttribute('aria-sort') !== 'none' && th.hasAttribute('aria-sort'))).toBe(false);
+    expect(m.trace.length).toBe(trace);
+  });
+
+  test('la colonne « Inclusions » suit les conflits du placement ; au repos, une pastille par organisation incluse, puis chaque personne incluse, « (exclue) » comprise ; vide sans inclusion', async () => {
+    const m = await ouvert();
+    const id = idDe(m, 'Grisaille');
+    await m.seance.executer('changerInclusionsOrganisation', { id, organisations: ['Atelier Ressac', CLUB] });
+    await m.seance.executer('changerInclusionsParticipant', { id, participants: [idDe(m, 'Lacasse'), idDe(m, 'Ombrelle')] });
+    await attendreSeance(m);
+    expect(COLONNES.indexOf('inclusions')).toBe(COLONNES.indexOf('conflitsPlacement') + 1);
+    const entete = section(m).querySelector('[data-commande="trier"][data-cible="inclusions"]');
+    expect(entete.textContent).toContain(t('participants.colonne.inclusions'));
+    expect(affichees(m, id)).toEqual(['Atelier Ressac', CLUB, 'Iris Ombrelle', 'Ondine Lacasse (exclue)']);
+    expect(cellule(m, id, 'inclusions').querySelectorAll('[data-inclusion-organisation] svg')).toHaveLength(2);
+    expect(cellule(m, id, 'inclusions').querySelectorAll('[data-inclusion-participant]')).toHaveLength(2);
+    expect(cellule(m, idDe(m, 'Ombrelle'), 'inclusions').textContent.trim()).toBe('');
+    // Le tri par le nombre de lignes : Grisaille, la seule à en porter, en
+    // tête dans les deux sens.
+    await cliquer(entete);
+    expect(idsAffiches(m)[0]).toBe(id);
+    await cliquer(entete);
+    expect(idsAffiches(m)[0]).toBe(id);
+  });
+
+  test('Entrée ouvre deux groupes : les organisations hors la sienne, puis les personnes hors elle-même sous une recherche ; Tab passe d’un contrôle à l’autre ; Entrée écrit les deux listes en une entrée, que Défaire reprend d’un coup', async () => {
+    const m = await ouvert();
+    const id = idDe(m, 'Ombrelle');
+    const avant = entrees(m).length;
+    const trace = m.trace.length;
+    await ouvrir(m, id);
+    expect(editeurDe(m, id)).not.toBeNull();
+    const [organisations, personnes] = groupes(m, id);
+    expect(organisations.getAttribute('aria-label')).toBe("Inclusions d'organisation de Iris Ombrelle, une case par organisation");
+    expect(personnes.getAttribute('aria-label')).toBe('Inclusions de participant de Iris Ombrelle, une case par personne');
+    expect(nomsDe(organisations)).toEqual(['Atelier Ressac', 'cercle des Hérons']);
+    expect(nomsDe(personnes)).toEqual(['Grisaille', 'Ondine Lacasse (exclue)', 'Théo Pervenche']);
+    expect(document.activeElement).toBe(casesDe(organisations)[0]);
+
+    // Tab : de la case active des organisations à la recherche, puis à la
+    // case active des personnes ; Maj+Tab revient.
+    await touche('Tab');
+    await rendu();
+    expect(document.activeElement).toBe(recherche(m, id));
+    await touche('Tab');
+    await rendu();
+    expect(document.activeElement).toBe(casesDe(personnes)[0]);
+    await majTab();
+    await rendu();
+    expect(document.activeElement).toBe(recherche(m, id));
+    expect(m.trace.length).toBe(trace);
+
+    // La recherche ne garde que les cases qui la contiennent ; Échap la vide
+    // sans refermer l'éditeur.
+    await saisir(recherche(m, id), 'theo');
+    expect(nomsDe(groupes(m, id)[1])).toEqual(['Théo Pervenche']);
+    await saisir(recherche(m, id), 'zéphyr');
+    expect(nomsDe(groupes(m, id)[1])).toEqual([]);
+    expect(groupes(m, id)[1].querySelector('[data-aucun-choix]').textContent.trim()).toBe(tEcran('participants.inclusions.aucunResultat', { texte: 'zéphyr' }));
+    recherche(m, id).focus();
+    await touche('Escape');
+    await rendu();
+    expect(editeurDe(m, id)).not.toBeNull();
+    expect(recherche(m, id).value).toBe('');
+    expect(nomsDe(groupes(m, id)[1])).toHaveLength(3);
+
+    // L'espace coche sans rien écrire ; Entrée valide.
+    await touche('Tab');
+    await touche('End');
+    await touche(' ');
+    await majTab();
+    await majTab();
+    await touche(' ');
+    await rendu();
+    expect(coches(groupes(m, id)[0])).toEqual([true, false]);
+    expect(coches(groupes(m, id)[1])).toEqual([false, false, true]);
+    expect(m.seance.gesteEnCours).toBe(true);
+    await attendreSeance(m);
+    expect(m.trace.length).toBe(trace);
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(entrees(m).at(-1).libelle).toBe(
+      "Inclusions d'organisation de Iris Ombrelle : ajouté « Atelier Ressac » ; inclusions de participant : ajouté Théo Pervenche",
+    );
+    expect(personneDe(m, id).inclusionsOrganisation).toEqual(['Atelier Ressac']);
+    expect(personneDe(m, id).inclusionsParticipant).toEqual([idDe(m, 'Pervenche')]);
+    expect(editeurDe(m, id)).toBeNull();
+    expect(affichees(m, id)).toEqual(['Atelier Ressac', 'Théo Pervenche']);
+    expect(document.activeElement).toBe(cellule(m, id, 'inclusions'));
+    expect(m.seance.gesteEnCours).toBe(false);
+    await m.seance.defaire();
+    await attendreSeance(m);
+    expect(personneDe(m, id).inclusionsParticipant).toBeUndefined();
+    expect(personneDe(m, id).inclusionsOrganisation).toBeUndefined();
+    expect(affichees(m, id)).toEqual([]);
+  });
+
+  test('une seule liste changée : la commande ne porte qu’elle ; Échap rend la saisie sans rien écrire ; Tab depuis le dernier contrôle valide une fois et mène à la cellule voisine', async () => {
+    const m = await ouvert();
+    const id = idDe(m, 'Pervenche');
+    await m.seance.executer('changerInclusionsOrganisation', { id, organisations: [CLUB] });
+    await attendreSeance(m);
+    const avant = entrees(m).length;
+    const executer = vi.spyOn(m.seance, 'executer');
+
+    await ouvrir(m, id);
+    expect(nomsDe(groupes(m, id)[0])).toEqual(['cercle des Hérons', CLUB]);
+    expect(coches(groupes(m, id)[0])).toEqual([false, true]);
+    await touche(' ');
+    await touche('Escape');
+    await attendreSeance(m);
+    expect(editeurDe(m, id)).toBeNull();
+    expect(document.activeElement).toBe(cellule(m, id, 'inclusions'));
+    expect(personneDe(m, id).inclusionsOrganisation).toEqual([CLUB]);
+    expect(executer).not.toHaveBeenCalled();
+
+    await ouvrir(m, id);
+    await touche('Tab');
+    await touche('Tab');
+    await touche(' ');
+    await rendu();
+    expect(coches(groupes(m, id)[1])).toEqual([true, false, false]);
+    await touche('Tab');
+    await attendreSeance(m);
+    await attendreSeance(m);
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer).toHaveBeenCalledWith('changerInclusions', { id, participants: [idDe(m, 'Grisaille')] });
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(document.activeElement).toBe(cellule(m, id, 'inclusionsPlacement'));
+  });
+
+  test('montrée à 1366 et 1024 de large : la page ne défile pas, la grille défile au besoin dans son conteneur, sans quitter la carte, et chaque inclusion tient dans sa cellule', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    try {
+      for (const largeur of [1366, 1024]) {
+        await fixerCadre(largeur, 700);
+        const m = await ouvert();
+        const id = idDe(m, 'Grisaille');
+        await m.seance.executer('changerInclusionsOrganisation', { id, organisations: ['Atelier Ressac', 'cercle des Hérons', CLUB] });
+        await m.seance.executer('changerInclusionsParticipant', { id, participants: [idDe(m, 'Lacasse'), idDe(m, 'Ombrelle'), idDe(m, 'Pervenche')] });
+        await attendreSeance(m);
+        expect(document.documentElement.scrollWidth, `${largeur}`).toBeLessThanOrEqual(innerWidth);
+        const defilement = grille(m).parentElement;
+        const carteDe = section(m).querySelector('section[aria-labelledby]');
+        expect(defilement.getBoundingClientRect().right, `${largeur}`).toBeLessThanOrEqual(carteDe.getBoundingClientRect().right);
+        const inclus = cellule(m, id, 'inclusions');
+        expect(inclus.querySelectorAll('[data-inclusions-personne] li')).toHaveLength(6);
+        for (const li of inclus.querySelectorAll('li')) {
+          expect(li.getBoundingClientRect().right, `${largeur} ${li.textContent}`).toBeLessThanOrEqual(inclus.getBoundingClientRect().right + 0.5);
+        }
+        m.demonter();
+        montes.splice(montes.indexOf(m), 1);
+      }
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+
+  test('le texte indicatif de la recherche prend l’encre secondaire de la page et tient 4,5:1 sur le fond du champ, dans les deux thèmes', async () => {
+    const m = await ouvert();
+    const id = idDe(m, 'Ombrelle');
+    await ouvrir(m, id);
+    const champ = recherche(m, id);
+    expect(champ.getAttribute('placeholder')).toBe(tEcran('participants.inclusions.recherche'));
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        const indicatif = composantes(getComputedStyle(champ, '::placeholder').color);
+        expect(indicatif, theme).toEqual(jeton('--couleur-page-texte-secondaire'));
+        expect(fondDe(champ), theme).toEqual(jeton('--couleur-carte-fond'));
+        expect(contraste(indicatif, fondDe(champ)), theme).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  });
+
+  test('un refus dans la cellule, la saisie gardée, les deux groupes marqués ; masquer la colonne l’abandonne, geste libéré ; en lecture, Entrée pose le refus de la séance', async () => {
+    const m = await ouvert();
+    const id = idDe(m, 'Grisaille');
+    const trace = m.trace.length;
+    vi.spyOn(m.seance, 'executer').mockImplementation(() =>
+      Promise.reject(Object.assign(new Error('PLAN_BLOQUE'), { code: 'PLAN_BLOQUE', details: { remede: { geste: 'debloquer' } } })),
+    );
+    await ouvrir(m, id);
+    await touche(' ');
+    await touche('Enter');
+    await attendreSeance(m);
+    const refus = cellule(m, id, 'inclusions').querySelector('[data-refus="PLAN_BLOQUE"]');
+    expect(refus).not.toBeNull();
+    expect(editeurDe(m, id)).not.toBeNull();
+    expect(coches(groupes(m, id)[0])).toEqual([true, false, false]);
+    for (const groupe of groupes(m, id)) {
+      expect(document.getElementById(groupe.getAttribute('aria-describedby'))).toBe(refus);
+      for (const c of casesDe(groupe)) expect(c.getAttribute('aria-invalid')).toBe('true');
+    }
+    expect(m.trace.length).toBe(trace);
+    // La colonne masquée pendant le refus emporte l'éditeur : la saisie
+    // s'abandonne, le geste se libère, rien ne s'écrit ; remontrée, la
+    // cellule est au repos. Le clic passe par click(), sans pointeur : le
+    // focus reste dans l'éditeur, que la case masque alors qu'il est ouvert.
+    expect(m.seance.gesteEnCours).toBe(true);
+    bascule(m).click();
+    await rendu();
+    await attendreSeance(m);
+    expect(grille(m).querySelector('[data-champ="inclusions"]')).toBeNull();
+    expect(m.seance.gesteEnCours).toBe(false);
+    expect(m.trace.length).toBe(trace);
+    await cliquer(bascule(m));
+    expect(editeurDe(m, id)).toBeNull();
+    expect(cellule(m, id, 'inclusions').querySelector('[data-refus]')).toBeNull();
+    expect(personneDe(m, id).inclusionsOrganisation).toBeUndefined();
+    vi.restoreAllMocks();
+
+    await m.seance.passerEnLecture();
+    await rendu();
+    const autre = idDe(m, 'Ombrelle');
+    cellule(m, autre, 'inclusions').focus();
+    await touche('Enter');
+    await rendu();
+    expect(editeurDe(m, autre)).toBeNull();
+    const refusSeance = cellule(m, autre, 'inclusions').querySelector('[data-refus]');
+    expect(refusSeance.dataset.refus).toBe(m.seance.etat().refus.code);
+  });
+});
+
 describe('le manque de places (§ 5.9, § 4.4)', () => {
   test('deux tables de 8 et seize personnes : la dix-septième est acceptée, une entrée, et avertit PLACES_MANQUANTES de 1', async () => {
     const m = await evenementOuvert({ tables: 2, personnes: NOMS.slice(0, 16).map((nom) => ({ nom })) });
@@ -1265,10 +1663,17 @@ describe('la fiche (§ 4.2, § 7.4)', () => {
       expect(fiche(m).dataset.fiche).toBe(String(id));
       expect(valeurDeFiche(m, 'participants.fiche.statut').textContent).toBe(t(cleDeStatut(statut)));
       // Les seuls contrôles de saisie de la fiche sont le champ des
-      // étiquettes et les cases de la présence, une par tour.
+      // étiquettes, la recherche et les cases des inclusions de participant
+      // — sans organisation, aucune case d'organisation —, et les cases de
+      // la présence, une par tour.
       const tours = m.seance.etat().charge.evenement.tours;
-      expect([...fiche(m).querySelectorAll('input, select, textarea')].map((champ) => champ.dataset.champ ?? `tour ${champ.dataset.presenceTour}`)).toEqual([
+      const nature = (champ) => {
+        if (champ.closest('[data-inclusions-fiche]') !== null) return 'inclusions';
+        return champ.dataset.champ ?? `tour ${champ.dataset.presenceTour}`;
+      };
+      expect([...fiche(m).querySelectorAll('input, select, textarea')].map(nature)).toEqual([
         'etiquettes',
+        ...Array.from({ length: participants(m).length }, () => 'inclusions'),
         ...Array.from({ length: tours }, (_, rang) => `tour ${rang + 1}`),
       ]);
     }
@@ -1725,6 +2130,39 @@ describe('export et collage (§ 10.2)', () => {
     const sansId = (liste) => liste.map(({ id, ...champs }) => champs);
     expect(avant.length).toBeGreaterThan(0);
     expect(sansId(participants(m))).toEqual(sansId(avant));
+  });
+
+  test('un export dont des inclusions visent un homonyme le dit en avis, tant que la liste reste celle qu’il a écrite ; annulé, il ne dit rien', async () => {
+    const m = await evenementOuvert({
+      personnes: [
+        { nom: 'Galet', prenom: 'Roger', organisation: 'Club des Merles' },
+        { nom: 'Galet', prenom: 'Roger', organisation: 'Atelier Ressac' },
+        { nom: 'Ombrelle', prenom: 'Iris' },
+      ],
+    });
+    const [premier, second] = participants(m).filter(({ nom }) => nom === 'Galet').map(({ id }) => id);
+    await m.seance.executer('changerInclusionsParticipant', { id: idDe(m, 'Ombrelle'), participants: [premier, second] });
+    await rendu();
+    const avis = () => section(m).querySelector('[data-avertissement="inclusionsVersHomonymes"]');
+    expect(avis()).toBeNull();
+    m.fs.enregistrerSous = async () => null;
+    await cliquer(section(m).querySelector('[data-commande="exporter"]'));
+    await attendreSeance(m);
+    expect(avis(), 'export annulé').toBeNull();
+    m.fs.enregistrerSous = async (nomPropose) => nomPropose;
+    const trace = m.trace.length;
+    await cliquer(section(m).querySelector('[data-commande="exporter"]'));
+    await attendreSeance(m);
+    await rendu();
+    expect(avis()).not.toBeNull();
+    expect(avis().getAttribute('role')).toBe('status');
+    expect(avis().textContent.trim()).toBe(tEcran('participants.export.homonymes', { n: 2 }));
+    expect(t('participants.export.homonymes', { n: 2 })).toMatch(/^2 inclusions visent une personne/);
+    expect(m.trace.length).toBe(trace);
+    // La liste change : l'avis tombe avec elle.
+    await m.seance.executer('ajouterParticipant', { champs: { nom: 'Pervenche', prenom: 'Théo' } });
+    await rendu();
+    expect(avis()).toBeNull();
   });
 
   test('un collage sur la grille ouvre l’aperçu d’import : importEnAttente porte le texte intact, origine collage, et la section import ; zéro écriture', async () => {
@@ -2844,6 +3282,8 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
         expect(pastille.left).toBeGreaterThanOrEqual(presence.getBoundingClientRect().left);
         const conflit = cellule(m, idDe(m, 'Quenouillet'), 'conflits');
         expect(conflit.querySelectorAll('[data-conflits-personne] li')).toHaveLength(conflits.length);
+        // La colonne des inclusions est masquée par défaut.
+        expect(grille(m).querySelector('[data-champ="inclusions"]')).toBeNull();
         expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
         const region = carte(m).getBoundingClientRect();
         expect(region.right).toBeLessThanOrEqual(innerWidth);
@@ -2974,8 +3414,9 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
       expect(innerWidth).toBeGreaterThan(86 * rem);
       expect(defilement.clientWidth).toBeLessThan(86 * rem);
       const id = idDe(m, 'Calvaille');
-      expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingRight)).toBe(espace(m, '--espace-2'));
-      expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingLeft)).toBe(espace(m, '--espace-2'));
+      expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingRight)).toBe(espace(m, '--espace-1'));
+      expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingLeft)).toBe(espace(m, '--espace-1'));
+      expect(parseFloat(getComputedStyle(cellule(m, id, 'exclu')).paddingLeft)).toBe(espace(m, '--espace-1'));
       expect(parseFloat(getComputedStyle(ligne(m, id).firstElementChild).paddingLeft)).toBe(espace(m, '--espace-3'));
       // Chaque en-tête sur une ligne, hors de celui des conflits du
       // placement, qui se replie toujours entre ses mots.
@@ -3052,5 +3493,300 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
       expect(visible(message)).toBe(true);
       expect(participants(m)).toHaveLength(1);
     });
+  });
+});
+
+// --- « Voir sur le plan » depuis la grille (§ 7.1, § 5.8) -------------------
+
+describe('« Voir sur le plan » depuis sa ligne de la grille', () => {
+  // Le plan ne se dessine que dans un cadre qui lui donne une vue : celui
+  // de 1 366 × 700 le temps de l'épreuve, puis celui d'avant.
+  let avant = null;
+  beforeEach(async () => {
+    avant = { largeur: innerWidth, hauteur: innerHeight };
+    await fixerCadre(1366, 700);
+  });
+  afterEach(async () => {
+    await fixerCadre(avant.largeur, avant.hauteur);
+  });
+
+  // Les chaises marquées [data-marque=miseEnEvidence], « table:siège ».
+  const marquees = (m) =>
+    [...m.racine.querySelectorAll('[data-marque="miseEnEvidence"]')].map((marque) => marque.closest('[data-siege]').dataset.siege);
+  // La place d'une personne au tour donné, « table:siège », ou null hors de
+  // toute chaise : dans le placement que le plan montre, ou dans celui de la
+  // proposition donnée, le retenu pour null.
+  function placeAuTour(m, id, tour, proposition = m.ui.etat().proposition) {
+    const etat = etatPlaces(m.seance.etat().charge, { tour, proposition });
+    for (const table of etat.tables) {
+      const chaise = table.chaises.find(({ occupant }) => occupant === id);
+      if (chaise !== undefined) return `${table.id}:${chaise.siege}`;
+    }
+    return null;
+  }
+
+  // Sept personnes, deux tables de quatre, trois tours, nombre propositions
+  // dont la première est retenue ; rend le montage et l'identifiant de la
+  // personne de NOMS[2]. Le plan montre le tour 1.
+  async function montage({ nombre = 1 } = {}) {
+    const m = await evenementOuvert({ sieges: 4, tours: 3, tables: 2, personnes: NOMS.slice(0, 7).map((nom) => ({ nom })) });
+    await m.seance.executer('modifierReglage', { cle: 'attribuerSieges', valeur: true });
+    await m.app.generation().generer({ graine: 1, nombre, arret: 50, historique: 1000 });
+    const [proposition] = m.seance.etat().charge.propositions;
+    await m.seance.executer('retenirProposition', { id: proposition.id });
+    return { m, id: idDe(m, NOMS[2]) };
+  }
+
+  // Clique « Voir sur le plan » sur la ligne de la personne, attend la vue,
+  // les tables du tour — deux par défaut — et le retrait de la demande de
+  // centrer ; rend la barre de la mise en évidence.
+  async function voir(m, id, { tables = 2 } = {}) {
+    await cliquer(commandeDeLigne(m, id, 'voirSurLePlan'));
+    expect(m.ui.etat().section).toBe('plan');
+    expect(m.ui.etat().miseEnEvidence).toBe(id);
+    await vi.waitFor(() => expect(m.racine.querySelector('[data-vue]')?.getAttribute('transform') ?? null).not.toBeNull());
+    await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-table]')).toHaveLength(tables));
+    await vi.waitFor(() => expect(m.ui.etat().centrerEvidence).toBe(false));
+    await rendu();
+    const barre = m.racine.querySelector('[data-evidence]');
+    expect(barre).not.toBeNull();
+    expect(Number(barre.dataset.evidence)).toBe(id);
+    return barre;
+  }
+
+  // La personne sans chaise au tour 1 — absente, ou laissée dans la
+  // réserve —, assise aux tours 2 et 3.
+  const CAS = [
+    ['absente au tour montré', (m, id) => m.seance.executer('changerPresence', { id, tours: [2, 3] })],
+    ['dans la réserve au tour montré', (m, id) => m.seance.executer('retirerDuTour', { tour: 1, participant: id })],
+  ];
+
+  test.each(CAS)('%s, assise à un autre tour : le plan s’ouvre au premier tour où elle est assise, sa chaise marquée', async (_cas, poser) => {
+    const { m, id } = await montage();
+    await poser(m, id);
+    await rendu();
+    expect(m.ui.etat().tour).toBe(1);
+    expect(placeAuTour(m, id, 1)).toBeNull();
+    expect(placeAuTour(m, id, 2)).not.toBeNull();
+
+    const barre = await voir(m, id);
+    expect(m.ui.etat().tour).toBe(2);
+    expect(marquees(m), 'une chaise marquée au tour où elle est assise').toHaveLength(1);
+    expect(marquees(m)).toEqual([placeAuTour(m, id, 2)]);
+    expect(barre.textContent).not.toContain(tEcran('plan.evidence.absenteAuTour', { tour: 2 }));
+    expect(barre.textContent).not.toContain(tEcran('plan.evidence.reserveAuTour', { tour: 2 }));
+  });
+
+  test('assise au tour montré, qui n’est pas le premier où elle l’est : le tour montré reste', async () => {
+    const { m, id } = await montage();
+    await m.seance.executer('changerPresence', { id, tours: [2, 3] });
+    m.ui.montrerTour(3);
+    await rendu();
+    expect(placeAuTour(m, id, 3)).not.toBeNull();
+
+    await voir(m, id);
+    expect(m.ui.etat().tour).toBe(3);
+    expect(marquees(m)).toEqual([placeAuTour(m, id, 3)]);
+  });
+
+  test('une proposition montrée : le tour se cherche dans ce placement, non dans le retenu', async () => {
+    const { m, id } = await montage({ nombre: 2 });
+    // La seconde proposition, que le retenu ne copie pas.
+    const autre = m.seance.etat().charge.propositions[1];
+    expect(autre.id).not.toBe(m.seance.etat().charge.retenu.proposition);
+    // Absente au tour 1 partout ; le retenu la laisse aussi dans la réserve
+    // au tour 2, la proposition l'y assied.
+    await m.seance.executer('changerPresence', { id, tours: [2, 3] });
+    await m.seance.executer('retirerDuTour', { tour: 2, participant: id });
+    m.ui.montrerProposition(autre.id);
+    await rendu();
+    expect(m.ui.etat().tour).toBe(1);
+    expect(placeAuTour(m, id, 1)).toBeNull();
+    expect(placeAuTour(m, id, 2), 'la proposition l’assied au tour 2').not.toBeNull();
+    expect(placeAuTour(m, id, 2, null), 'le retenu la laisse dans la réserve au tour 2').toBeNull();
+    expect(placeAuTour(m, id, 3, null)).not.toBeNull();
+
+    await voir(m, id);
+    expect(m.ui.etat().proposition).toBe(autre.id);
+    expect(m.ui.etat().tour).toBe(2);
+    expect(marquees(m)).toEqual([placeAuTour(m, id, 2)]);
+  });
+
+  test('dans la réserve à chaque tour : le tour montré reste, la vue ajustée aussi, rien n’est marqué, la barre dit la réserve', async () => {
+    const { m, id } = await montage();
+    for (const tour of [1, 2, 3]) await m.seance.executer('retirerDuTour', { tour, participant: id });
+    await rendu();
+    expect([1, 2, 3].map((tour) => placeAuTour(m, id, tour))).toEqual([null, null, null]);
+
+    const barre = await voir(m, id);
+    expect(m.ui.etat().tour).toBe(1);
+    const cadre = cadreDepuisRect(svgDe(m).getBoundingClientRect());
+    const ajustee = ajuster(englobantDuTour(etatPlaces(m.seance.etat().charge, { tour: 1, proposition: null })), cadre);
+    expect(vueDe(m), 'la vue ajustée, que rien ne déplace').toEqual(ajustee);
+    expect(marquees(m)).toEqual([]);
+    expect(barre.textContent).toContain(tEcran('plan.evidence.reserveAuTour', { tour: 1 }));
+    expect(barre.textContent).not.toContain(tEcran('plan.evidence.absenteAuTour', { tour: 1 }));
+  });
+});
+
+describe('« Voir sur le plan » sur la grande démonstration : la chaise au centre du cadre (§ 7.1, § 7.3)', () => {
+  let avant = null;
+  beforeEach(async () => {
+    avant = { largeur: innerWidth, hauteur: innerHeight };
+    await fixerCadre(1366, 700);
+  });
+  afterEach(async () => {
+    await fixerCadre(avant.largeur, avant.hauteur);
+  });
+
+  // La grande démonstration livrée, une proposition générée puis retenue,
+  // ouverte en lecture depuis le disque simulé ; cadrage, s'il est donné,
+  // mémorisé avant que le plan ne s'ouvre. La section des participants
+  // ouverte.
+  async function ouvrirGrande({ cadrage = null } = {}) {
+    const lue = analyser(texteLivre('grande')).charge;
+    const configuration = configurationDepuisCharge(lue);
+    const propositions = rechercher(configuration, { graine: 1, nombre: 1, arret: 50 });
+    const generee = appliquerCommande('enregistrerGeneration', lue, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
+    const charge = appliquerCommande('retenirProposition', generee, { id: generee.propositions[0].id }).charge;
+    const texte = serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
+    const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `soiree/soiree${SUFFIXES.etat}`, texte }] });
+    montes.push(m);
+    await m.seance.ouvrir('soiree/soiree');
+    if (cadrage !== null) m.seance.demanderCadrage(cadrage);
+    m.ui.allerA('participants');
+    await rendu();
+    return m;
+  }
+
+  // La personne assise au tour 1 la plus loin du centre du plan, sa table,
+  // son siège et la géométrie de sa table.
+  function laPlusLoin(m) {
+    const etat = etatPlaces(m.seance.etat().charge, { tour: 1, proposition: null });
+    const { minX, minY, maxX, maxY } = englobantDuTour(etat);
+    const milieu = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    let retenue = null;
+    for (const table of etat.tables) {
+      const geometrie = geometrieTable(table, table.capacite);
+      for (const [rang, { occupant, siege }] of table.chaises.entries()) {
+        if (occupant === null) continue;
+        const { x, y } = geometrie.chaises[rang];
+        const distance = Math.hypot(x - milieu.x, y - milieu.y);
+        if (retenue === null || distance > retenue.distance) retenue = { id: occupant, table: table.id, siege, geometrie, distance };
+      }
+    }
+    return { ...retenue, tables: etat.tables.length };
+  }
+
+  // Ouvre « Voir sur le plan » sur la ligne de la personne et attend la
+  // vue, les tables et le retrait de la demande de centrer.
+  async function voirGrande(m, id, tables) {
+    await cliquer(commandeDeLigne(m, id, 'voirSurLePlan'));
+    expect([m.ui.etat().section, m.ui.etat().miseEnEvidence]).toEqual(['plan', id]);
+    await vi.waitFor(() => expect(m.racine.querySelector('[data-vue]')?.getAttribute('transform') ?? null).not.toBeNull());
+    await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-table]')).toHaveLength(tables));
+    await vi.waitFor(() => expect(m.ui.etat().centrerEvidence).toBe(false));
+    await rendu();
+  }
+
+  // La chaise marquée, seule, visible, et son centre à l'écran.
+  function marqueSeule(m) {
+    const marques = [...m.racine.querySelectorAll('[data-marque="miseEnEvidence"]')];
+    expect(marques).toHaveLength(1);
+    expect(marques[0].checkVisibility({ opacityProperty: true, visibilityProperty: true })).toBe(true);
+    const rect = marques[0].getBoundingClientRect();
+    return { siege: marques[0].closest('[data-siege]').dataset.siege, rect, centre: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+  }
+
+  test('le plan ajusté ne dessine aucune chaise ; « Voir sur le plan » amène la sienne, marquée, au centre du cadre, au zoom où sa table dessine ses chaises', async () => {
+    const m = await ouvrirGrande();
+    const personne = laPlusLoin(m);
+    // Ouvert sans demande, le plan ajusté ne dessine aucune chaise.
+    m.ui.allerA('plan');
+    await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-table]')).toHaveLength(personne.tables));
+    await rendu();
+    expect(m.racine.querySelectorAll('[data-siege]')).toHaveLength(0);
+    expect(vueDe(m).k).toBeLessThan(kSieges(personne.geometrie));
+    expect(m.seance.cadrage(), 'la vue ajustée ne s’écrit pas').toBeNull();
+    m.ui.allerA('participants');
+    await rendu();
+
+    await voirGrande(m, personne.id, personne.tables);
+    expect(m.ui.etat().tour).toBe(1);
+    const vue = vueDe(m);
+    expect(vue.k, 'le seuil de sa table, à l’arrondi de l’attribut près').toBeCloseTo(kSieges(personne.geometrie), 12);
+    expect(m.seance.cadrage(), 'mémorisée comme un zoom de l’opérateur (§ 8.5)').toEqual(vue);
+    const marque = marqueSeule(m);
+    expect(marque.siege).toBe(`${personne.table}:${personne.siege}`);
+    const cadre = svgDe(m).getBoundingClientRect();
+    expect(marque.rect.left >= cadre.left && marque.rect.right <= cadre.right, 'dans le cadre, en largeur').toBe(true);
+    expect(marque.rect.top >= cadre.top && marque.rect.bottom <= cadre.bottom, 'dans le cadre, en hauteur').toBe(true);
+    expect(Math.abs(marque.centre.x - (cadre.left + cadre.width / 2))).toBeLessThan(1);
+    expect(Math.abs(marque.centre.y - (cadre.top + cadre.height / 2))).toBeLessThan(1);
+  });
+
+  test('un cadrage déjà plus près que le seuil garde son zoom ; la chaise vient au centre du cadre', async () => {
+    const m = await ouvrirGrande({ cadrage: { k: 2, tx: 0, ty: 0 } });
+    const personne = laPlusLoin(m);
+    await voirGrande(m, personne.id, personne.tables);
+    expect(vueDe(m).k).toBe(2);
+    expect(m.seance.cadrage(), 'mémorisée comme un zoom de l’opérateur (§ 8.5)').toEqual(vueDe(m));
+    const marque = marqueSeule(m);
+    expect(marque.siege).toBe(`${personne.table}:${personne.siege}`);
+    const cadre = svgDe(m).getBoundingClientRect();
+    expect(Math.abs(marque.centre.x - (cadre.left + cadre.width / 2))).toBeLessThan(1);
+    expect(Math.abs(marque.centre.y - (cadre.top + cadre.height / 2))).toBeLessThan(1);
+  });
+});
+
+describe('la colonne « Animation » : les tables animées, ou « à désigner » (§ 10.2)', () => {
+  // Quatre personnes et deux tables, numérotées 1 et 2 : Ombrelle anime la
+  // table 2, Pervenche et Lacasse portent la marque, Lacasse exclue,
+  // Grisaille ne porte rien.
+  async function ouvrirAnimees() {
+    const m = await evenementOuvert({
+      tables: 2,
+      personnes: [{ nom: 'Ombrelle' }, { nom: 'Pervenche' }, { nom: 'Lacasse', exclu: true }, { nom: 'Grisaille' }],
+    });
+    for (const nom of ['Ombrelle', 'Pervenche', 'Lacasse']) {
+      await m.seance.executer('modifierParticipant', { id: idDe(m, nom), champs: { animationReservee: true } });
+    }
+    const table = m.seance.etat().charge.tables.find(({ numero }) => numero === 2);
+    await m.seance.executer('designerAnimateurs', { table: table.id, participants: [idDe(m, 'Ombrelle')], libelle: 'animation' });
+    await attendreSeance(m);
+    return m;
+  }
+
+  test('juste après le titre pressenti : les numéros des tables animées, « à désigner » sous la marque, rien pour une exclue ni sans marque ; l’en-tête ne trie pas', async () => {
+    const m = await ouvrirAnimees();
+    expect(COLONNES.indexOf('animation')).toBe(COLONNES.indexOf('titrePressenti') + 1);
+    const entete = [...grille(m).tHead.rows[0].cells][colonnesMontrees([]).indexOf('animation')];
+    expect(texteDe(entete)).toBe(t('participants.colonne.animation'));
+    expect(entete.querySelector('button')).toBeNull();
+    expect(texteDe(cellule(m, idDe(m, 'Ombrelle'), 'animation'))).toBe('2');
+    expect(cellule(m, idDe(m, 'Ombrelle'), 'animation').querySelector('[data-animation="tables"]')).not.toBeNull();
+    expect(texteDe(cellule(m, idDe(m, 'Pervenche'), 'animation'))).toBe(t('participants.animation.aDesigner'));
+    expect(cellule(m, idDe(m, 'Pervenche'), 'animation').querySelector('[data-animation="aDesigner"]')).not.toBeNull();
+    expect(texteDe(cellule(m, idDe(m, 'Lacasse'), 'animation'))).toBe('');
+    expect(texteDe(cellule(m, idDe(m, 'Grisaille'), 'animation'))).toBe('');
+  });
+
+  test('la cellule se lit au clavier et ne s’édite pas ; une désignation la met à jour', async () => {
+    const m = await ouvrirAnimees();
+    const id = idDe(m, 'Pervenche');
+    const trace = m.trace.length;
+    cellule(m, id, 'titrePressenti').focus();
+    await touche('ArrowRight');
+    await rendu();
+    const mesure = cellule(m, id, 'animation');
+    expect(document.activeElement).toBe(mesure);
+    await touche('Enter');
+    await rendu();
+    expect(mesure.querySelector('input, textarea, [role="group"]')).toBeNull();
+    expect(m.trace.length).toBe(trace);
+    const table = m.seance.etat().charge.tables.find(({ numero }) => numero === 1);
+    await m.seance.executer('designerAnimateurs', { table: table.id, participants: [id], libelle: 'animation' });
+    await attendreSeance(m);
+    expect(texteDe(cellule(m, id, 'animation'))).toBe('1');
   });
 });

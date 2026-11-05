@@ -75,6 +75,7 @@ import { classer, premierPalierQuiDepartage } from '../moteur/classement.js';
 import { SANS_GROUPE, STATUT, figerConfiguration, indexerPlan, normaliser } from '../moteur/configuration.js';
 import { compilationDe } from '../moteur/criteres.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
+import { ciblesDesInclusions } from '../moteur/inclusions.js';
 import { assisAChaqueTourPresent, mesurer } from '../moteur/indicateurs.js';
 import {
   borneHaute,
@@ -138,6 +139,32 @@ export { CASES, MODES_OBJECTIFS, PRIORITES_PAR_DEFAUT } from '../moteur/criteres
  * @property {boolean|null} minimumAtteint
  * @property {object[]} refusDessin   verifierIndicateurs, chaque violation
  *           complétée de participant, l'identifiant de son index ; []
+ * @property {InclusionsNommees|null} inclusions
+ *           comparable : les inclusions de la mesure (mesures.inclusions),
+ *           chaque personne par identifiant ; null sans ligne active, et
+ *           quand le statut n'est pas comparable
+ *
+ * @typedef {Object} InclusionsNommees   mesures.inclusions, nommées
+ * @property {number} cible        les rencontres demandées qui font les avis
+ * @property {number} satisfaites  celles que le plan fait
+ * @property {number} avis         cible − satisfaites
+ * @property {Array<{participant: number,
+ *            cible: {participant: number}|{organisation: string},
+ *            partenaire: number|null, reciproque: boolean}>} nonSatisfaites
+ *           une par rencontre demandée non satisfaite, dans l'ordre de la
+ *           mesure : la personne qui la porte, la personne incluse ou le
+ *           libellé de l'organisation incluse, partenaire, la personne dont
+ *           la rencontre la satisfait (null pour une organisation que
+ *           plusieurs membres satisfont), et reciproque quand les deux
+ *           personnes de la paire la demandent, l'une par son organisation
+ *           peut-être
+ * @property {Array<{participant: number, actives: number, besoin: number,
+ *            plafond: number, atteignables: number, satisfaites: number,
+ *            auDelaDuPlafond: boolean}>} parPersonne
+ *           chaque personne qui porte une inclusion active, par identifiant
+ *           croissant : k°(p), b(p), K(p), I(p), ses inclusions satisfaites,
+ *           et auDelaDuPlafond quand sa liste dépasse ce qu'elle peut
+ *           rencontrer (§ 5.4)
  *
  * @typedef {Object} TableEvaluation
  * @property {number[]} population    identifiants non exclus, croissants
@@ -207,7 +234,39 @@ const nonMesuree = (id, statut, raisons) => ({
   ecartAuPlafondAPrioriMax: null,
   minimumAtteint: null,
   refusDessin: [],
+  inclusions: null,
 });
+
+// Les inclusions d'une mesure, nommées par identifiants (InclusionsNommees) :
+// chaque personne par le sien, et la cible codée −1 − g
+// (instance.inclusionCible) par le libellé de son organisation, comme le
+// diagnostic les nomme. Le partenaire d'un avis se lit dans l'unité qui le
+// porte (ciblesDesInclusions, déjà calculée par la mesure) : les avis
+// suivent l'ordre des unités, et u avance jusqu'à celle de même source et
+// de même cible, unique pour une source. null quand la mesure n'en porte
+// pas.
+function inclusionsNommees(instance, inclusions) {
+  if (inclusions === null) return null;
+  const { ids, groupes, inclusionCible } = instance;
+  const { uniteLigne, uniteSource, unitePartenaire } = ciblesDesInclusions(instance);
+  let u = 0;
+  const partenaireDe = (p, cible) => {
+    while (uniteSource[u] !== p || inclusionCible[uniteLigne[u]] !== cible) u += 1;
+    return unitePartenaire[u] < 0 ? null : ids[unitePartenaire[u]];
+  };
+  return {
+    cible: inclusions.cible,
+    satisfaites: inclusions.satisfaites,
+    avis: inclusions.avis,
+    nonSatisfaites: inclusions.nonSatisfaites.map(({ p, cible, reciproque }) => ({
+      participant: ids[p],
+      cible: cible < 0 ? { organisation: groupes[-1 - cible] } : { participant: ids[cible] },
+      partenaire: partenaireDe(p, cible),
+      reciproque,
+    })),
+    parPersonne: inclusions.parPersonne.map(({ p, ...reste }) => ({ participant: ids[p], ...reste })),
+  };
+}
 
 /**
  * La table d'évaluation d'une charge (contrat de A6). Ne modifie pas la
@@ -261,6 +320,7 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
         ...violation,
         participant: instance.ids[violation.index],
       })),
+      inclusions: inclusionsNommees(instance, mesures.inclusions),
     };
   }
 
@@ -329,6 +389,25 @@ export function resumeDuRetenu(charge) {
 export function premiereDuClassement(table) {
   const [premiere] = table.propositions;
   return premiere !== undefined && premiere.statut === 'comparable' ? premiere : null;
+}
+
+/**
+ * Le plafond réalisé de la personne au rang 1 du profil de manque d'une
+ * ligne comparable (§ 12.10.3), celui que la colonne du plus grand manque
+ * écrit sous son chiffre : profilManque range le plus grand manque en
+ * tête, à manque égal le plafond le plus bas d'abord, et teteDuManque en
+ * lit le rang 1, comme le détail et la comparaison. Le départage par
+ * identifiant ne change pas ce plafond : le profil se range ici sur les
+ * index de la ligne. null pour une population vide.
+ *
+ * @param {LigneEvaluation} ligne  comparable
+ * @returns {number|null}
+ */
+export function plafondEnTeteDuManque({ mesures, plafondsRealises: realises }) {
+  const N = realises.length;
+  const index = Array.from({ length: N }, (_, p) => p);
+  const tete = teteDuManque(profilManque({ N, ids: index }, manques(realises, mesures.rencontres), realises));
+  return tete === null ? null : tete.plafondRealise;
 }
 
 /**
@@ -430,7 +509,16 @@ export function nettoyage(table, n) {
  *           ceux de detailler (qualite.js), chaque personne et chaque table
  *           par son identifiant (id, a, b, table), chaque tour par son index
  *           à partir de 0 ; objectifs porte en plus critere, {coche,
- *           sansObjet} du critère des objectifs
+ *           sansObjet} du critère des objectifs, et tables casesAuPire,
+ *           {sieges, assis, doublons}, par position le nombre de cases au
+ *           plus grand compte de la grille, null sans case
+ * @property {InclusionsNommees|null} inclusions   celles de la ligne
+ *           d'évaluation du placement ; null sans inclusion active
+ * @property {Array<{participant: number,
+ *            cible: {organisation: string}|{participant: number},
+ *            raison: string}>} inclusionsHorsDAtteinte
+ *           les inclusions hors d'atteinte du diagnostic, avec leur raison,
+ *           dans son ordre, qu'une inclusion soit active ou non
  * @property {string[]|null} planchersRetires   ceux du diagnostic : les
  *           planchers que la présence par tour retire, ['ecartItineraire']
  *           dès qu'une personne non exclue manque un tour, [] sinon
@@ -482,6 +570,8 @@ const CHAMPS_DE_MESURE = [
   'matrice',
   'objectifs',
   'animateurs',
+  'inclusions',
+  'inclusionsHorsDAtteinte',
   'planchersRetires',
   'course',
 ];
@@ -492,10 +582,12 @@ const CHAMPS_DE_MESURE = [
 // classer la lit. L'écart au plafond a priori se lit comme ligneDe le lit,
 // null sous un a priori inconnu ; une grandeur que les mesures ne portent pas
 // — objectifs ou animateurs sans personne concernée, conflits sans paire en
-// conflit — vaut null. La Map ne sert qu'à retrouver une lecture.
+// conflit, inclusions sans ligne active — vaut null. La Map ne sert qu'à
+// retrouver une lecture.
 const LECTURES_DES_VALEURS = new Map([
   ['minimumBrut', (mesures) => mesures.aggRencontres.tous.min],
   ['conflitsOrganisation', (mesures) => mesures.conflitsOrganisation],
+  ['inclusionsNonSatisfaites', (mesures) => mesures.inclusions?.avis ?? null],
   ['ecartAuPlafondAPrioriMax', (mesures, aPriori) => plusGrand(ecartsAuPlafondAPriori(mesures, aPriori))],
   ['excedentCollisions', (mesures) => mesures.excedentCollisions],
   ['collisionsCumulees', (mesures) => mesures.collisionsCumulees],
@@ -661,12 +753,32 @@ function violationNommee(instance, violation) {
   return nommee;
 }
 
+// L'effectif du pire cas de la grille des tables (§ 12.7, § 12.11) : par
+// position, le nombre de cases non null qui portent le plus grand compte de
+// la grille, lu au pire de chaque ligne de mixTables ; null quand aucune
+// case ne l'est. Les positions sont les clés des comptes du moteur.
+function casesAuPire(lignes) {
+  const avecCase = lignes.filter(({ pire }) => pire !== null);
+  if (avecCase.length === 0) return null;
+  const effectifs = {};
+  for (const position of Object.keys(avecCase[0].pire)) {
+    const plus = Math.max(...avecCase.map(({ pire }) => pire[position]));
+    let cases = 0;
+    for (const { tours } of avecCase) {
+      for (const cellule of tours) if (cellule !== null && cellule.comptes[position] === plus) cases += 1;
+    }
+    effectifs[position] = cases;
+  }
+  return effectifs;
+}
+
 // Le détail du moteur (detailler) rendu en identifiants : chaque index de
 // personne p, q, a, b devient l'identifiant de la personne, sous id quand
 // il désignait la ligne, chaque index de table t devient table,
 // l'identifiant de la table ; l'index de groupe g des collisions, que le
 // libellé groupe double, se retire. Les tours restent des index, à partir
-// de 0.
+// de 0. Les tables portent en plus casesAuPire, l'effectif de leur pire
+// cas.
 function enIdentifiants(instance, brut, critere) {
   const { ids, idsTables } = instance;
   const avecId = (element) => {
@@ -697,6 +809,7 @@ function enIdentifiants(instance, brut, critere) {
     tables: {
       lignes: brut.tables.lignes.map(({ t, ...reste }) => ({ table: idsTables[t], ...reste })),
       ordres: brut.tables.ordres,
+      casesAuPire: casesAuPire(brut.tables.lignes),
     },
     paires: { choisies: brut.paires.choisies.map(paire), imposees: brut.paires.imposees.map(paire) },
     matrice: matrice === null ? null : { ordre: matrice.ordre.map((p) => ids[p]), comptes: matrice.comptes },
@@ -762,7 +875,9 @@ function placementDe(charge, id) {
  * de diversité ; detailler, en une
  * lecture du plan, la matrice seulement jusqu'à SEUIL_MATRICE_PARTICIPANTS
  * personnes, dans l'ordre du profil ; puis la garde à quatre paramètres,
- * planchers des collisions et des objectifs par tour compris (D42).
+ * planchers des collisions et des objectifs par tour compris (D42). Les
+ * inclusions sont celles de la ligne d'évaluation, nommées de même, et les
+ * inclusions hors d'atteinte du même diagnostic.
  *
  * La filiation (D76, C23) : derivation, celle de la proposition dont la
  * course est montrée ; un retenu non ajusté venu d'une dérivée porte donc
@@ -870,6 +985,12 @@ export function detaillerQualite(charge, id, options = {}) {
     })),
     propositionDuRetenu: id === 'retenu' && origine !== null ? origine.id : null,
     ...enIdentifiants(instance, brut, critere),
+    inclusions: inclusionsNommees(instance, mesures.inclusions),
+    inclusionsHorsDAtteinte: diagnostic.inclusions.horsDAtteinte.map(({ participant, cible, raison }) => ({
+      participant,
+      cible: { ...cible },
+      raison,
+    })),
     planchersRetires: [...diagnostic.planchersRetires],
     course:
       course === null

@@ -14,6 +14,16 @@
   // réservation qui tient la personne. Caché, il ne porte
   // rien ; montré ou non, il ne reçoit pas le pointeur.
   //
+  // L'anneau [data-marque="fantome"] se peint sur un halo du jeton
+  // --couleur-sol, plus large que lui de 2 px de chaque côté, sans marque ni
+  // remplissage. L'anneau garde son rayon en pixels, la chaise visée le sien
+  // en cm : à un zoom où leurs rayons à l'écran se rejoignent, le trait de la
+  // chaise passerait sous l'anneau ou le borderait. Le halo l'en détache à
+  // tout zoom, et l'anneau se mesure contre ce jeton, le sol contre lequel le
+  // registre des marques l'éprouve à 3:1 (marques.js, § 14.5). Le fond peint
+  // sous le plan est celui de la page : le halo s'y lit comme un liseré à
+  // peine distinct.
+  //
   // fantome : {nom, cle} | null ; element : le <g>, lié pour Plan.svelte.
   import { getContext } from 'svelte';
 
@@ -24,6 +34,7 @@
 
 <g class="fantome" class:cache={fantome === null} data-fantome bind:this={element}>
   {#if fantome !== null}
+    <circle class="halo" r="10" />
     <circle class="disque" data-marque="fantome" r="10" />
     <text class="texte" x="16" y="-6"
       ><tspan data-partie="nom">{fantome.nom}</tspan><tspan x="16" dy="1.25em" data-partie="etat">{t(fantome.cle)}</tspan></text
@@ -38,6 +49,12 @@
 
   .fantome.cache {
     display: none;
+  }
+
+  .halo {
+    fill: none;
+    stroke: var(--couleur-sol);
+    stroke-width: 8;
   }
 
   .disque {

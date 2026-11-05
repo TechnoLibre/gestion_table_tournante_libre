@@ -10,7 +10,9 @@
   // d'assistance ; il dessine les tables de la page par PlanDessin, sur le
   // modèle du plan imprimé (modeleDessin, option impression) : régime des
   // sièges, ni poignée, ni cible, ni identifiant, ni sélection. Les listes
-  // ont la largeur et la troncature de l'écran (§ 7.4).
+  // ont la largeur et la troncature de l'écran (§ 7.4), et portent
+  // l'organisation de chaque occupant quand l'aperçu la demande. Une colonne
+  // de tables par page, demandée, passe à la découpe (pagesDuPlan).
   //
   // Hors de la zone de contenu, dans la bande de la feuille : le cartouche
   // de repérage — page, colonne, rangée, renvois vers les pages voisines —,
@@ -22,18 +24,27 @@
   // porter, aux numéros les plus larges (CARTOUCHE_GABARIT) ; l'aperçu la
   // mesure, et la découpe reçoit la bande mesurée.
   //
-  // La hauteur d'une ligne de liste (HAUTEUR_LIGNE) se mesure sur une sonde
-  // au style des listes, rendue sans taille à côté des feuilles : les blocs
-  // de noms entrent dans la découpe à la hauteur qu'elle leur donne. Les
-  // pages attendent la mesure. L'orientation de la découpe remonte à
-  // l'aperçu par la propriété liée orientation : c'est celle qu'il demande
-  // à l'imprimante.
+  // La hauteur d'une ligne de liste (HAUTEUR_LIGNE) et la largeur d'un texte
+  // de liste, droit et en italique, se mesurent sur une sonde au style des
+  // listes, rendue sans taille à côté des feuilles, composée comme elles en
+  // geometricPrecision : les blocs de noms entrent dans la découpe à la
+  // hauteur que donnent la hauteur de ligne et leurs rangées, les rangées
+  // d'une organisation repliée sous le nom comprises (rangeesListe), celles
+  // mêmes que la liste dessine. Les pages attendent la mesure. Listes et
+  // organisations demandées, le plan imprimé est le plan écarté de l'écran
+  // (§ 7.4) : les rangées se calculent sur le modèle des tables à leur
+  // position enregistrée (rangeesEcartees), le modèle dessiné les reçoit, et
+  // la découpe pagine ses géométries.
+  // L'orientation de la découpe remonte à l'aperçu par la propriété liée
+  // orientation : c'est celle qu'il demande à l'imprimante.
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
+  import { constante } from '../../geometrie/constantes.js';
   import { TAILLE_TEXTE_LISTE_CM } from '../../geometrie/texte.js';
-  import { hauteurLigne, mesurable } from '../plan/mesure_texte.js';
-  import { libelleLongueur, modeleDessin } from '../plan/modele.js';
+  import { creerMesureur, hauteurLigne, mesurable } from '../plan/mesure_texte.js';
+  import { libelleLongueur, modeleDessin, rangeesEcartees, rangeesListe } from '../plan/modele.js';
   import PlanDessin from '../plan/PlanDessin.svelte';
-  import { nomDeCharge } from '../plan/vue_plan.js';
+  import { nomDeCharge, organisationDeCharge } from '../plan/vue_plan.js';
   import Feuille from './Feuille.svelte';
   import { CARTOUCHE_GABARIT, ECHELLE_GABARIT, MENTIONS_GABARIT, modeleDeLaPage, pagesDuPlan, renvois } from './plan.js';
 
@@ -43,28 +54,65 @@
   const format = getContext('format');
   const seance = getContext('seance');
 
-  // La hauteur de ligne mesurée sur la sonde, en cm de dessin ; null avant
-  // la mesure.
-  let hauteur = $state(null);
+  // Les mesures prises sur la sonde, en cm de dessin — hauteur de ligne,
+  // mesureurs droit et italique — ; null avant la mesure.
+  let mesures = $state(null);
 
-  const modele = $derived(modeleDessin(etat, { listes: options.listes, nomDe: nomDeCharge($seance.charge), impression: true }));
+  const largeurBloc = constante('LARGEUR_BLOC_NOMS_CM');
+  // Le modèle du plan imprimé, les tables posées où les rangées les
+  // dessinent.
+  const dessiner = (rangees) =>
+    modeleDessin(etat, {
+      listes: options.listes,
+      nomDe: nomDeCharge($seance.charge),
+      organisations: options.organisations,
+      organisationDe: organisationDeCharge($seance.charge),
+      nomsTours: nomsDesTours($seance.charge),
+      impression: true,
+      rangees,
+    });
+  // Le modèle des tables à leur position enregistrée, puis les rangées du
+  // plan écarté, aucune quand rien ne s'écarte, puis le modèle dessiné.
+  const modeleEnregistre = $derived(dessiner([]));
+  const rangees = $derived(
+    !modeleEnregistre.listesRendues || !options.organisations || mesures === null
+      ? []
+      : rangeesEcartees(modeleEnregistre, t, { ...mesures, largeur: largeurBloc }),
+  );
+  const modele = $derived(rangees.length === 0 ? modeleEnregistre : dessiner(rangees));
+  // Les rangées en retrait de chaque table, quand les listes se montrent ;
+  // aucune sans elles.
+  const lignesAjoutees = $derived.by(() => {
+    if (!modele.listesRendues || mesures === null) return new Map();
+    const reglage = { mesurer: mesures.mesurer, mesurerItalique: mesures.mesurerItalique, largeur: largeurBloc };
+    return new Map(modele.tables.map((table) => [table.id, rangeesListe(table, t, reglage).filter(({ retrait }) => retrait).length]));
+  });
   const pages = $derived(
-    bandeMm === null || hauteur === null
+    bandeMm === null || mesures === null
       ? null
-      : pagesDuPlan(
-          etat,
-          modele.tables.map((table) => table.geometrie),
-          options.decoupe,
-          { papier: options.papier, bandeMm, listes: options.listes, hauteurLigne: hauteur, pied: feuille },
-        ),
+      : pagesDuPlan(etat, modele.tables.map((table) => table.geometrie), options.decoupe, {
+          papier: options.papier,
+          bandeMm,
+          listes: options.listes,
+          hauteurLigne: mesures.hauteur,
+          lignesAjoutees,
+          parColonne: options.parColonne,
+          pied: feuille,
+        }),
   );
 
   $effect(() => {
     if (pages !== null) orientation = pages[0].orientation;
   });
 
-  function mesurerLigne(sonde) {
-    if (mesurable(sonde)) hauteur = hauteurLigne(sonde);
+  function mesurerListes(sonde) {
+    if (mesurable(sonde)) {
+      mesures = {
+        hauteur: hauteurLigne(sonde),
+        mesurer: creerMesureur(sonde),
+        mesurerItalique: creerMesureur(sonde.querySelector('.titre')),
+      };
+    }
   }
 </script>
 
@@ -98,7 +146,7 @@
   </Feuille>
 {:else}
   <svg class="sonde" aria-hidden="true" width="0" height="0"
-    ><text font-size={TAILLE_TEXTE_LISTE_CM} {@attach mesurerLigne}></text></svg
+    ><text font-size={TAILLE_TEXTE_LISTE_CM} {@attach mesurerListes}><tspan class="titre"></tspan></text></svg
   >
   {#if pages !== null}
     {#each pages as page (page.rang)}
@@ -129,8 +177,8 @@
     display: block;
   }
 
-  /* La sonde de la hauteur de ligne : le style des listes (ListeNoms),
-     rendue sans taille ni place, jamais vue ni imprimée. */
+  /* La sonde des listes : le style des listes (ListeNoms), rendue sans
+     taille ni place, jamais vue ni imprimée. */
   .sonde {
     position: absolute;
     overflow: hidden;
@@ -140,7 +188,12 @@
 
   .sonde text {
     font-family: var(--police-interface);
+    text-rendering: geometricPrecision;
     white-space: pre;
+  }
+
+  .sonde .titre {
+    font-style: italic;
   }
 
   .bande {

@@ -5,14 +5,17 @@
 // l'import lit — marque UTF-8, « ; », CRLF, les neuf en-têtes de l'import —,
 // les champs cités au besoin, les étiquettes jointes par « , » et relues par
 // la découpe de la saisie, la présence en plages et en listes, relue par la
-// grammaire de l'import, et l'aller-retour qui importe, exporte, réimporte
+// grammaire de l'import, les inclusions, les organisations comme les
+// conflits et les personnes par leur nom affiché, le compte des inclusions
+// qui visent un homonyme, et l'aller-retour qui importe, exporte, réimporte
 // et compare champ par champ, sur chaque donnée d'épreuve de
-// test/fixtures/csv/, sur les fichiers d'exemple et sur une liste aux valeurs
-// difficiles. L'écriture d'un
-// CSV, que l'export partage avec le CSV des refus, s'éprouve contre la
-// découpe qui la relit. Le modèle à télécharger (§ 10.1) s'éprouve par son
-// texte exact, par chaque colonne qu'il remplit et par son import tel quel,
-// sous chaque nombre de tours de 1 à 6, puisque sa présence le suit.
+// test/fixtures/csv/, sur les fichiers d'exemple, sur une liste aux valeurs
+// difficiles et sur chaque partie non vide des tours de 1 à 6, dont l'export
+// réimporté en mise à jour ne modifie personne. L'écriture d'un CSV, que
+// l'export partage avec le CSV des refus, s'éprouve contre la découpe qui la
+// relit. Le modèle à télécharger (§ 10.1) s'éprouve par son texte exact, par
+// chaque colonne qu'il remplit et par son import tel quel, sous chaque nombre
+// de tours de 1 à 6, puisque sa présence le suit.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
@@ -21,16 +24,29 @@ import { SEPARATEURS_ETIQUETTES, lireEtiquettes } from '../stockage/etiquettes.j
 import { VALEURS_EXCLU, apercevoir } from './apercu.js';
 import { CHAMPS } from './colonnes.js';
 import { decoder } from './encodage.js';
-import { JOINTURE_CONFLITS, JOINTURE_ETIQUETTES, SEPARATEUR, ecrireCsv, exporterParticipants, modeleParticipants } from './export.js';
+import {
+  JOINTURE_CONFLITS,
+  JOINTURE_ETIQUETTES,
+  SEPARATEUR,
+  ecrireCsv,
+  exporterParticipants,
+  inclusionsVersHomonymes,
+  modeleParticipants,
+} from './export.js';
 import { appliquerImport } from './import.js';
 import { decouper } from './lecture.js';
 import { JOINTURE_PRESENCE } from './presence.js';
 
 const FIXTURES = new URL('../../test/fixtures/csv/', import.meta.url);
 
-// L'en-tête d'une liste où personne ne nomme de conflit : CHAMPS sans la
-// colonne des conflits d'organisation, que l'export n'écrit alors pas.
-const ENTETE = CHAMPS.filter((champ) => champ !== 'conflit_organisation').join(';');
+// Les colonnes que l'export n'écrit que lorsqu'une personne de la liste
+// porte leur champ.
+const FACULTATIVES = ['conflit_organisation', 'animation_reservee', 'inclusion_organisation', 'inclusion_participant'];
+
+// L'en-tête d'une liste où personne ne nomme de conflit ni d'inclusion ni ne
+// porte l'animation réservée : CHAMPS sans ces colonnes, que l'export
+// n'écrit alors pas.
+const ENTETE = CHAMPS.filter((champ) => !FACULTATIVES.includes(champ)).join(';');
 const EXEMPLES = new URL('../../exemples/', import.meta.url);
 
 const MARQUE = '\u{FEFF}';
@@ -49,6 +65,7 @@ const personne = (id, nom, autres = {}) => ({
 // Champs d'un participant, dans l'ordre du fichier d'état.
 const CHAMPS_DU_PARTICIPANT = [
   'id', 'nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes', 'exclu', 'etiquettes', 'presence', 'conflits',
+  'inclusionsOrganisation', 'inclusionsParticipant', 'animationReservee',
 ];
 
 // Participants qu'un import crée, en ajoutant, sur une charge neuve de tours
@@ -95,9 +112,13 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
     );
   });
 
-  test("les en-têtes sont les champs de l'import, CHAMPS, sans les conflits quand personne n'en nomme, et le séparateur « ; »", () => {
+  test("les en-têtes sont les champs de l'import, CHAMPS, sans les conflits, l'animation réservée ni les inclusions quand personne n'en porte, et le séparateur « ; »", () => {
     assert.equal(SEPARATEUR, ';');
-    assert.equal(CHAMPS.join(';'), 'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence;conflit_organisation');
+    assert.equal(
+      CHAMPS.join(';'),
+      'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence;conflit_organisation;animation_reservee;' +
+        'inclusion_organisation;inclusion_participant',
+    );
     assert.equal(ENTETE, 'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence');
     assert.equal(texteDe(exporterParticipants([])), `${MARQUE}${ENTETE}\r\n`);
   });
@@ -245,7 +266,7 @@ describe("exporterParticipants : l'aller-retour, champ par champ (§ 10.2)", () 
 describe('exporterParticipants : la colonne de la présence (§ 10.2)', () => {
   test('la neuvième, toujours écrite : vide sans champ, chaque suite d’au moins trois tours en « a-b », les autres tours joints par « , »', () => {
     assert.equal(JOINTURE_PRESENCE, ', ');
-    assert.equal(CHAMPS.at(-2), 'presence');
+    assert.equal(CHAMPS[8], 'presence');
     const texte = texteDe(exporterParticipants([
       personne(1, 'Ombrelle', { presence: [1, 2, 3, 5] }),
       personne(2, 'Pervenche'),
@@ -266,6 +287,42 @@ describe('exporterParticipants : la colonne de la présence (§ 10.2)', () => {
       personne(4, 'Sarcelle', { presence: [1, 3, 4, 5] }),
     ];
     memesParticipants(importer(exporterParticipants(participants), 'présences', [], 5), participants, 'présences');
+  });
+
+  test('pour R de 1 à 6, chaque partie non vide des tours : importée, exportée, réimportée, les mêmes ensembles, et une mise à jour par l’export ne modifie personne', () => {
+    for (let R = 1; R <= 6; R += 1) {
+      // Une personne par partie, sa présence écrite comme un opérateur la
+      // tape : « tour 2 », « tours 1 et 3 et 4 », ou « tous » pour la partie
+      // pleine, qui n'en porte aucune.
+      const parties = [];
+      const lignes = ['nom;prenom;presence'];
+      for (let masque = 1; masque < 2 ** R; masque += 1) {
+        const partie = Array.from({ length: R }, (_, rang) => rang + 1).filter((tour) => masque & (2 ** (tour - 1)));
+        parties.push(partie);
+        const cellule = partie.length === R ? 'tous' : `${partie.length === 1 ? 'tour' : 'tours'} ${partie.join(' et ')}`;
+        lignes.push(`Brumeval;Partie ${masque};${cellule}`);
+      }
+      const nom = `R = ${R}`;
+      const apercu = apercevoir(csv(...lignes), { tours: R });
+      assert.deepEqual(apercu.refusees, [], nom);
+      const neuve = creerCharge({ id: 'evt-essai', nom: "Soirée d'essai", siegesParDefaut: 4, tours: R });
+      const { charge } = appliquerImport(neuve, apercu, 'ajouter');
+      assert.deepEqual(
+        charge.participants.map(({ presence }) => presence),
+        parties.map((partie) => (partie.length === R ? undefined : partie)),
+        nom,
+      );
+      const octets = exporterParticipants(charge.participants);
+      memesParticipants(importer(octets, nom, [], R), charge.participants, nom);
+      const options = { participants: charge.participants, mode: 'mettreAJour', tours: R };
+      const { charge: apres, resume } = appliquerImport(charge, apercevoir(decoder(octets).texte, options), 'mettreAJour');
+      assert.deepEqual(
+        [resume.ajoutes, resume.misAJour, resume.inchanges, resume.refusees],
+        [0, 0, parties.length, []],
+        nom,
+      );
+      assert.deepEqual(apres.participants, charge.participants, nom);
+    }
   });
 });
 
@@ -304,14 +361,13 @@ describe("exporterParticipants : la colonne des conflits d'organisation (§ 10.2
     return { entete, cellules: lignes.map((ligne) => ligne[entete.indexOf('conflit_organisation')]) };
   };
 
-  test('écrite en dernier, après la présence, dès qu\u{2019}une personne nomme un conflit ; absente sinon', () => {
+  test('écrite après la présence, en dernier sans animation réservée, dès qu\u{2019}une personne nomme un conflit ; absente sinon', () => {
     const avec = conflitsEcrits(exporterParticipants([
       personne(1, 'Ombrelle', { organisation: 'Club des Merles' }),
       personne(2, 'Pervenche', { conflits: ['Atelier Ressac', 'Club des Merles'] }),
       personne(3, 'Lacasse', { organisation: 'Atelier Ressac', presence: [2] }),
     ]));
-    assert.deepEqual(avec.entete, [...CHAMPS]);
-    assert.equal(avec.entete.at(-1), 'conflit_organisation');
+    assert.deepEqual(avec.entete, [...ENTETE.split(';'), 'conflit_organisation']);
     assert.deepEqual(avec.cellules, ['', 'Atelier Ressac; Club des Merles', '']);
     assert.equal(decoder(exporterParticipants([personne(2, 'Pervenche', { conflits: ['A', 'B'] })])).texte.split('\r\n')[1], 'Pervenche;;;;;non;;;;"A; B"');
     const sans = conflitsEcrits(exporterParticipants([personne(1, 'Ombrelle', { organisation: 'Club des Merles' })]));
@@ -390,14 +446,165 @@ describe("exporterParticipants : la colonne des conflits d'organisation (§ 10.2
   });
 });
 
+describe('exporterParticipants : les colonnes des inclusions (§ 10.2)', () => {
+  // L'en-tête et les cellules des deux colonnes des inclusions, null pour
+  // une colonne que l'export n'écrit pas.
+  function inclusionsEcrites(octets) {
+    const [entete, ...lignes] = decouper(decoder(octets).texte, SEPARATEUR).enregistrements;
+    const colonne = (champ) => {
+      const rang = entete.indexOf(champ);
+      return rang < 0 ? null : lignes.map((ligne) => ligne[rang]);
+    };
+    return { entete, organisations: colonne('inclusion_organisation'), personnes: colonne('inclusion_participant') };
+  }
+
+  test('écrites en dernier, après l’animation réservée, chacune dès qu’une personne porte sa liste ; absentes sinon', () => {
+    const deux = inclusionsEcrites(exporterParticipants([
+      personne(1, 'Ombrelle', { organisation: 'Club des Merles', animationReservee: true }),
+      personne(2, 'Pervenche', { inclusionsOrganisation: ['Club des Merles'], inclusionsParticipant: [1] }),
+    ]));
+    assert.deepEqual(deux.entete, [...ENTETE.split(';'), 'animation_reservee', 'inclusion_organisation', 'inclusion_participant']);
+    const organisations = inclusionsEcrites(exporterParticipants([
+      personne(1, 'Ombrelle', { organisation: 'Club des Merles' }),
+      personne(2, 'Pervenche', { inclusionsOrganisation: ['Club des Merles'] }),
+    ]));
+    assert.deepEqual([organisations.entete.at(-1), organisations.personnes], ['inclusion_organisation', null]);
+    const personnes = inclusionsEcrites(exporterParticipants([personne(1, 'Ombrelle'), personne(2, 'Pervenche', { inclusionsParticipant: [1] })]));
+    assert.deepEqual(personnes.entete, [...ENTETE.split(';'), 'inclusion_participant']);
+    assert.deepEqual(inclusionsEcrites(exporterParticipants([personne(1, 'Ombrelle')])).entete, ENTETE.split(';'));
+  });
+
+  test('les organisations jointes comme les conflits ; les personnes par leur nom affiché, prénom puis nom, numéro compris, dans l’ordre des identifiants', () => {
+    const { organisations, personnes } = inclusionsEcrites(exporterParticipants([
+      personne(1, 'Ombrelle', { prenom: 'Iris', organisation: 'Société Alpha, Beta' }),
+      personne(2, 'Galet 01', { prenom: 'Roger', organisation: 'Club des Merles', nomNumerote: true }),
+      personne(3, 'Pervenche', { inclusionsOrganisation: ['Club des Merles', 'Société Alpha, Beta'], inclusionsParticipant: [1, 2, 4] }),
+      personne(4, 'Grisaille'),
+    ]));
+    assert.deepEqual(organisations, ['', '', 'Club des Merles; Société Alpha, Beta', '']);
+    assert.deepEqual(personnes, ['', '', 'Iris Ombrelle; Roger Galet 01; Grisaille', '']);
+  });
+
+  test('quand « ; » relirait deux personnes en une, la cellule se joint par « | », puis par une fin de ligne', () => {
+    const participants = [
+      personne(1, 'Lune', { prenom: 'Iris' }),
+      personne(2, 'Soleil'),
+      personne(3, 'Lune; Soleil', { prenom: 'Iris' }),
+      personne(4, 'Ombrelle', { inclusionsParticipant: [1, 2] }),
+      personne(5, 'Pervenche', { inclusionsParticipant: [3] }),
+    ];
+    const octets = exporterParticipants(participants);
+    assert.deepEqual(inclusionsEcrites(octets).personnes, ['', '', '', 'Iris Lune | Soleil', 'Iris Lune; Soleil']);
+    memesParticipants(importer(octets, 'jointure des personnes'), participants, 'jointure des personnes');
+  });
+
+  test('l’aller-retour export → import rend les mêmes inclusions, sous chaque mode ; un réimport en mise à jour ne modifie personne', () => {
+    const participants = [
+      personne(1, 'Ombrelle', { prenom: 'Iris', organisation: 'Club des Merles', inclusionsParticipant: [3, 4] }),
+      personne(2, 'Pervenche', { prenom: 'Théo', organisation: 'Atelier Ressac', inclusionsOrganisation: ['Club des Merles'] }),
+      personne(3, 'Lacasse', { prenom: 'Ondine', exclu: true, inclusionsOrganisation: ['Atelier Ressac', 'Club des Merles'], inclusionsParticipant: [1] }),
+      personne(4, 'Galet 01', { prenom: 'Roger', nomNumerote: true }),
+    ];
+    const octets = exporterParticipants(participants);
+    const relus = importer(octets, 'inclusions').map(({ nomNumerote, ...autres }) => autres);
+    memesParticipants(relus, participants.map(({ nomNumerote, ...autres }) => autres), 'inclusions');
+    const charge = creerCharge({ id: 'evt-essai', nom: "Soirée d'essai", siegesParDefaut: 4, tours: 4 });
+    charge.participants = structuredClone(participants);
+    charge.prochainsIds.participant = 5;
+    const apercu = apercevoir(decoder(octets).texte, { participants: charge.participants, mode: 'mettreAJour', tours: 4 });
+    const { charge: apres, resume } = appliquerImport(charge, apercu, 'mettreAJour');
+    assert.deepEqual([resume.ajoutes, resume.misAJour, resume.inchanges], [0, 0, 4]);
+    assert.deepEqual(apres.participants, charge.participants);
+    const remplace = appliquerImport(charge, apercevoir(decoder(octets).texte, { participants: charge.participants, mode: 'remplacer', tours: 4 }), 'remplacer');
+    assert.deepEqual(
+      remplace.charge.participants.map(({ inclusionsParticipant }) => inclusionsParticipant),
+      [[7, 8], undefined, [5], undefined],
+    );
+  });
+
+  test('des inclusions présentes qui ne sont pas une liste de textes, ou d’identifiants de la liste : TypeError qui nomme la personne et le champ', () => {
+    const refuse = (participant, message) =>
+      assert.throws(() => exporterParticipants([personne(1, 'Sarcelle'), participant]), { name: 'TypeError', message });
+    refuse(personne(2, 'Ombrelle', { inclusionsOrganisation: 'Club' }), 'participant 2 de la liste, inclusion_organisation : liste de textes attendu, reçu "Club"');
+    refuse(personne(2, 'Ombrelle', { inclusionsParticipant: [9] }), "participant 2 de la liste, inclusion_participant : liste d'identifiants de la liste attendu, reçu [9]");
+    refuse(personne(2, 'Ombrelle', { inclusionsParticipant: 1 }), "participant 2 de la liste, inclusion_participant : liste d'identifiants de la liste attendu, reçu 1");
+  });
+});
+
+describe('inclusionsVersHomonymes : les inclusions que l’export nomme par un nom partagé (§ 10.2)', () => {
+  test('compte chaque inclusion qui vise une personne dont une autre porte le nom affiché, à la clé normalisée près', () => {
+    const participants = [
+      personne(1, 'Galet', { prenom: 'Roger', organisation: 'Club des Merles' }),
+      personne(2, 'GALET', { prenom: 'roger', organisation: 'Atelier Ressac' }),
+      personne(3, 'Galet 01', { prenom: 'Roger', nomNumerote: true }),
+      personne(4, 'Ombrelle', { inclusionsParticipant: [1, 3] }),
+      personne(5, 'Pervenche', { inclusionsParticipant: [2] }),
+    ];
+    assert.equal(inclusionsVersHomonymes(participants), 2);
+    assert.equal(inclusionsVersHomonymes(participants.filter(({ id }) => id !== 2)), 0);
+    assert.equal(inclusionsVersHomonymes([]), 0);
+  });
+
+  test('l’import du fichier exporté refuse l’inclusion vers un homonyme : INCLUSION_PARTICIPANT_AMBIGU', () => {
+    const participants = [
+      personne(1, 'Galet', { prenom: 'Roger', organisation: 'Club des Merles' }),
+      personne(2, 'Galet', { prenom: 'Roger', organisation: 'Atelier Ressac' }),
+      personne(3, 'Ombrelle', { inclusionsParticipant: [2] }),
+    ];
+    assert.equal(inclusionsVersHomonymes(participants), 1);
+    const apercu = apercevoir(decoder(exporterParticipants(participants)).texte, { tours: 4 });
+    assert.deepEqual([apercu.refusGlobal, apercu.refusGlobalLigne, apercu.refusGlobalNom], ['INCLUSION_PARTICIPANT_AMBIGU', 4, 'Roger Galet']);
+  });
+});
+
+describe('exporterParticipants : la colonne de l’animation réservée (§ 10.2)', () => {
+  // L'en-tête et les cellules de la colonne de l'animation réservée, null
+  // quand l'export ne l'écrit pas.
+  function animationsEcrites(octets) {
+    const [entete, ...lignes] = decouper(decoder(octets).texte, SEPARATEUR).enregistrements;
+    const rang = entete.indexOf('animation_reservee');
+    return { entete, cellules: rang < 0 ? null : lignes.map((ligne) => ligne[rang]) };
+  }
+
+  test('écrite après les conflits, en dernier sans inclusion, oui ou non, dès qu’une personne porte la marque ; absente sinon', () => {
+    const avec = animationsEcrites(exporterParticipants([
+      personne(1, 'Ombrelle', { titrePressenti: 'Animation table d’honneur', animationReservee: true }),
+      personne(2, 'Pervenche'),
+    ]));
+    assert.deepEqual(avec.entete, [...ENTETE.split(';'), 'animation_reservee']);
+    assert.deepEqual(avec.cellules, ['oui', 'non']);
+    const lesDeux = animationsEcrites(exporterParticipants([personne(1, 'Ombrelle', { animationReservee: true, conflits: ['A'] })]));
+    assert.deepEqual(lesDeux.entete, [...ENTETE.split(';'), 'conflit_organisation', 'animation_reservee']);
+    assert.deepEqual(animationsEcrites(exporterParticipants([personne(1, 'Ombrelle')])).cellules, null);
+  });
+
+  test('l’aller-retour export → import rend les mêmes marques, et un réimport en mise à jour ne modifie personne', () => {
+    const participants = [personne(1, 'Ombrelle', { animationReservee: true }), personne(2, 'Pervenche')];
+    const octets = exporterParticipants(participants);
+    memesParticipants(importer(octets, 'animation'), participants, 'animation');
+    const charge = { ...creerCharge({ id: 'evt-essai', nom: "Soirée d'essai", siegesParDefaut: 4, tours: 4 }), participants };
+    const apercu = apercevoir(decoder(octets).texte, { participants, tours: 4, mode: 'mettreAJour' });
+    const { resume } = appliquerImport(charge, apercu, 'mettreAJour');
+    assert.deepEqual([resume.misAJour, resume.inchanges], [0, 2]);
+  });
+
+  test('une marque présente qui n’est pas vraie : TypeError qui nomme la personne et le champ', () => {
+    assert.throws(
+      () => exporterParticipants([personne(1, 'Ombrelle', { animationReservee: false })]),
+      { name: 'TypeError', message: 'participant 1 de la liste, animation_reservee : vrai ou absent attendu, reçu false' },
+    );
+  });
+});
+
 describe("modeleParticipants : le modèle à télécharger, dans la forme de l'export (§ 10.1)", () => {
   // Le modèle sous quatre tours : la plage « 1-3 », la liste « 2, 3 ».
   const ATTENDU = csv(
-    'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence;conflit_organisation',
-    'Ombrelle;Iris;Coopérative Aubier;iris.ombrelle@exemple.test;animation;non;;finance, Montréal;;',
-    'Pervenche;Théo;Coopérative Aubier;;;non;arrive au deuxième tour;ressources humaines;2, 3;',
-    'Lacasse;Ondine;Atelier Ressac;ondine.lacasse@exemple.test;;oui;désistement annoncé;;;',
-    'Tourteau;Basile;;;;non;;bénévole;1-3;Atelier Ressac',
+    'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence;conflit_organisation;animation_reservee;' +
+      'inclusion_organisation;inclusion_participant',
+    'Ombrelle;Iris;Coopérative Aubier;iris.ombrelle@exemple.test;animation;non;;finance, Montréal;;;oui;;Basile Tourteau',
+    'Pervenche;Théo;Coopérative Aubier;;;non;arrive au deuxième tour;ressources humaines;2, 3;;non;Atelier Ressac;',
+    'Lacasse;Ondine;Atelier Ressac;ondine.lacasse@exemple.test;;oui;désistement annoncé;;;;non;;',
+    'Tourteau;Basile;;;;non;;bénévole;1-3;Atelier Ressac;non;;',
   );
 
   // Les cellules de présence du modèle, rang à rang, sous tours tours.
@@ -435,13 +642,15 @@ describe("modeleParticipants : le modèle à télécharger, dans la forme de l'e
     assert.throws(() => modeleParticipants(), TypeError);
   });
 
-  test("chaque colonne que l'import lit porte au moins une valeur ; exclu ses deux valeurs, une cellule plusieurs étiquettes", () => {
+  test("chaque colonne que l'import lit porte au moins une valeur ; exclu et l'animation réservée leurs deux valeurs, une cellule plusieurs étiquettes", () => {
     const { enregistrements } = decouper(decoder(modeleParticipants({ tours: 4 })).texte, SEPARATEUR);
     const [entete, ...lignes] = enregistrements;
     assert.deepEqual(entete, [...CHAMPS]);
     CHAMPS.forEach((champ, rang) => assert.ok(lignes.some((ligne) => ligne[rang] !== ''), champ));
     const exclus = new Set(lignes.map((ligne) => ligne[CHAMPS.indexOf('exclu')]));
     assert.deepEqual([...exclus].sort(), ['non', 'oui']);
+    const animations = new Set(lignes.map((ligne) => ligne[CHAMPS.indexOf('animation_reservee')]));
+    assert.deepEqual([...animations].sort(), ['non', 'oui']);
     assert.ok(lignes.some((ligne) => ligne[CHAMPS.indexOf('etiquettes')].includes(JOINTURE_ETIQUETTES)));
   });
 
@@ -449,11 +658,11 @@ describe("modeleParticipants : le modèle à télécharger, dans la forme de l'e
     memesParticipants(importer(modeleParticipants({ tours: 4 }), 'modèle'), [
       personne(1, 'Ombrelle', {
         prenom: 'Iris', organisation: 'Coopérative Aubier', courriel: 'iris.ombrelle@exemple.test', titrePressenti: 'animation',
-        etiquettes: ['Montréal', 'finance'],
+        etiquettes: ['Montréal', 'finance'], inclusionsParticipant: [4], animationReservee: true,
       }),
       personne(2, 'Pervenche', {
         prenom: 'Théo', organisation: 'Coopérative Aubier', notes: 'arrive au deuxième tour', etiquettes: ['ressources humaines'],
-        presence: [2, 3],
+        presence: [2, 3], inclusionsOrganisation: ['Atelier Ressac'],
       }),
       personne(3, 'Lacasse', {
         prenom: 'Ondine', organisation: 'Atelier Ressac', courriel: 'ondine.lacasse@exemple.test', notes: 'désistement annoncé',
@@ -463,6 +672,20 @@ describe("modeleParticipants : le modèle à télécharger, dans la forme de l'e
     ], 'modèle');
     const apercu = apercevoir(decoder(modeleParticipants({ tours: 4 })).texte, { tours: 4 });
     assert.deepEqual([apercu.doublons, apercu.multilignes], [[], []]);
+  });
+
+  test('réimporté sur la liste qu’il a créée : admis en mise à jour et en remplacement, refusé en ajout, INCLUSION_PARTICIPANT_AMBIGU', () => {
+    const texte = decoder(modeleParticipants({ tours: 4 })).texte;
+    const participants = importer(modeleParticipants({ tours: 4 }), 'modèle');
+    for (const mode of ['mettreAJour', 'remplacer']) {
+      const apercu = apercevoir(texte, { participants, mode, tours: 4 });
+      assert.deepEqual([apercu.refusGlobal, apercu.refusees], [null, []], mode);
+    }
+    const ajout = apercevoir(texte, { participants, mode: 'ajouter', tours: 4 });
+    assert.deepEqual(
+      [ajout.refusGlobal, ajout.refusGlobalLigne, ajout.refusGlobalNom],
+      ['INCLUSION_PARTICIPANT_AMBIGU', 2, 'Basile Tourteau'],
+    );
   });
 
   test('deux appels rendent les mêmes octets, dans deux tableaux distincts', () => {

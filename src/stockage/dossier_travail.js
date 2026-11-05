@@ -41,12 +41,14 @@
 //                   événements qui existent, ou peuvent exister, ailleurs, et
 //                   l'échec du dossier retenu se nomme encore à la première
 //                   écriture refusée.
-//   autre           le dossier retenu est neuf et vide — il ne porte aucune
-//                   entrée — quand l'autre emplacement porte des événements :
-//                   le logiciel propose de les importer, par copie (§ 8.7).
-//                   Un dossier qui a servi, fût-ce pour une corbeille ou des
-//                   réglages locaux, ne le propose plus à chaque séance ; un
-//                   emplacement qui ne se lit pas ne propose rien.
+//   autre           le dossier retenu est neuf, vide — il ne porte aucune
+//                   entrée — et inscriptible quand l'autre emplacement porte
+//                   des événements : le logiciel propose de les importer, par
+//                   copie (§ 8.7). Un dossier qui a servi, fût-ce pour une
+//                   corbeille ou des réglages locaux, ne le propose plus à
+//                   chaque séance ; un emplacement qui ne se lit pas ne
+//                   propose rien, ni un dossier retenu dont la sonde échoue,
+//                   où la copie échouerait.
 //   avertissements  PLATEFORME_WEB, puis SUPPORT_AMOVIBLE quand le dossier
 //                   retenu est sur un support amovible, où le renommage
 //                   par-dessus ne vaut pas celui du volume système (§ 8.8).
@@ -96,8 +98,9 @@ import { DOSSIER_CORBEILLE, SUFFIXES, cleSansCasse } from './noms.js';
  *           la cause de sa sonde : le logiciel demande avant d'ouvrir la
  *           liste
  * @property {null|{racine: Racine, evenements: number}} autre
- *           le dossier retenu est neuf et vide, l'autre emplacement porte
- *           ces événements : le logiciel propose de les importer, par copie
+ *           le dossier retenu est neuf, vide et inscriptible, l'autre
+ *           emplacement porte ces événements : le logiciel propose de les
+ *           importer, par copie
  * @property {Array<'PLATEFORME_WEB'|'SUPPORT_AMOVIBLE'>} avertissements
  *           dans cet ordre
  */
@@ -248,7 +251,11 @@ export async function determinerDossierTravail(fs) {
     question = { code: 'DOCUMENTS_NON_INSCRIPTIBLE', racine, evenements, cause: sonde.cause };
   }
   // Un compte inconnu, null, ne propose rien : null n'est pas supérieur à 0.
-  const autre = ici.length === 0 && evenementsAilleurs > 0 ? { racine: ailleurs, evenements: evenementsAilleurs } : null;
+  // Un dossier retenu qui refuse l'écriture ne propose rien non plus : la
+  // copie y échouerait, et la question, ou à défaut la première écriture
+  // refusée, nomme ce refus.
+  const proposer = sonde.inscriptible && ici.length === 0 && evenementsAilleurs > 0;
+  const autre = proposer ? { racine: ailleurs, evenements: evenementsAilleurs } : null;
 
   const avertissements = [];
   if (mode === 'web') avertissements.push('PLATEFORME_WEB');

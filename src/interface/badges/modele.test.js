@@ -1,13 +1,13 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Le modèle de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8, Q3),
-// sans DOM : les sources offertes et celle qui vaut, les réglages d'une
-// demande, les phrases de l'annonce, ce qui bloque « Produire », les
+// Le modèle des badges de la section de l'impression (§ 11.2, § 11.5, § 11.6,
+// § 11.8, Q3), sans DOM : les sources offertes et celle qui vaut, les réglages
+// d'une demande, les phrases de l'annonce, ce qui bloque « Produire », les
 // personnes d'une réédition. Chaque clé que le modèle désigne existe, en
 // français comme en langue témoin, et se compose sans lever. Une annonce se
-// prend telle que la séance la rend (planche_seance.js), sur de petites
-// soirées construites ; aucune production de PDF.
+// prend telle que la séance la rend (planche_seance.js), sur de petites soirées
+// construites ; aucune production de PDF.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { personne, soiree, table } from '../../../test/fixtures/badges/cas.js';
@@ -414,6 +414,128 @@ describe('le pied TechnoLibre (§ 8.5, § 11.4)', () => {
     ]);
     assert.match(textes[0], /TechnoLibre/);
     assert.match(textes[1], /retenue sur ce poste/);
+  });
+});
+
+describe('le nom des doublons laissé en blanc (§ 8.5, § 11.4)', () => {
+  // L'annonce de la séance sur la soirée retenue, la case donnée.
+  const annoncerAvecCase = (charge, cacherNumero) =>
+    planches.preparer({ charge, base: 'lucioles', fs: fsVide, racine: { id: 'documents', chemin: '/d' }, papier: 'A4', modeleBadge: 'a6', cacherNumero });
+
+  test('une annonce est celle de la machine quand sa case est celle de la machine ; une annonce ou une machine qui ne la porte pas vaut décochée', async () => {
+    const cochee = await annoncerAvecCase(retenue(), true);
+    const decochee = await annoncerAvecCase(retenue(), false);
+    assert.deepEqual([cochee.cacherNumero, decochee.cacherNumero], [true, false]);
+    const machine = { modeleBadge: 'a6', papier: 'A4' };
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, cacherNumero: true }), true);
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, cacherNumero: false }), false);
+    assert.equal(annonceDeLaMachine(cochee, machine), false);
+    assert.equal(annonceDeLaMachine(decochee, { ...machine, cacherNumero: true }), false);
+    assert.equal(annonceDeLaMachine(decochee, { ...machine, cacherNumero: false }), true);
+    assert.equal(annonceDeLaMachine(decochee, machine), true);
+    const { cacherNumero: _case, ...sansCase } = cochee;
+    assert.equal(annonceDeLaMachine(sansCase, { ...machine, cacherNumero: false }), true);
+    assert.equal(annonceDeLaMachine(sansCase, { ...machine, cacherNumero: true }), false);
+    // La case du pied TechnoLibre se compare à part.
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, cacherNumero: true, piedTechnolibre: true }), false);
+  });
+
+  test('l’annonce ne dit rien de plus : mêmes phrases, cochée ou décochée', async () => {
+    assert.deepEqual(phrasesAnnonce(await annoncerAvecCase(retenue(), true)), phrasesAnnonce(await annoncerAvecCase(retenue(), false)));
+  });
+
+  test('la case, sa note et son avertissement ont leur libellé', () => {
+    const textes = composer([
+      { cle: 'badges.doublons.case', details: {} },
+      { cle: 'badges.doublons.nonRetenu', details: {} },
+      { cle: 'badges.doublons.note', details: {} },
+    ]);
+    assert.equal(textes[0], 'Laisser le nom des doublons en blanc');
+    assert.match(textes[1], /retenue sur ce poste/);
+    assert.equal(textes[2], 'La place du nom reste vide, pour l\u{2019}écrire à la main.');
+    // Les deux cases du groupe ont chacune leur avis : celui-ci nomme la
+    // sienne, pour ne pas se confondre avec celui du pied TechnoLibre.
+    assert.ok(textes[1].includes(textes[0]));
+  });
+});
+
+describe('l’organisation en gros (§ 8.5, § 11.4)', () => {
+  // L'annonce de la séance sur la soirée retenue, la case donnée.
+  const annoncerAvecCase = (charge, organisationEnGros) =>
+    planches.preparer({
+      charge,
+      base: 'lucioles',
+      fs: fsVide,
+      racine: { id: 'documents', chemin: '/d' },
+      papier: 'A4',
+      modeleBadge: 'a6',
+      organisationEnGros,
+    });
+
+  test('une annonce est celle de la machine quand sa case est celle de la machine ; une annonce ou une machine qui ne la porte pas vaut décochée', async () => {
+    const cochee = await annoncerAvecCase(retenue(), true);
+    const decochee = await annoncerAvecCase(retenue(), false);
+    assert.deepEqual([cochee.organisationEnGros, decochee.organisationEnGros], [true, false]);
+    const machine = { modeleBadge: 'a6', papier: 'A4' };
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, organisationEnGros: true }), true);
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, organisationEnGros: false }), false);
+    assert.equal(annonceDeLaMachine(cochee, machine), false);
+    assert.equal(annonceDeLaMachine(decochee, { ...machine, organisationEnGros: true }), false);
+    assert.equal(annonceDeLaMachine(decochee, machine), true);
+    const { organisationEnGros: _case, ...sansCase } = cochee;
+    assert.equal(annonceDeLaMachine(sansCase, { ...machine, organisationEnGros: false }), true);
+    assert.equal(annonceDeLaMachine(sansCase, { ...machine, organisationEnGros: true }), false);
+    // La case du nom des doublons se compare à part.
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, organisationEnGros: true, cacherNumero: true }), false);
+  });
+
+  test('l’annonce ne dit rien de plus : mêmes phrases, cochée ou décochée', async () => {
+    assert.deepEqual(phrasesAnnonce(await annoncerAvecCase(retenue(), true)), phrasesAnnonce(await annoncerAvecCase(retenue(), false)));
+  });
+
+  test('la case et son avertissement ont leur libellé ; l’avis nomme la case', () => {
+    const textes = composer([
+      { cle: 'badges.organisationEnGros.case', details: {} },
+      { cle: 'badges.organisationEnGros.nonRetenu', details: {} },
+    ]);
+    assert.equal(textes[0], 'Organisation en gros, au-dessus du nom');
+    assert.match(textes[1], /retenue sur ce poste/);
+    assert.ok(textes[1].includes(textes[0]));
+  });
+});
+
+describe('l’image des badges dans l’annonce (§ 11.4, § 11.5)', () => {
+  const avecImage = async (imageBadges, plus = {}) => ({ ...(await annoncer(retenue(), 'A4')), imageBadges, ...plus });
+  const POSEE = Object.freeze({ position: 'haut', chemin: `logo/${'9'.repeat(64)}.png`, posees: 4, sansPlace: 0, introuvable: null });
+  const dImage = (phrases) => cles(phrases).filter((cle) => cle.startsWith('badges.annonce.image'));
+
+  test('case décochée, ou image posée sur chaque badge : l’annonce n’en dit rien', async () => {
+    const annonce = await annoncer(retenue(), 'A4');
+    assert.equal(annonce.imageBadges, null);
+    assert.deepEqual(dImage(phrasesAnnonce(annonce)), []);
+    assert.deepEqual(dImage(phrasesAnnonce(await avecImage(POSEE))), []);
+  });
+
+  test('aucune image choisie, introuvable, illisible, ou sans place sur des badges : une phrase, avant celles des logos, et rien ne bloque', async () => {
+    for (const [image, cle, texte] of [
+      [{ ...POSEE, chemin: null, posees: 0 }, 'badges.annonce.imageAucune', 'Image des badges : aucune image choisie, les badges s’impriment sans image.'],
+      [
+        { ...POSEE, posees: 0, introuvable: 'ABSENT' },
+        'badges.annonce.imageIntrouvable',
+        'Image des badges introuvable dans le dossier de l’événement : les badges s’impriment sans image.',
+      ],
+      [{ ...POSEE, posees: 0, introuvable: 'ILLISIBLE' }, 'badges.annonce.imageIllisible', 'Image des badges illisible : les badges s’impriment sans image.'],
+      [{ ...POSEE, posees: 1, sansPlace: 3 }, 'badges.annonce.imageSansPlace', 'Image des badges : retirée de 3 badges, faute de place.'],
+      [{ ...POSEE, posees: 3, sansPlace: 1 }, 'badges.annonce.imageSansPlace', 'Image des badges : retirée d’un badge, faute de place.'],
+    ]) {
+      const annonce = await avecImage(image, { logos: { poses: 0, sansPlace: 1, introuvables: [] } });
+      const phrases = phrasesAnnonce(annonce);
+      assert.deepEqual(dImage(phrases), [cle]);
+      const rang = cles(phrases).indexOf(cle);
+      assert.equal(cles(phrases)[rang + 1], 'badges.annonce.logosSansPlace');
+      assert.equal(composer(phrases)[rang], texte);
+      assert.equal(produireBloque(annonce), false);
+    }
   });
 });
 

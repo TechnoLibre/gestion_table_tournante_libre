@@ -44,13 +44,25 @@ describe('la filiation d’une dérivée (§ 5.7, D76, C7)', () => {
     assert.equal(texteFiliation(filiation(1000, [10]), { t, format }), 'Dérivée de n° 1000, tour 10 figé.');
   });
 
-  test('les clés propositions.filiation.* sont trois, et aucune de leurs valeurs ne dit « variante »', () => {
+  test('un tour figé que l’événement nomme suit son numéro, entre parenthèses', () => {
+    const nomsTours = [null, 'Fromages', null];
+    assert.equal(texteFiliation(filiation(4, [1, 2]), { t, format, nomsTours }), 'Dérivée de n° 4, tours 1 et 2 (Fromages) figés.');
+    assert.equal(texteFiliation(filiation(4, [2]), { t, format, nomsTours }), 'Dérivée de n° 4, tour 2 (Fromages) figé.');
+  });
+
+  test('les clés propositions.filiation.* sont trois phrases et le terme d’un tour figé, et aucune de leurs valeurs ne dit « variante »', () => {
     const cles = [...TABLE.keys()].filter((cle) => cle.startsWith('propositions.filiation.'));
-    assert.deepEqual(cles, ['propositions.filiation.derivee', 'propositions.filiation.deriveeFiges', 'propositions.filiation.departAbsent']);
-    for (const cle of cles) {
+    assert.deepEqual(cles, [
+      'propositions.filiation.derivee',
+      'propositions.filiation.deriveeFiges',
+      'propositions.filiation.departAbsent',
+      'propositions.filiation.tourFige',
+    ]);
+    for (const cle of cles.slice(0, 3)) {
       const texte = t(cle, { depart: 4, tours: ['1', '2'] });
       assert.doesNotMatch(texte, /variante/i, cle);
       assert.match(texte, /^Dérivée de n° 4/, cle);
     }
+    assert.equal(t('propositions.filiation.tourFige', { numero: '2', nom: 'Fromages' }), '2 (Fromages)');
   });
 });

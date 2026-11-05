@@ -15,7 +15,11 @@
 // d'organisation » (§ 4, § 10.2) : son résumé et son choix multiple, un
 // brouillon qui n'écrit rien, « Appliquer » en une entrée par organisation
 // qui change, le clavier, le refus sous les cases et l'écriture venue
-// d'ailleurs. Puis la rubrique « Logo » (§ 8.9, § 10.2) : sa place, la
+// d'ailleurs. Puis les rubriques des inclusions (§ 4, § 10.2) : leur
+// place, leurs choix, l'exclue marquée, la recherche qui cache sans
+// décocher, « Appliquer » en une entrée par rubrique, le clavier, le refus
+// sous les cases, l'écriture venue d'ailleurs et le passage à une autre
+// personne. Puis la rubrique « Logo » (§ 8.9, § 10.2) : sa place, la
 // vignette, « Logo » qui choisit, convertit et pose l'image, la remplace,
 // « Retirer le logo », Défaire, l'adresse blob: de chaque vignette libérée
 // au chemin suivant et à la fermeture de la fiche, la vue grande dans la
@@ -28,8 +32,8 @@
 // « Modifier » et son formulaire prérempli, le focus au nom puis rendu à
 // « Modifier », une seule entrée des seuls champs changés, aucune quand
 // rien ne change, « Annuler » et Échap, NOM_REQUIS contre le nom,
-// l'orthographe d'organisation retenue et son signal, l'avis des conflits
-// qui suivent, le refus en lecture et sur un plan bloqué, le formulaire
+// l'orthographe d'organisation retenue et son signal, les avis des conflits
+// et des inclusions qui suivent, le refus en lecture et sur un plan bloqué, le formulaire
 // refermé au passage à une autre personne, Ctrl+Z, et les conflits
 // atteignables pendant la saisie. Chaque épreuve
 // monte App par monterApp, au cadre de 1 366 × 700, ouvre la section des
@@ -866,6 +870,210 @@ describe("la rubrique « Conflits d'organisation » de la fiche (§ 4, § 10.2)"
   });
 });
 
+describe('les rubriques des inclusions de la fiche (§ 4, § 10.2)', () => {
+  const rubriqueDe = (fiche, sorte) => fiche.querySelector(`[data-inclusions-fiche="${sorte}"]`);
+  const cases = (fiche, sorte) => [...rubriqueDe(fiche, sorte).querySelectorAll('[data-choix]')];
+  const noms = (fiche, sorte) => cases(fiche, sorte).map((c) => texteDe(c.closest('label')));
+  const coches = (fiche, sorte) => cases(fiche, sorte).map((c) => c.checked);
+  const appliquer = (fiche, sorte) => rubriqueDe(fiche, sorte).querySelector('[data-commande^="appliquerInclusions"]');
+  const resume = (fiche, sorte) => rubriqueDe(fiche, sorte).querySelector('[data-inclusions-resume]');
+  const elements = (fiche, sorte) => [...resume(fiche, sorte).querySelectorAll('li')].map(texteDe);
+  const recherche = (fiche) => rubriqueDe(fiche, 'participant').querySelector('[data-recherche-choix]');
+  const ficheDe = (m, id) => m.racine.querySelector(`[data-fiche="${id}"]`);
+  const personneDe = (m, id) => m.seance.etat().charge.participants.find((p) => p.id === id);
+  // Les entrées d'inclusions du journal, une par geste validé.
+  const libelles = (m) => {
+    const texte = m.fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.journal}`);
+    const tous = texte === null ? [] : lireJournal(texte).entrees.map(({ libelle }) => libelle);
+    return tous.filter((libelle) => libelle.startsWith('Inclusions '));
+  };
+
+  // Douze personnes, trois organisations : la douzième passe au Club des
+  // Merles ; la cinquième est exclue.
+  function chargeTrois() {
+    const charge = chargeDouze();
+    charge.participants[11].organisation = 'Club des Merles';
+    charge.participants[4].exclu = true;
+    return charge;
+  }
+
+  async function basculer(fiche, sorte, rang) {
+    cases(fiche, sorte)[rang].click();
+    flushSync();
+    await tick();
+  }
+
+  // Tape texte dans la recherche, comme une saisie.
+  function chercher(fiche, texte) {
+    const champ = recherche(fiche);
+    champ.value = texte;
+    champ.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+  }
+
+  test('entre les conflits et la présence, l’une sous l’autre : leurs titres, leurs résumés vides, les organisations hors la sienne, les personnes hors elle-même rangées par nom, l’exclue marquée, sous une recherche', async () => {
+    const { fiche } = await ouvrirFiche(chargeTrois(), 3);
+    const organisations = rubriqueDe(fiche, 'organisation');
+    const personnes = rubriqueDe(fiche, 'participant');
+    const suit = (a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(suit(fiche.querySelector('[data-conflits-fiche]'), organisations)).toBe(true);
+    expect(suit(organisations, personnes)).toBe(true);
+    expect(suit(personnes, fiche.querySelector('[data-presence-fiche]'))).toBe(true);
+    expect(texteDe(organisations.querySelector('h4'))).toBe(t('participants.fiche.inclusionsOrganisation'));
+    expect(texteDe(personnes.querySelector('h4'))).toBe(t('participants.fiche.inclusionsParticipant'));
+    expect(texteDe(resume(fiche, 'organisation'))).toBe("Aucune inclusion d'organisation.");
+    expect(texteDe(resume(fiche, 'participant'))).toBe('Aucune inclusion de participant.');
+    expect(noms(fiche, 'organisation')).toEqual(['Atelier Ressac', 'Club des Merles']);
+    expect(organisations.querySelector('fieldset').getAttribute('aria-label')).toBe(
+      "Inclusions d'organisation de Ondine Lacasse, une case par organisation",
+    );
+    expect(texteDe(organisations.querySelector('legend'))).toBe(t('participants.inclusions.legendeOrganisations'));
+    expect(noms(fiche, 'participant')).toEqual([
+      'Aurèle Bruyère',
+      'Basile Tourteau',
+      'Clovis Embrun',
+      'Iris Ombrelle',
+      'Maëlle Quenouille (exclue)',
+      'Noé Sablière',
+      'Perrine Goémon',
+      'Sidonie Varech',
+      'Tancrède Ajonc',
+      'Théo Pervenche',
+      'Ysaline Fougeraie',
+    ]);
+    expect(personnes.querySelector('fieldset').getAttribute('aria-label')).toBe(
+      'Inclusions de participant de Ondine Lacasse, une case par personne',
+    );
+    expect(recherche(fiche).getAttribute('aria-label')).toBe(t('participants.inclusions.recherche'));
+    expect(cases(fiche, 'participant').map((c) => c.tabIndex).filter((rang) => rang === 0)).toHaveLength(1);
+  });
+
+  test('la recherche ne montre que les personnes dont le nom la contient, sans rien décocher ; une case cochée qu’elle cache reste cochée ; Échap la vide', async () => {
+    const { m, fiche } = await ouvrirFiche(chargeTrois(), 3);
+    await basculer(fiche, 'participant', 0);
+    chercher(fiche, 'goe');
+    expect(noms(fiche, 'participant')).toEqual(['Perrine Goémon']);
+    expect(coches(fiche, 'participant')).toEqual([false]);
+    // La recherche lit le nom seul, non la marque de l'exclue.
+    chercher(fiche, 'quenouille');
+    expect(noms(fiche, 'participant')).toEqual(['Maëlle Quenouille (exclue)']);
+    chercher(fiche, 'exclue');
+    expect(noms(fiche, 'participant')).toEqual([]);
+    chercher(fiche, 'zéphyr');
+    expect(noms(fiche, 'participant')).toEqual([]);
+    expect(rubriqueDe(fiche, 'participant').querySelector('[data-aucun-choix]').textContent.trim()).toBe(
+      tEcran('participants.inclusions.aucunResultat', { texte: 'zéphyr' }),
+    );
+    recherche(fiche).focus();
+    await touche('Escape');
+    await attendre(() => expect(recherche(fiche).value).toBe(''));
+    expect(coches(fiche, 'participant')[0]).toBe(true);
+    // Une seconde Échap, dans la recherche vide, rend la liste enregistrée.
+    await touche('Escape');
+    await attendre(() => expect(coches(fiche, 'participant')[0]).toBe(false));
+    expect(m.seance.gesteEnCours).toBe(false);
+  });
+
+  test('cocher et décocher n’écrivent rien ; chaque « Appliquer » écrit sa liste en une entrée, qu’un Défaire reprend, et le résumé la nomme', async () => {
+    const { m, fiche } = await ouvrirFiche(chargeTrois(), 3);
+    const trace = m.trace.length;
+    await basculer(fiche, 'organisation', 1);
+    await basculer(fiche, 'participant', 4);
+    await basculer(fiche, 'participant', 9);
+    expect(m.seance.gesteEnCours).toBe(true);
+    expect(m.trace.length).toBe(trace);
+    appliquer(fiche, 'organisation').click();
+    await attendre(() => expect(personneDe(m, 3).inclusionsOrganisation).toEqual(['Club des Merles']));
+    expect(personneDe(m, 3).inclusionsParticipant).toBeUndefined();
+    expect(m.seance.gesteEnCours).toBe(true);
+    appliquer(ficheDe(m, 3), 'participant').click();
+    await attendre(() => expect(personneDe(m, 3).inclusionsParticipant).toEqual([2, 5]));
+    await attendre(() => expect(libelles(m)).toHaveLength(2));
+    expect(libelles(m)).toEqual([
+      "Inclusions d'organisation de Ondine Lacasse : ajouté « Club des Merles »",
+      'Inclusions de participant de Ondine Lacasse : ajouté Théo Pervenche et Maëlle Quenouille',
+    ]);
+    await attendre(() => expect(elements(ficheDe(m, 3), 'participant')).toEqual(['Maëlle Quenouille (exclue)', 'Théo Pervenche']));
+    expect(elements(ficheDe(m, 3), 'organisation')).toEqual(['Club des Merles']);
+    expect(m.seance.gesteEnCours).toBe(false);
+    // Cocher puis décocher : « Appliquer » n'exécute rien.
+    const executer = vi.spyOn(m.seance, 'executer');
+    await basculer(ficheDe(m, 3), 'organisation', 0);
+    await basculer(ficheDe(m, 3), 'organisation', 0);
+    appliquer(ficheDe(m, 3), 'organisation').click();
+    await attendre(() => expect(m.seance.gesteEnCours).toBe(false));
+    expect(executer).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+    await m.seance.defaire();
+    await attendre(() => expect(personneDe(m, 3).inclusionsParticipant).toBeUndefined());
+    await attendre(() => expect(texteDe(resume(ficheDe(m, 3), 'participant'))).toBe('Aucune inclusion de participant.'));
+    expect(elements(ficheDe(m, 3), 'organisation')).toEqual(['Club des Merles']);
+  });
+
+  test('au clavier : l’espace coche, Entrée dans la recherche applique, Échap dans les cases rend la liste enregistrée sans rien écrire', async () => {
+    const { m, fiche } = await ouvrirFiche(chargeTrois(), 3);
+    const executer = vi.spyOn(m.seance, 'executer');
+    cases(fiche, 'organisation')[0].focus();
+    await touche('End');
+    await touche(' ');
+    await attendre(() => expect(coches(fiche, 'organisation')).toEqual([false, true]));
+    await touche('Escape');
+    await attendre(() => expect(coches(fiche, 'organisation')).toEqual([false, false]));
+    expect(executer).not.toHaveBeenCalled();
+    cases(fiche, 'participant')[0].focus();
+    await touche(' ');
+    recherche(fiche).focus();
+    await touche('Enter');
+    await attendre(() => expect(personneDe(m, 3).inclusionsParticipant).toEqual([7]));
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer).toHaveBeenCalledWith('changerInclusionsParticipant', { id: 3, participants: [7] });
+  });
+
+  test('un refus se pose sous les cases, qu’il décrit, le brouillon gardé : sur un plan bloqué, ouvert en lecture, le refus de la séance et son remède', async () => {
+    const lue = generee(chargeTrois());
+    const retenue = executer(lue, 'retenirProposition', { id: lue.propositions[0].id });
+    const { m, fiche } = await ouvrirFiche(executer(retenue, 'changerEtat', { etat: 'bloque' }), 3, { mode: 'lecture' });
+    const trace = m.trace.length;
+    await basculer(fiche, 'participant', 1);
+    appliquer(fiche, 'participant').click();
+    const refus = await attendre(() => {
+      const trouve = rubriqueDe(fiche, 'participant').querySelector('[data-refus]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    expect(refus.dataset.refus).toBe(m.seance.etat().refus.code);
+    expect(refus.querySelector('button')).not.toBeNull();
+    expect(coches(fiche, 'participant')[1]).toBe(true);
+    expect(document.getElementById(rubriqueDe(fiche, 'participant').querySelector('fieldset').getAttribute('aria-describedby'))).toBe(refus);
+    for (const c of cases(fiche, 'participant')) expect(c.getAttribute('aria-invalid')).toBe('true');
+    expect(rubriqueDe(fiche, 'organisation').querySelector('[data-refus]')).toBeNull();
+    expect(m.trace.length).toBe(trace);
+    await basculer(fiche, 'participant', 0);
+    expect(rubriqueDe(fiche, 'participant').querySelector('[data-refus]')).toBeNull();
+  });
+
+  test('une écriture venue d’ailleurs met le résumé et les cases à jour ; une autre personne repart de sa liste, sans brouillon', async () => {
+    const { m, fiche } = await ouvrirFiche(chargeTrois(), 3);
+    await m.seance.executer('changerInclusionsParticipant', { id: 3, participants: [1] });
+    await attendre(() => expect(elements(fiche, 'participant')).toEqual(['Iris Ombrelle']));
+    expect(coches(fiche, 'participant')[3]).toBe(true);
+    await basculer(fiche, 'organisation', 0);
+    expect(m.seance.gesteEnCours).toBe(true);
+    m.ui.ouvrirFiche(4);
+    const autre = await attendre(() => {
+      const trouvee = ficheDe(m, 4);
+      expect(trouvee).not.toBeNull();
+      return trouvee;
+    });
+    expect(texteDe(resume(autre, 'participant'))).toBe('Aucune inclusion de participant.');
+    expect(coches(autre, 'organisation').every((coche) => !coche)).toBe(true);
+    await attendre(() => expect(m.seance.gesteEnCours).toBe(false));
+    await m.seance.defaire();
+    m.ui.ouvrirFiche(3);
+    await attendre(() => expect(texteDe(resume(ficheDe(m, 3), 'participant'))).toBe('Aucune inclusion de participant.'));
+  });
+});
+
 describe('la rubrique « Logo » de la fiche (§ 8.9, § 10.2)', () => {
   const rubriqueLogo = (fiche) => fiche.querySelector('[data-logo-fiche]');
   const commande = (fiche, nom) => rubriqueLogo(fiche).querySelector(`[data-commande="${nom}"]`);
@@ -1305,7 +1513,7 @@ describe('les informations de la fiche et « Modifier » (§ 4, § 10.2)', () =>
     return charge;
   }
 
-  test('en lecture, les six valeurs sous leur intitulé, « — » quand vide, puis le statut ; « Modifier », nommée par la personne, avant le logo', async () => {
+  test('en lecture, les six valeurs sous leur intitulé, « — » quand vide, puis l’animation réservée et le statut ; « Modifier », nommée par la personne, avant le logo', async () => {
     const charge = chargeDouze();
     Object.assign(charge.participants[2], { courriel: 'ondine@exemple.invalid', notes: 'Arrive tard\nAllergie aux noix' });
     const { fiche } = await ouvrirFiche(charge, 3);
@@ -1317,6 +1525,7 @@ describe('les informations de la fiche et « Modifier » (§ 4, § 10.2)', () =>
       [t('participants.colonne.courriel'), 'ondine@exemple.invalid'],
       [t('participants.colonne.titrePressenti'), '\u{2014}'],
       [t('participants.colonne.notes'), 'Arrive tard Allergie aux noix'],
+      [t('participants.informations.animationReservee'), t('participants.informations.animationNon')],
       [t('participants.fiche.statut'), expect.any(String)],
     ]);
     expect([...bloc(fiche).querySelectorAll('dd')][5].textContent).toBe('Arrive tard\nAllergie aux noix');
@@ -1379,6 +1588,34 @@ describe('les informations de la fiche et « Modifier » (§ 4, § 10.2)', () =>
     expect(personneDe(m, 3).organisation).toBe('Coopérative Aubier');
     await attendre(() => expect(valeurs(ficheDe(m, 3)).slice(0, 3).map(([, valeur]) => valeur)).toEqual(['Lacasse', 'Ondine', 'Coopérative Aubier']));
     expect(executer).toHaveBeenCalledTimes(1);
+  });
+
+  test('la case « Animation réservée », cochée puis enregistrée : une entrée qui la nomme, la fiche dit « oui » ; Ctrl+Z la retire', async () => {
+    const { m } = await ouvrirFiche(chargeDouze(), 3);
+    const executer = vi.spyOn(m.seance, 'executer');
+    const fiche = await ouvrirFormulaire(m, 3);
+    const caseAnimation = champ(fiche, 'animationReservee');
+    expect(caseAnimation.type).toBe('checkbox');
+    expect(caseAnimation.checked).toBe(false);
+    expect(texteDe(formulaire(fiche).querySelector(`label[for="${caseAnimation.id}"]`))).toBe(t('participants.informations.animationReservee'));
+    caseAnimation.click();
+    flushSync();
+    expect(m.seance.gesteEnCours).toBe(true);
+    enregistrer(fiche).click();
+    await attendre(() => expect(personneDe(m, 3).animationReservee).toBe(true));
+    expect(executer).toHaveBeenCalledWith('modifierParticipant', { id: 3, champs: { animationReservee: true } });
+    await attendre(() => expect(libelles(m)).toEqual(['Modifié Ondine Lacasse : animation réservée']));
+    await attendre(() =>
+      expect(valeurs(ficheDe(m, 3)).at(-2)).toEqual([t('participants.informations.animationReservee'), t('participants.informations.animationOui')]),
+    );
+    const rouverte = await ouvrirFormulaire(m, 3);
+    expect(champ(rouverte, 'animationReservee').checked).toBe(true);
+    annuler(rouverte).click();
+    await attendre(() => expect(formulaire(ficheDe(m, 3))).toBeNull());
+
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(Object.hasOwn(personneDe(m, 3), 'animationReservee')).toBe(false));
+    await attendre(() => expect(valeurs(ficheDe(m, 3)).at(-2)[1]).toBe(t('participants.informations.animationNon')));
   });
 
   test('rien de changé, ou des blancs de bord seulement : « Enregistrer » referme sans écrire ni refuser, le focus à « Modifier »', async () => {
@@ -1587,6 +1824,28 @@ describe('les informations de la fiche et « Modifier » (§ 4, § 10.2)', () =>
     m.ui.ouvrirFiche(3);
     await attendre(() => expect(ficheDe(m, 3)).not.toBeNull());
     expect(bloc(ficheDe(m, 3)).querySelector('[data-avertissement]')).toBeNull();
+  });
+
+  test('les inclusions d’organisation suivent de même : leur avis, sous celui des conflits, le dit à son tour', async () => {
+    const charge = chargeConflit();
+    charge.participants[4].inclusionsOrganisation = ['Club des Merles'];
+    const { m } = await ouvrirFiche(charge, 12);
+    const fiche = await ouvrirFormulaire(m, 12);
+    remplir(champ(fiche, 'organisation'), 'Club des Grives');
+    enregistrer(fiche).click();
+    await attendre(() => expect(personneDe(m, 5).inclusionsOrganisation).toEqual(['Club des Grives']));
+    expect(personneDe(m, 3).conflits).toEqual(['Club des Grives']);
+    const avis = await attendre(() => {
+      const trouves = [...bloc(ficheDe(m, 12)).querySelectorAll('[data-avertissement]')].map((element) => element.dataset.avertissement);
+      expect(trouves).toEqual(['conflitsSuivis', 'inclusionsSuivies']);
+      return bloc(ficheDe(m, 12)).querySelector('[data-avertissement="inclusionsSuivies"]');
+    });
+    expect(avis.getAttribute('role')).toBe('status');
+    expect(avis.querySelector('p').textContent).toBe(
+      tEcran('participants.informations.inclusionsSuivies', { renommee: { de: 'Club des Merles', vers: 'Club des Grives' }, retirees: [], propres: 0 }),
+    );
+    await m.seance.defaire();
+    await attendre(() => expect(bloc(ficheDe(m, 12)).querySelector('[data-avertissement]')).toBeNull());
   });
 
   test('en lecture, et sur un plan bloqué en écriture comme en lecture : « Modifier » refuse à côté du bouton, avec son remède, sans ouvrir le formulaire ni rien écrire', async () => {

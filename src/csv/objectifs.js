@@ -162,6 +162,10 @@ const rangees = (etiquettes) => [...etiquettes].sort(comparerTextes);
  * @property {'mettreAJour'|'remplacer'} mode   le mode pour lequel l'aperçu
  *           est calculé : appliquerImportObjectifs ne l'applique que dans ce
  *           mode
+ * @property {number} tours   le nombre de tours sous lequel la colonne tour
+ *           est lue, porté sous un refus global comme sans :
+ *           appliquerImportObjectifs refuse un aperçu dont la colonne tour est
+ *           associée sous un autre nombre de tours que l'événement
  * @property {string|null} separateur   null quand aucun séparateur n'est
  *           établi, ou pour un fichier à une colonne
  * @property {string[]} entetes         tels qu'écrits
@@ -186,16 +190,17 @@ const rangees = (etiquettes) => [...etiquettes].sort(comparerTextes);
  *           null sinon
  */
 
-// Aperçu d'un texte refusé en entier : son mode, ce que la lecture a établi
-// avant le refus, aucune ligne.
+// Aperçu d'un texte refusé en entier : son mode et son nombre de tours, ce
+// que la lecture a établi avant le refus, aucune ligne.
 function refuserEn(
-  mode,
+  { mode, tours },
   code,
   { separateur = null, entetes = [], association = { colonnes: {}, ambigus: [], nonReconnues: [] } } = {},
   ligne = null,
 ) {
   return {
     mode,
+    tours,
     separateur,
     entetes,
     association,
@@ -347,7 +352,7 @@ export function apercevoirObjectifs(texte, charge, { choix = {}, mode = 'mettreA
   }
   const { tours } = charge.evenement;
   if (!Number.isSafeInteger(tours) || tours < 1) throw new TypeError(`tours : entier positif attendu, reçu ${String(tours)}`);
-  const refuser = (...refus) => refuserEn(mode, ...refus);
+  const refuser = (...refus) => refuserEn({ mode, tours }, ...refus);
   if (contientNul(texte)) return refuser('CARACTERE_NUL');
 
   let separateur;
@@ -410,6 +415,7 @@ export function apercevoirObjectifs(texte, charge, { choix = {}, mode = 'mettreA
   const lignes = valides.map(({ ligne, champs, brut }, rang) => ({ ligne, champs: { ...champs, etiquettes: listes[rang] }, brut }));
   return {
     mode,
+    tours,
     ...lu,
     lignes,
     refusees,
@@ -471,8 +477,12 @@ const memesObjectifs = (a, b) => a.regle === b.regle && JSON.stringify(a.etiquet
  * @param {'mettreAJour'|'remplacer'} mode
  * @returns {{charge: import('../stockage/types.js').Charge, resume: ResumeImportObjectifs}}
  * @throws {ErreurCsv} dans cet ordre : PLAN_BLOQUE, détails {}, en état
- *   bloqué ; le refus global de l'aperçu, son code, détails { ligne } ;
- *   AMBIGUITE, détails { champs }, tant que le choix ne tranche pas
+ *   bloqué ; APERCU_TOURS_CHANGES, détails { tours, toursApercu }, quand la
+ *   colonne tour est associée et que l'aperçu l'a lue sous un autre nombre
+ *   de tours que l'événement — un tour que l'aperçu admet ou refuse ne
+ *   l'est peut-être plus, et relire le fichier refait l'aperçu ; le refus
+ *   global de l'aperçu, son code, détails { ligne } ; AMBIGUITE, détails
+ *   { champs }, tant que le choix ne tranche pas
  * @throws {TypeError} pour un mode inconnu, un aperçu calculé pour un autre
  *   mode, et une ligne dont la table manque à la charge : l'aperçu montré à
  *   l'opérateur est celui que l'import applique
@@ -483,6 +493,10 @@ export function appliquerImportObjectifs(charge, apercu, mode) {
   }
   if (apercu.mode !== mode) throw new TypeError(`aperçu calculé pour ${String(apercu.mode)}, import en ${mode}`);
   if (charge.evenement.etat === 'bloque') throw new ErreurCsv('PLAN_BLOQUE');
+  const { tours } = charge.evenement;
+  if (apercu.association.colonnes.tour !== undefined && apercu.tours !== tours) {
+    throw new ErreurCsv('APERCU_TOURS_CHANGES', { tours, toursApercu: apercu.tours });
+  }
   if (apercu.refusGlobal !== null) throw new ErreurCsv(apercu.refusGlobal, { ligne: apercu.refusGlobalLigne });
   const { ambigus } = apercu.association;
   if (ambigus.length > 0) throw new ErreurCsv('AMBIGUITE', { champs: ambigus.map(({ champ: nom }) => nom) });

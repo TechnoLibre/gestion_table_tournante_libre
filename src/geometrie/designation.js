@@ -4,10 +4,10 @@
 // La désignation d'un siège (§ 7.3, § 14.10) : ce que contient un point de
 // dessin, lu sur les géométries de tables.js, celles mêmes que le dessin pose.
 // Le dépôt d'un glissement ne cherche pas sa cible dans le DOM : il convertit
-// le point en coordonnées de dessin et le passe à designer.
+// le point en coordonnées de dessin et le passe à designer. Le seuil des
+// cibles, CIBLE_MIN_PX, vient de cible.js, que les graphiques lisent aussi.
 
-/** Taille d'écran minimale d'une cible de siège, en px (§ 7.3). */
-export const CIBLE_MIN_PX = 24;
+import { CIBLE_MIN_PX } from './cible.js';
 
 // Vrai quand le point est dans le disque (ronde) ou le carré aux côtés
 // parallèles aux axes (carrée) de demi-taille donnée, centré sur la table,
@@ -29,6 +29,21 @@ function dans(point, { centre, forme }, demiTaille) {
  */
 export function regimeCibles(k, geometrie) {
   return k * geometrie.pas >= CIBLE_MIN_PX ? 'sieges' : 'table';
+}
+
+/**
+ * Le plus petit zoom où regimeCibles rend 'sieges' pour une table :
+ * CIBLE_MIN_PX / pas, relevé d'un écart d'arrondi quand le produit k × pas
+ * retombe sous le seuil. Au-dessous, la table ne dessine aucune chaise, et
+ * aucune marque ne s'y pose (§ 7.3).
+ *
+ * @param {import('./tables.js').GeometrieTable} geometrie
+ * @returns {number}  px/cm
+ */
+export function kSieges(geometrie) {
+  let k = CIBLE_MIN_PX / geometrie.pas;
+  while (k * geometrie.pas < CIBLE_MIN_PX) k += k * Number.EPSILON;
+  return k;
 }
 
 /**

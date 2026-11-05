@@ -407,6 +407,25 @@ describe('etatPlaces : titres, réservations et marques (§ 4.1, § 4.4, § 7.6)
     );
   });
 
+  test('pourvu ailleurs : la réservation sans siège d’Iris à la table 5 pourvoit son titre, le retenu l’assied à la table 1 — la chaise titrée, sans réservation, est pleine', () => {
+    const charge = chargeTitres();
+    charge.titres = [{ table: 5, siege: 1, libelle: 'animation' }];
+    charge.reservations = [resa(1, 5, null)];
+    const plan = planFichier({ tables: [1, 2, 3, 4, 5], capacites: [4, 4, 4, 4, 4], participants: [1, 2, 3, 4, 5], tours: [[[1], [2], [3], [5], [4]], [[2], [3], [5], [1], [4]]] });
+    charge.propositions = [propositionDe(1, plan)];
+    charge.retenu = retenuDe(1, plan);
+    charge.prochainsIds.proposition = 2;
+    const etat = etatPlaces(charge, { tour: 1 });
+    assert.equal(etat.tables[0].chaises.find(({ occupant }) => occupant === 1).reservation, null);
+    const chaise = etat.tables[4].chaises[0];
+    assert.notEqual(chaise.occupant, 1);
+    assert.equal(chaise.reservation, null);
+    assert.deepEqual(chaise.titre, { libelle: 'animation', pourvu: true });
+    assert.deepEqual([chaise.remplissage, chaise.marques], ['plein', ['cadenasOuvert']]);
+    assert.deepEqual(etat.tables[4].titres, { titres: 1, pourvus: 1 });
+    assert.deepEqual(titresNonPourvus(charge), []);
+  });
+
   test('exclusion : Iris désignée puis exclue laisse ses réservations, son titre redevient non pourvu ; réintégrée, il l’est de nouveau', () => {
     const designee = executer('designer', chargeTitres(), { participant: 1, table: 3, siege: null, libelle: 'animatrice' }).charge;
     const exclue = executer('exclureParticipant', designee, { id: 1 }).charge;
@@ -515,8 +534,8 @@ describe('etatPlaces : la réservation au siège que le placement ne tient pas (
     assert.equal(trois.occupant, 3);
     assert.deepEqual(trois.reservation, { participant: 2, portee: 'tous', tour: null });
     assert.deepEqual([trois.remplissage, trois.marques], ['hachure', ['cadenasFerme', 'anneau']]);
-    // La hachure dit la réservation non tenue, non le titre : 3, assis au
-    // siège titré, le pourvoit (§ 4.1).
+    // La hachure dit la réservation non tenue, non le titre : la réservation
+    // de 2 au siège titré le pourvoit, bien que 3 y soit assis (§ 4.1).
     assert.deepEqual(trois.titre, { libelle: 'Animation', pourvu: true });
     assert.deepEqual([deux.occupant, deux.reservation, deux.remplissage, deux.marques], [2, null, 'normal', []]);
   });

@@ -14,6 +14,7 @@
   // Le panneau lit 'seance' et 'ui' au contexte ; etatTour, l'état des
   // places du tour affiché, que SectionPlan calcule, ou null sans événement.
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import { effetDe } from '../raccourcis.js';
   import { nomDeCharge } from './vue_plan.js';
 
@@ -25,6 +26,8 @@
   const uid = $props.id();
 
   const charge = $derived($seance.charge);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived(charge === null ? [] : nomsDesTours(charge));
   const tour = $derived(etatTour === null ? 1 : etatTour.tour);
   const reserve = $derived(etatTour === null ? [] : etatTour.reserve);
   const nomDe = $derived(charge === null ? null : nomDeCharge(charge));
@@ -48,7 +51,7 @@
   <h3 id="{uid}-titre">{t('plan.reserve.titre')}</h3>
   {#if charge !== null}
     <div class="corps">
-      <p class="sous-titre">{t('plan.reserve.tour', { tour })}</p>
+      <p class="sous-titre">{t('plan.reserve.tour', { tour, nomsTours })}</p>
       {#if reserve.length === 0}
         <p>{t('plan.reserve.vide')}</p>
       {:else}

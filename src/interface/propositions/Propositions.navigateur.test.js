@@ -22,12 +22,13 @@ import { configurationDe } from '../../application/configuration.js';
 import { creerFormat } from '../../application/format.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { nomAffiche } from '../../application/personnes.js';
+import { INACTIVITE_MS } from '../../application/seance.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { CRITERES, classer } from '../../moteur/classement.js';
 import { indexerPlan, normaliser } from '../../moteur/configuration.js';
 import { mesurer } from '../../moteur/indicateurs.js';
-import { troisChiffres } from '../../moteur/manque.js';
+import { manques, profilManque, teteDuManque, troisChiffres } from '../../moteur/manque.js';
 import { plafondsAPriori, plafondsRealises } from '../../moteur/plafond.js';
 import { rechercher } from '../../moteur/recherche.js';
 import { serialiser } from '../../stockage/canonique.js';
@@ -250,10 +251,20 @@ async function exigerPlanMontre(m, placement) {
   for (const noms of attendu.values()) expect(noms.length).toBeGreaterThan(0);
 }
 
-// Le texte de chaque cellule d'une ligne, par colonne.
+// Le chiffre d'une cellule : son texte sans les lignes écrites dessous.
+function chiffreDe(td) {
+  const copie = td.cloneNode(true);
+  for (const sous of copie.querySelectorAll('[data-sous]')) sous.remove();
+  return texteDe(copie);
+}
+
+// Les lignes écrites sous le chiffre d'une cellule, dans l'ordre.
+const sousDe = (td) => [...td.querySelectorAll('[data-sous]')].map(texteDe);
+
+// Le chiffre de chaque cellule d'une ligne, par colonne.
 function cellules(tr) {
   const lues = [...tr.querySelectorAll('td[data-colonne]')];
-  return new Map(lues.map((td) => [td.dataset.colonne, texteDe(td)]));
+  return new Map(lues.map((td) => [td.dataset.colonne, chiffreDe(td)]));
 }
 
 // Les chiffres que rend le moteur pour un placement de la charge, écrits
@@ -283,13 +294,50 @@ function attendus(chargeLue, placement) {
   ]);
 }
 
-// Chaque chiffre attendu se lit dans sa cellule ; aucune cellule ne porte
-// le minimum de r(p), qui désignerait la personne la mieux servie.
-function exigerChiffres(tr, attendue) {
+// Les lignes que le tableau écrit sous les chiffres d'un placement de la
+// charge, par colonne, tirées du moteur : sous le plus grand manque, le
+// plafond réalisé du rang 1 du profil de manque ; puis « mobiles X · ancrés
+// Y » sous le minimum de A(p), le taux de diversité et les trois chiffres
+// du manque, chacun quand sa mesure a une valeur sur les mobiles et sur les
+// ancrés.
+function sousAttendus(chargeLue, placement) {
+  const instance = normaliser(configurationDepuisCharge(chargeLue));
+  const tableDe = indexerPlan(instance, planDepuisFichier(placement));
+  const mesures = mesurer(instance, tableDe);
+  const realises = plafondsRealises(instance, tableDe);
+  const trois = troisChiffres(instance, mesures, plafondsAPriori(instance), realises);
+  const tete = teteDuManque(profilManque(instance, manques(realises, mesures.rencontres), realises));
+  const ecrit = (valeur, decimales = 0) => (valeur === null ? TIRET : format.nombre(valeur, { decimales }));
+  const sous = new Map([['manqueMax', [`plafond réalisé ${format.nombre(tete.plafondRealise)}`]]]);
+  const parPopulation = [
+    ['organisationsVues', (population) => mesures.aggOrganisationsVues[population].min],
+    ['diversite', (population) => mesures.aggDiversite[population].min, 2],
+    ['manqueMax', (population) => trois.manqueMax[population]],
+    ['effectifManque', (population) => trois.effectifManque[population]],
+    ['ecartItineraireMax', (population) => trois.ecartItineraireMax[population]],
+  ];
+  for (const [colonne, lire, decimales = 0] of parPopulation) {
+    if (lire('mobiles') === null || lire('ancres') === null) continue;
+    const ligneSecondaire = `mobiles ${ecrit(lire('mobiles'), decimales)} \u{00B7} ancrés ${ecrit(lire('ancres'), decimales)}`;
+    sous.set(colonne, [...(sous.get(colonne) ?? []), ligneSecondaire]);
+  }
+  return sous;
+}
+
+// Chaque chiffre attendu se lit dans sa cellule, et les lignes attendues
+// dessous, aucune sous une autre cellule ; aucune cellule ne porte le
+// minimum de r(p), qui désignerait la personne la mieux servie. Le texte
+// attendu se lit comme texteDe lit le rendu : l'espace fine d'un millier y
+// devient une espace.
+function exigerChiffres(tr, attendue, sous = new Map()) {
   const lues = cellules(tr);
+  const lu = (texte) => texte.replace(/\s+/g, ' ');
   expect(attendue.size).toBe(15);
   expect(lues.has('redondance'), 'minimum de r(p)').toBe(false);
-  for (const [colonne, texte] of attendue) expect(lues.get(colonne), colonne).toBe(texte);
+  for (const [colonne, texte] of attendue) expect(lues.get(colonne), colonne).toBe(lu(texte));
+  for (const td of tr.querySelectorAll('td[data-colonne]')) {
+    expect(sousDe(td), td.dataset.colonne).toEqual((sous.get(td.dataset.colonne) ?? []).map(lu));
+  }
 }
 
 // --- Le tableau classé (§ 5.4, § 5.7, § 19.3 capture 11) --------------------------
@@ -304,7 +352,9 @@ describe('le tableau classé', () => {
     const positions = CRITERES.map((nom) => phrase.indexOf(t(`moteur.critere.${nom}`)));
     expect(positions.every((position, rang) => position >= 0 && (rang === 0 || position > positions[rang - 1]))).toBe(true);
     expect(phrase.indexOf('identifiant')).toBeGreaterThan(positions[4]);
-    for (const proposition of chargeLue.propositions) exigerChiffres(ligne(m, proposition.id), attendus(chargeLue, proposition));
+    for (const proposition of chargeLue.propositions) {
+      exigerChiffres(ligne(m, proposition.id), attendus(chargeLue, proposition), sousAttendus(chargeLue, proposition));
+    }
   });
 
   test('le minimum seul : aucun en-tête ni aucune cellule ne porte la moyenne des rencontres ; les unités nommées', async () => {
@@ -323,8 +373,40 @@ describe('le tableau classé', () => {
     const instance = normaliser(configurationDepuisCharge(chargeLue));
     const { aggRencontres } = mesurer(instance, indexerPlan(instance, planDepuisFichier(chargeLue.propositions[0])));
     const moyennes = ['tous', 'mobiles'].map((population) => format.nombre(aggRencontres[population].moyenne, { decimales: 2 }));
-    for (const texte of lues.values()) for (const moyenne of moyennes) expect(texte).not.toContain(moyenne);
+    const sous = [...ligne(m, 1).querySelectorAll('td[data-colonne]')].flatMap(sousDe);
+    expect(sous.length).toBeGreaterThan(0);
+    for (const texte of [...lues.values(), ...sous]) for (const moyenne of moyennes) expect(texte).not.toContain(moyenne);
   });
+
+  test('la grande, ancrée : sous le plus grand manque, le plafond réalisé puis « mobiles X · ancrés Y », chacun sur sa ligne, en encre secondaire lisible à 4,5:1 dans les deux thèmes, retenu compris', async () => {
+    const chargeLue = executer(generee(chargeDemo('grande'), { graine: 1, nombre: 2, arret: 300 }), 'retenirProposition', { id: 1 });
+    const m = await ouvrir(chargeLue);
+    for (const proposition of chargeLue.propositions) {
+      exigerChiffres(ligne(m, proposition.id), attendus(chargeLue, proposition), sousAttendus(chargeLue, proposition));
+    }
+    exigerChiffres(ligneRetenu(m), attendus(chargeLue, chargeLue.retenu), sousAttendus(chargeLue, chargeLue.retenu));
+    const manque = ligne(m, 1).querySelector('td[data-colonne="manqueMax"]');
+    expect(sousDe(manque)).toHaveLength(2);
+    expect(lignesDuTexte(manque)).toBe(3);
+    const corps = parseFloat(getComputedStyle(manque).fontSize);
+    for (const tr of [ligneRetenu(m), ligne(m, 1)]) {
+      for (const sous of tr.querySelectorAll('[data-sous]')) {
+        expect(lignesDuTexte(sous), texteDe(sous)).toBe(1);
+        expect(parseFloat(getComputedStyle(sous).fontSize)).toBeLessThan(corps);
+      }
+    }
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        flushSync();
+        for (const [tr, jeton] of [[ligneRetenu(m), '--couleur-etat-retenu-fond'], [ligne(m, 1), '--couleur-carte-fond']]) {
+          for (const sous of tr.querySelectorAll('[data-sous]')) {
+            expect(couleurTexte(sous).join(), theme).toBe(couleurDeJeton('--couleur-page-texte-secondaire').join());
+            expect(contraste(couleurTexte(sous), couleurDeJeton(jeton)), `${theme} ${texteDe(sous)}`).toBeGreaterThanOrEqual(4.5);
+          }
+        }
+      });
+    }
+  }, 60_000);
 
   test('la grande : « 99 retours imposés par 33 ancrages » à part, la ligne « ancrés » à 24, et « atteignabilité inconnue »', async () => {
     const m = await ouvrir(generee(chargeDemo('grande'), { graine: 1, nombre: 1, arret: 50_000 }));
@@ -497,7 +579,7 @@ describe('retenir, voir sur le plan', () => {
     const avant = cellules(ligne(m, 2));
     await m.seance.executer('deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null });
     const chargeLue = charge(m);
-    await attendre(() => exigerChiffres(ligneRetenu(m), attendus(chargeLue, chargeLue.retenu)));
+    await attendre(() => exigerChiffres(ligneRetenu(m), attendus(chargeLue, chargeLue.retenu), sousAttendus(chargeLue, chargeLue.retenu)));
     expect(cellules(ligne(m, 2))).toEqual(avant);
     expect(texteDe(ligneRetenu(m))).toContain(t('propositions.retenu.ajuste', { proposition: 2 }));
   });
@@ -858,6 +940,44 @@ describe('garder les meilleures', () => {
     expect(commande(refus, 'debloquer')).not.toBeNull();
     expect(fenetreOuverte(m)).toBeNull();
     expect(ids(m)).toEqual([3, 2, 1]);
+  });
+
+  test('un nombre tapé et non validé tient la séance en écriture ; Entrée le valide et rend le compte ; refusé, il reste en cours, et Échap le rend', async () => {
+    const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
+    // L'horloge passe le délai d'inactivité, puis la file se vide.
+    const laisserPasser = async () => {
+      m.horloge.avancer(INACTIVITE_MS + 1);
+      await m.seance.attendre();
+      flushSync();
+    };
+    const taper = (texte) => {
+      const entree = champGardees(m);
+      entree.focus();
+      entree.value = texte;
+      entree.dispatchEvent(new Event('input', { bubbles: true }));
+      flushSync();
+    };
+    expect(m.seance.gesteEnCours).toBe(false);
+    taper('2');
+    expect(m.seance.gesteEnCours).toBe(true);
+    await laisserPasser();
+    expect(m.seance.etat().mode).toBe('ecriture');
+    await touche('Enter');
+    flushSync();
+    expect(texteDe(garder(m))).toBe('Garder les 2 meilleures');
+    expect(m.seance.gesteEnCours).toBe(false);
+
+    taper('0');
+    await touche('Enter');
+    await attendre(() => expect(champGardees(m).getAttribute('aria-invalid')).toBe('true'));
+    expect(m.seance.gesteEnCours).toBe(true);
+    await laisserPasser();
+    expect(m.seance.etat().mode).toBe('ecriture');
+    await touche('Escape');
+    await attendre(() => expect(champGardees(m).value).toBe('2'));
+    expect(m.seance.gesteEnCours).toBe(false);
+    await laisserPasser();
+    expect(m.seance.etat().mode).toBe('lecture');
   });
 });
 
@@ -2053,7 +2173,7 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
       [2, 3],
     ],
   ]) {
-    test(`à 1 366 px, chaque ligne a la hauteur de ses chiffres, filiation comprise : ni « Actions » ni les phrases imposées ne l’allongent — ${cas}`, async () => {
+    test(`à 1 366 px, chaque ligne a la hauteur de ses chiffres, filiation et lignes sous un chiffre comprises : ni « Actions » ni les phrases imposées ne l’allongent — ${cas}`, async () => {
       const m = await ouvrir(construire());
       for (const id of derivees) expect(filiationDe(ligne(m, id)), String(id)).not.toBeNull();
       const rangees = [ligneRetenu(m), ...lignes(m)];
@@ -2067,21 +2187,27 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
         const sans = tr.getBoundingClientRect().height;
         contenu.style.display = '';
         expect(Math.abs(avec - sans), `${quoi} : ${avec} px avec les commandes, ${sans} px sans`).toBeLessThan(0.5);
-        // Hors la cellule d'identité, chaque cellule de chiffres tient sur
-        // une ligne : le rang, chaque mesure, le certificat, et les deux
-        // phrases imposées, l'une après l'autre.
+        // Hors la cellule d'identité, chaque chiffre tient sur une ligne, et
+        // chaque ligne écrite dessous sur la sienne : le rang, chaque
+        // mesure, le certificat, et les deux phrases imposées, l'une après
+        // l'autre.
         expect(tr.querySelectorAll('td[data-colonne="imposes"] p').length, quoi).toBe(2);
         const uneLigne = [...tr.children].filter((cellule) => !['proposition', 'commandes'].includes(cellule.dataset.colonne));
         expect(uneLigne.length, quoi).toBeGreaterThan(10);
-        for (const cellule of uneLigne) expect(lignesDuTexte(cellule), `${quoi}, ${cellule.dataset.colonne} : « ${texteDe(cellule)} »`).toBe(1);
+        for (const cellule of uneLigne) {
+          expect(lignesDuTexte(cellule), `${quoi}, ${cellule.dataset.colonne} : « ${texteDe(cellule)} »`).toBe(1 + sousDe(cellule).length);
+        }
+        expect(sousDe(tr.querySelector('td[data-colonne="manqueMax"]')).length, quoi).toBeGreaterThanOrEqual(1);
         // La ligne a la hauteur de sa plus haute cellule de chiffres : la
-        // cellule d'identité, filiation comprise, ou une ligne de texte.
+        // cellule d'identité, filiation comprise, ou celle d'un chiffre et
+        // des lignes écrites dessous.
         const plafond = Math.max(...[...tr.children].filter((cellule) => cellule.dataset.colonne !== 'commandes').map((cellule) => hauteurDuContenu(cellule) + habillageDe(cellule)));
         expect(avec, `${quoi} : ${avec} px pour des chiffres de ${plafond} px`).toBeLessThanOrEqual(plafond + 0.5);
         const identite = tr.querySelector('[data-colonne="proposition"]');
         const rang = tr.querySelector('[data-colonne="rang"]');
-        const hauteur = Math.max(...[identite, rang].map((cellule) => hauteurDuContenu(cellule) + habillageDe(cellule)));
-        expect(avec, `${quoi} : ${avec} px pour une cellule d’identité de ${hauteur} px`).toBeLessThanOrEqual(hauteur + 0.5);
+        const avecSous = [...tr.querySelectorAll('td[data-colonne]')].filter((cellule) => sousDe(cellule).length > 0);
+        const hauteur = Math.max(...[identite, rang, ...avecSous].map((cellule) => hauteurDuContenu(cellule) + habillageDe(cellule)));
+        expect(avec, `${quoi} : ${avec} px pour une cellule d’identité ou de chiffres de ${hauteur} px`).toBeLessThanOrEqual(hauteur + 0.5);
         // Une dérivée et le retenu portent une phrase sous leur numéro ; les
         // autres lignes, leur seul numéro, tiennent sur une ligne de texte.
         if (quoi === 'retenu' || derivees.includes(Number(quoi))) expect(lignesDuTexte(identite), quoi).toBeGreaterThanOrEqual(2);

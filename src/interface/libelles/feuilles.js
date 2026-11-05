@@ -21,6 +21,9 @@ export const TABLE = new Map([
   ['feuilles.accueil.reserve', 'Réserve'],
   // Un tour où la personne est absente : ni table, ni siège, ni réserve.
   ['feuilles.accueil.absente', 'absente'],
+  // L'intertitre des personnes sans organisation, à la fin de la liste
+  // triée par organisation.
+  ['feuilles.accueil.sansOrganisation', 'Sans organisation'],
   // L'en-tête d'un bloc de tours consécutifs, quand les tours ne tiennent
   // pas tous côte à côte : « Tours 1 à 34 », « Tour 7 » pour un seul.
   ['feuilles.accueil.tours', ({ premier, dernier }) => (premier === dernier ? `Tour ${premier}` : `Tours ${premier} à ${dernier}`)],
@@ -30,8 +33,12 @@ export const TABLE = new Map([
   // Ce qui sépare le titre d'une feuille du libellé de sa table, que la
   // feuille pose dans son propre nœud.
   ['feuilles.tables.avantLibelle', ' \u{2014} '],
+  // Ce qui sépare le nom d'un occupant de son organisation, que la cellule
+  // pose dans son propre nœud, à l'encre secondaire.
+  ['feuilles.tables.avantOrganisation', ' \u{2014} '],
   ['feuilles.tables.place', 'Place'],
   ['feuilles.tables.vide', 'Place vide'],
   ['feuilles.tables.titreNonPourvu', '(titre non pourvu)'],
-  ['feuilles.tables.aucune', 'Aucune table'],
+  // Aucune table, ou personne d'assis à aucune.
+  ['feuilles.tables.aucune', 'Aucune table occupée'],
 ]);

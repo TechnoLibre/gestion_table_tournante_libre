@@ -56,6 +56,23 @@ export const EXEMPLES = [
 ];
 
 export const TEXTES = [
+  // Un tour que l'événement nomme : après son numéro dans une phrase, seul
+  // dans une mention brève (aides.js).
+  [
+    'PERSONNE_ABSENTE_AU_TOUR',
+    { participant: 2, personne: 'Théo Pervenche', tour: 2, remede: null, nomsTours: [null, 'Plat principal'] },
+    "Théo Pervenche est absente au tour 2 (Plat principal) : la marquer présente à ce tour avant de l'y placer.",
+  ],
+  [
+    'ENTREE_DEPLACER_DANS_RETENU',
+    { personne: 'Iris Ombrelle', de: 4, vers: 7, siege: null, tour: 2, nomsTours: [null, 'Plat principal'] },
+    'Déplacé Iris Ombrelle de la table 4 à la table 7, Plat principal',
+  ],
+  [
+    'ENTREE_RESERVER',
+    { personne: 'Théo Pervenche', numero: 4, siege: null, portee: 'tour', tour: 1, nomsTours: ['Apéritif', null] },
+    'Réservé Théo Pervenche à la table 4, Apéritif',
+  ],
   [
     'PERSONNE_ABSENTE_AU_TOUR',
     { participant: 2, personne: 'Théo Pervenche', tour: 3, remede: null },
@@ -86,6 +103,23 @@ export const TEXTES = [
     },
     "Refus pour Capucine Sarcelle, aucun animateur n'est désigné. " +
       "Cette personne n'est pas présente au tour 3 : une table ne s'anime que par une personne présente à tous les tours.",
+  ],
+  [
+    'ABSENT_AU_TOUR',
+    { participant: 6, personne: 'Capucine Sarcelle', tour: 2, nomsTours: [null, 'Plat principal', null], remede: null },
+    "Cette personne n'est pas présente au tour 2 (Plat principal) : une table ne s'anime que par une personne présente à tous les tours.",
+  ],
+  [
+    'ANIMATEUR_REFUSE',
+    {
+      participant: 6,
+      personne: 'Capucine Sarcelle',
+      refus: { code: 'ABSENT_AU_TOUR', details: { participant: 6, personne: 'Capucine Sarcelle', tour: 3 } },
+      nomsTours: [null, null, 'Dessert'],
+      remede: { commande: 'changerPresence', arguments: { id: 6, tours: [1, 2, 3] } },
+    },
+    "Refus pour Capucine Sarcelle, aucun animateur n'est désigné. " +
+      "Cette personne n'est pas présente au tour 3 (Dessert) : une table ne s'anime que par une personne présente à tous les tours.",
   ],
   ['ENTREE_DESIGNER_ANIMATEURS', { numero: 5, personnes: ['Iris Ombrelle'] }, 'Désigné 1 animateur à la table 5 : Iris Ombrelle'],
   [

@@ -270,15 +270,17 @@ export function placesTenues(couvrantes, places) {
 // il la laisse vide ou y assied une autre personne — la réservation n'y est
 // pas tenue. Cette hachure ne dit rien du titre de la chaise, que la chaise
 // porte à part, pourvu ou non selon pourvoyeursDesTitres (§ 4.1). Le cadenas
-// ouvert reste au titre seul, hachuré quand rien ne le pourvoit à ce tour :
-// la forme distingue toujours une réservation d'un titre.
+// ouvert reste au titre seul, que la chaise ne lie à aucune réservation :
+// plein quand une réservation le pourvoit pourtant à ce tour — sans siège,
+// sa personne assise ailleurs ou nulle part —, hachuré quand rien ne le
+// pourvoit. La forme distingue toujours une réservation d'un titre.
 function aspect(reservation, occupant, titre) {
   if (reservation !== null) {
     const anneau = reservation.portee === 'tous' ? ['anneau'] : [];
     const remplissage = reservation.participant === occupant ? 'plein' : 'hachure';
     return { remplissage, marques: ['cadenasFerme', ...anneau] };
   }
-  if (titre !== null) return { remplissage: titre.pourvu ? 'normal' : 'hachure', marques: ['cadenasOuvert'] };
+  if (titre !== null) return { remplissage: titre.pourvu ? 'plein' : 'hachure', marques: ['cadenasOuvert'] };
   return { remplissage: 'normal', marques: [] };
 }
 

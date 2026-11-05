@@ -54,20 +54,24 @@
   // Les cœurs de calcul sont un réglage du poste, que le contrôleur de
   // génération tient pour la séance du logiciel : ni le fichier ni le journal
   // ne les portent, et ils se règlent en lecture comme en écriture. La case
-  // « Cœurs automatiques », cochée par défaut, emploie un cœur par
-  // processeur logique ; décochée, elle montre « Nombre de cœurs », pré-rempli
-  // du dernier nombre accepté. La saisie se valide à la sortie du champ ou
-  // par Entrée, par controleur.reglerCoeurs ; son refus se pose contre le
-  // champ, saisie gardée, et le parent le lit (refusCoeurs, lié) : un refus
-  // posé, « Générer » ne part pas. Échap rend le dernier nombre accepté ; les
-  // deux touches sont celles du contexte 'champ' de la table des raccourcis.
-  // La valeur automatique du poste s'affiche à côté, dans les deux états.
+  // « Cœurs automatiques », cochée par défaut, emploie un cœur par processeur
+  // logique ; décochée, elle montre « Nombre de cœurs », pré-rempli du dernier
+  // nombre accepté. La saisie se valide à la sortie du champ ou par Entrée, par
+  // controleur.reglerCoeurs, et le champ montre alors le nombre accepté ; son
+  // refus se pose contre le champ, saisie gardée, et le parent le lit
+  // (refusCoeurs, lié) : un refus posé, « Générer » ne part pas. Échap rend le
+  // dernier nombre accepté ; les deux touches sont celles du contexte 'champ'
+  // de la table des raccourcis. Tant que le champ montré ne porte pas le
+  // dernier nombre accepté, la saisie n'est pas validée : un geste ouvert
+  // (geste.js), qui suspend le compte d'inactivité de la séance (§ 8.4). La
+  // valeur automatique du poste s'affiche à côté, dans les deux états.
   //
   // Habillage : la graine et les cœurs se saisissent comme un Champ, sur le
   // fond de la carte au filet de contrôle ; les contraintes et les cœurs sont
   // deux groupes sous un intertitre en petites capitales.
-  import { getContext, untrack } from 'svelte';
+  import { getContext, onDestroy, untrack } from 'svelte';
   import Champ from '../primitives/Champ.svelte';
+  import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
   import { effetDe } from '../raccourcis.js';
   import Priorites from './Priorites.svelte';
@@ -112,8 +116,16 @@
   }
 
   function validerCoeurs() {
-    refusCoeurs = generation.reglerCoeurs({ saisie: saisieCoeurs }).refus;
+    const { refus } = generation.reglerCoeurs({ saisie: saisieCoeurs });
+    if (refus === null) rendreCoeurs();
+    else refusCoeurs = refus;
   }
+
+  // Le geste suit la saisie du champ montré que le dernier nombre accepté ne
+  // rend pas.
+  const gesteCoeurs = creerGeste(seance);
+  $effect(() => gesteCoeurs.tenir(!coeurs.automatique && saisieCoeurs !== String(coeurs.manuel)));
+  onDestroy(() => gesteCoeurs.liberer());
 
   function toucheCoeurs(evenement) {
     const effet = effetDe('champ', evenement.key);

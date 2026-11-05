@@ -766,8 +766,8 @@ export function creerFacade({
     /**
      * Copie l'événement de clé cle sous le nom donné, logos compris, et ouvre
      * la copie en lecture → { cle, base, avertissements } (§ 8.7) :
-     * LOGOS_NON_COPIES {evenement, logos, personnes} quand un logo ne s'est
-     * pas recopié, sans défaire la copie.
+     * LOGOS_NON_COPIES {evenement, logos, personnes, imageBadges} quand un
+     * logo ne s'est pas recopié, sans défaire la copie.
      */
     copier,
     /**

@@ -23,13 +23,14 @@
  * Le fichier d'état, au format courant, FORMAT (§ 8.8, § 8.9). Deux régions :
  * l'en-tête et la charge. Des champs facultatifs, chacun absent à son défaut
  * et écrit après les clés toujours présentes de son objet : les
- * étiquettes et la présence par tour d'un participant, les objectifs d'une
- * table, des réglages, la dérivation d'une proposition et les absents d'un
- * tour de placement. Aucun format plus ancien que FORMAT ne se lit : un tel
- * fichier se refuse, raison FORMAT_TROP_ANCIEN. Les comparaisons qui
- * traversent les constructions — empreinte des démonstrations, aller-retour
- * des fichiers livrés — portent sur la charge seule. Toute clé hors de ces
- * formes est une faute de forme.
+ * étiquettes, la présence par tour, les conflits, les inclusions, le logo
+ * et la marque du nom numéroté d'un participant, le libellé et les
+ * objectifs d'une table, des réglages, la dérivation d'une proposition et
+ * les absents d'un tour de placement. Aucun format plus ancien que FORMAT
+ * ne se lit : un tel fichier se refuse, raison FORMAT_TROP_ANCIEN. Les
+ * comparaisons qui traversent les constructions — empreinte des
+ * démonstrations, aller-retour des fichiers livrés — portent sur la charge
+ * seule. Toute clé hors de ces formes est une faute de forme.
  * Le texte est en UTF-8 sans marque d'ordre d'octets, fin de ligne LF, une
  * seule fin de ligne finale, dans la forme canonique qu'écrit canonique.js.
  *
@@ -87,6 +88,18 @@
  * @property {'cm'} unite              (§ 7.2)
  * @property {'brouillon'|'propose'|'retenu'|'bloque'} etat   (§ 9)
  * @property {Filiation|null} filiation  (§ 8.7)
+ * @property {Array<string|null>} [nomsTours]  facultatif : un élément par
+ *                                     tour, son nom, de la forme du
+ *                                     libellé d'une table, ou null pour un
+ *                                     tour sans nom ; au moins un nom ;
+ *                                     absent, aucun tour n'a de nom (§ 8.9)
+ * @property {{active: boolean, chemin: string|null, position: 'haut'|'centre'|'bas'}} [imageBadges]
+ *                                     facultatif : l'image des badges, sa
+ *                                     case, le chemin de son image,
+ *                                     logo/<empreinte>.png, ou null, et sa
+ *                                     position ; jamais à son défaut, case
+ *                                     décochée, sans image, en haut ;
+ *                                     absent, ce défaut (§ 8.9, § 11.4)
  *
  * @typedef {Object} Filiation
  * @property {{id: string, nom: string}} source             chaînes non vides
@@ -182,6 +195,26 @@
  *                                          jamais la sienne, sans doublon,
  *                                          rangées par unités UTF-16 ;
  *                                          absent, aucune
+ * @property {string[]} [inclusionsOrganisation] facultatif : les
+ *                                          organisations dont la personne
+ *                                          doit rencontrer au moins un
+ *                                          membre à une table, au moins
+ *                                          une, chacune l'organisation
+ *                                          d'un participant de
+ *                                          l'événement, jamais la sienne,
+ *                                          sans doublon, rangées par
+ *                                          unités UTF-16 ; absent, aucune.
+ *                                          Le moteur ne les lit pas (§ 8.9)
+ * @property {number[]} [inclusionsParticipant] facultatif : les
+ *                                          identifiants des participants
+ *                                          que la personne doit rencontrer
+ *                                          au moins une fois à une table,
+ *                                          au moins un, chacun celui d'un
+ *                                          participant de l'événement,
+ *                                          exclus compris, jamais le sien,
+ *                                          sans doublon, rangés
+ *                                          croissants ; absent, aucun. Le
+ *                                          moteur ne les lit pas (§ 8.9)
  * @property {string} [logo]               facultatif : le chemin de son
  *                                          logo, relatif au dossier de
  *                                          l'événement, logo/ puis le
@@ -190,6 +223,27 @@
  *                                          minuscules, puis .png
  *                                          (logos.js) ; absent, aucun
  *                                          logo (§ 8.9)
+ * @property {true} [nomNumerote]          facultatif : le numéro final du
+ *                                          nom, une espace puis deux
+ *                                          chiffres ou plus
+ *                                          (SUFFIXE_NUMERO), est celui
+ *                                          qu'a ajouté « Rendre les noms
+ *                                          uniques » (§ 10.1) ; absent, le
+ *                                          nom est tel que reçu. Jamais
+ *                                          faux ; ni montré, ni saisi, ni
+ *                                          écrit dans une colonne CSV ;
+ *                                          renommer la personne le
+ *                                          retire (§ 8.9)
+ * @property {true} [animationReservee]    facultatif : la personne est à
+ *                                          désigner animatrice d'une
+ *                                          table (§ 4) ; absent, rien ne
+ *                                          l'y appelle. Jamais faux ; une
+ *                                          intention, non le fait
+ *                                          d'animer, que les titres
+ *                                          pourvus disent seuls ; la
+ *                                          fiche la saisit, la colonne
+ *                                          CSV animation_reservee la
+ *                                          porte (§ 8.9, § 10.1)
  *
  * @typedef {Object} Table
  * @property {number} id            identifiant, unique
@@ -442,10 +496,13 @@
  *
  * Avertissement de la lecture des réglages locaux, qui ne lève jamais :
  *
- *   REGLAGES_ILLISIBLES  {chemin, raison}       le fichier ne se lit pas, et
- *                                               les défauts s'appliquent ;
+ *   REGLAGES_ILLISIBLES  {chemin, raison,       le fichier ne se lit pas, et
+ *                         cause?}               les défauts s'appliquent ;
  *                                               raison JSON, FORME, ou le code
- *                                               du refus de lecture
+ *                                               du refus de lecture, dont
+ *                                               cause est alors celle des
+ *                                               détails du refus, quand ils
+ *                                               en portent une
  */
 
 /**
@@ -454,13 +511,15 @@
  * dépôt) —, qui ne refuse jamais l'opération :
  *
  *   LOGOS_NON_COPIES     {evenement, logos,      des fichiers de logo/ ne se
- *                         personnes}             sont pas recopiés dans le
- *                                                dossier neuf : evenement, le
+ *                         personnes,             sont pas recopiés dans le
+ *                         imageBadges}           dossier neuf : evenement, le
  *                                                nom de l'événement écrit ;
  *                                                logos, le nombre de ces
  *                                                fichiers ; personnes, celui
  *                                                des personnes dont le logo
- *                                                en est un
+ *                                                en est un ; imageBadges,
+ *                                                vrai quand l'image des
+ *                                                badges en est un
  */
 
 /**

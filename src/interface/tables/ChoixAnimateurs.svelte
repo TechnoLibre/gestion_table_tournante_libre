@@ -6,19 +6,21 @@
   // un <dialog> modal, ouvert au montage, titré du numéro de la table, le
   // focus dans sa recherche. Elle porte la recherche — nom, prénom ou
   // organisation, sans égard à la casse ni aux accents —, la case « Grouper
-  // par organisation », cochée au montage, le champ « Titre », prérempli du
-  // titre par défaut des places, puis la liste des personnes
-  // (personnesPourAnimation, groupesParOrganisation, chaque groupe nommé
-  // d'après la liste entière, avant la recherche), une case à cocher
-  // chacune, son statut en texte et son titre pressenti. La case de qui ne
-  // se choisit pas est désactivée, cochée pour qui anime déjà la table ; le
-  // statut en dit la raison. Le compte dit les personnes choisies et les
-  // places libres de la table (placesLibresPourAnimer).
+  // par organisation », cochée au montage, le champ du titre, prérempli du
+  // titre par défaut des places et nommé « Titre pour les personnes sans
+  // titre pressenti », puis la liste des personnes (personnesPourAnimation,
+  // groupesParOrganisation, chaque groupe nommé d'après la liste entière,
+  // avant la recherche), une case à cocher chacune, son statut en texte et
+  // son titre pressenti. La case de qui ne se choisit pas est désactivée,
+  // cochée pour qui anime déjà la table ; le statut en dit la raison. Le
+  // compte dit les personnes choisies et les places libres de la table
+  // (placesLibresPourAnimer).
   //
   // Le choix tient par identifiant : une personne choisie que la recherche
   // cache reste choisie. « Ajouter », désactivé sans choix, appelle
   // executer({participants, libelle}) — les personnes choisies dans l'ordre
-  // de la liste, le titre tel que saisi — et attend sa promesse : aboutie,
+  // de la liste, le titre tel que saisi, que designerAnimateurs donne aux
+  // seules personnes sans titre pressenti — et attend sa promesse : aboutie,
   // la fenêtre se ferme et appelle surFermer ; refusée — une erreur qui
   // porte un code —, elle reste ouverte et le refus, avec son remède, s'y
   // pose ; une erreur sans code ferme la fenêtre, appelle surFermer et

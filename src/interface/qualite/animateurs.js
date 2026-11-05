@@ -17,6 +17,10 @@
 // sous le jeton de sa série ; aucune quand il n'en a ni l'une ni l'autre. Le
 // jumeau porte la soirée de chaque animateur, puis une ligne par tour animé,
 // dans l'ordre des tours : il détaille au-delà du graphique (§ 12.7).
+//
+// Sans animateur ou sans personne concernée, les deux vues cèdent la place
+// à leur phrase (§ 12.6) : la diversité d'un animateur que personne ne peut
+// rencontrer ne répond pas à la question de la vue.
 
 // Les colonnes de la diversité, dans l'ordre : chacune sous le nom de son
 // drapeau dans detail.animateurs.diversite.colonnes, de son compte dans une
@@ -90,8 +94,9 @@ export function modeleAnimateurs(detail, t) {
  * Le modèle de la vue de la diversité par animateur, ou ce qui la remplace.
  *
  * - null sans détail mesuré ;
- * - {cas: 'aucunAnimateur'} sans animateur : la vue cède la place à sa
- *   phrase ;
+ * - {cas: 'aucun'} sans animateur ou sans personne concernée, comme la vue
+ *   des animateurs rencontrés, même quand un animateur anime : la vue cède
+ *   la place à sa phrase ;
  * - sinon {cas: 'diversite', phrase, equite, barres, infobulle, jumeau} :
  *   phrase, null quand les deux colonnes se dessinent, sinon le cas du
  *   § 12.6 — 'sansEtiquette', 'sansOrganisation' ou 'rien' ;
@@ -109,11 +114,13 @@ export function modeleAnimateurs(detail, t) {
  *
  * @param {Object|null} detail   le détail du placement (detaillerQualite)
  * @param {(cle: string, details?: Object) => string} t
+ * @param {Array<string|null>} [nomsTours]   les noms des tours de
+ *        l'événement (nomsDesTours), qui nomment la portée d'un tour
  */
-export function modeleDiversite(detail, t) {
+export function modeleDiversite(detail, t, nomsTours = undefined) {
   if (detail === null) return null;
   const { animateurs, personnes, idsTables, numerosTables } = detail;
-  if (animateurs === null || animateurs.diversite.lignes.length === 0) return { cas: 'aucunAnimateur' };
+  if (animateurs === null || animateurs.profil === null || animateurs.diversite.lignes.length === 0) return { cas: 'aucun' };
   const { colonnes: drapeaux, lignes, equite } = animateurs.diversite;
   const nomDe = new Map(personnes.map(({ id, nom }) => [id, nom]));
   const numeroDe = new Map(idsTables.map((id, rang) => [id, numerosTables[rang]]));
@@ -147,7 +154,7 @@ export function modeleDiversite(detail, t) {
     soirees.push(soiree);
     rangees.push(soiree);
     for (const tour of ligne.parTour) {
-      const portee = t('qualite.diversite.tour', { tour: tour.tour + 1, table: numeroDe.get(tour.table) });
+      const portee = t('qualite.diversite.tour', { tour: tour.tour + 1, table: numeroDe.get(tour.table), nomsTours });
       rangees.push(rangee(nom, portee, null, tour));
     }
   }

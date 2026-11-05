@@ -14,8 +14,11 @@
 // celui qu'il inscrit, le démarrage que ps écrit en temps universel quel
 // que soit le fuseau du processus qui le lit, et le plafond d'une image
 // choisie, que la taille lue sur le disque décide avant toute lecture. Le
-// lanceur de l'ouvreur du bureau s'y éprouve enfin sur de vrais processus,
-// des Node qui jouent l'ouvreur.
+// lanceur de l'ouvreur du bureau s'y éprouve sur de vrais processus, des
+// Node qui jouent l'ouvreur ; suit enfin l'issue des liens d'« À propos »,
+// que le préchargement porte à la page. Le chemin de leur adresse vers le
+// navigateur du système, qui ne lance aucun processus, s'éprouve dans
+// test/fichiers_electron.test.js.
 // Chaque épreuve écrit sous ses propres dossiers temporaires, retirés à sa
 // fin, qu'elle passe ou non.
 import assert from 'node:assert/strict';
@@ -40,6 +43,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compileFunction } from 'node:vm';
 import {
+  CANAL_LIEN,
   DELAI_OUVREUR_MS,
   GENRES_A_IMPORTER,
   TEMOIN,
@@ -54,6 +58,7 @@ import { eprouverContrat } from './contrat_fichiers.js';
 import { describe, test } from './lanceur.js';
 
 const PRECHARGEMENT = fileURLToPath(new URL('../electron/preload.cjs', import.meta.url));
+const PANNEAU_APROPOS = fileURLToPath(new URL('../src/interface/APropos.svelte', import.meta.url));
 const NOM_PRODUIT = 'Gestion table tournante Libre';
 
 // Sous Windows, un dossier ne passe pas en lecture seule par ses droits, et
@@ -97,9 +102,12 @@ const ditPar = (lancee) => String(lancee.error?.message ?? lancee.stderr ?? '');
 // Charge electron/preload.cjs comme un rendu en bac à sable, contre un
 // electron dont invoke porte chaque appel au gestionnaire que servir a posé
 // sur ce canal ; arguments et réponse sont copiés comme l'IPC les copie, et
-// d'une erreur levée ne passe que le message. Rend gtt.fichiers.
-function parLePrechargement(fichiers) {
+// d'une erreur levée ne passe que le message. on relève chaque écouteur
+// d'un canal que le processus principal emprunte vers la page ; fenetre est
+// le window que voit le préchargement. Rend gtt et les écouteurs, par canal.
+function chargerLePrechargement(fichiers, fenetre = undefined) {
   const gestionnaires = new Map();
+  const ecouteurs = new Map();
   servir(fichiers, (canal, gestionnaire) => gestionnaires.set(canal, gestionnaire));
   let gtt;
   const electron = {
@@ -121,6 +129,10 @@ function parLePrechargement(fichiers) {
         }
         return structuredClone(reponse);
       },
+      on(canal, ecouteur) {
+        if (!ecouteurs.has(canal)) ecouteurs.set(canal, []);
+        ecouteurs.get(canal).push(ecouteur);
+      },
     },
   };
   const module = { exports: {} };
@@ -128,11 +140,14 @@ function parLePrechargement(fichiers) {
     if (nom === 'electron') return electron;
     throw new Error(`module « ${nom} » indisponible dans un préchargement en bac à sable`);
   };
-  compileFunction(readFileSync(PRECHARGEMENT, 'utf8'), ['require', 'module', 'exports'], {
+  compileFunction(readFileSync(PRECHARGEMENT, 'utf8'), ['require', 'module', 'exports', 'window'], {
     filename: PRECHARGEMENT,
-  })(requerir, module, module.exports);
-  return gtt.fichiers;
+  })(requerir, module, module.exports, fenetre);
+  return { gtt, ecouteurs };
 }
+
+// Le préchargement chargé comme ci-dessus : rend gtt.fichiers.
+const parLePrechargement = (fichiers) => chargerLePrechargement(fichiers).gtt.fichiers;
 
 // Les dialogues et l'explorateur ne servent qu'aux épreuves qui les donnent.
 const SANS_APPEL = new Proxy({}, {
@@ -583,5 +598,37 @@ describe("coquille : le lanceur de l'ouvreur du bureau, sur de vrais processus",
 
   test("le délai de l'ouvreur vaut 3 s", () => {
     assert.equal(DELAI_OUVREUR_MS, 3000);
+  });
+});
+
+describe("coquille : l'issue des liens d'« À propos », portée à la page (§ 18.6)", () => {
+  // Une adresse inventée : le préchargement ne juge pas la liste blanche,
+  // que le processus principal applique avant d'ouvrir.
+  const ADRESSE = 'https://exemple.invalid/';
+
+  test('le préchargement porte à la page, par window.postMessage, chaque issue que le processus principal envoie sur CANAL_LIEN : son adresse et sa raison, sous le type que le panneau « À propos » écoute', () => {
+    const messages = [];
+    const fenetre = { postMessage: (message, cible) => messages.push([message, cible]) };
+    const { ecouteurs } = chargerLePrechargement({}, fenetre);
+    assert.deepEqual([...ecouteurs.keys()], [CANAL_LIEN]);
+    const raison = 'xdg-open : statut 3';
+    // Une issue d'une autre forme ne passe pas ; un champ de plus ne passe
+    // pas avec elle.
+    const issues = [
+      { adresse: ADRESSE, raison: '' },
+      { adresse: ADRESSE, raison, autre: 'non transmis' },
+      { adresse: ADRESSE, raison: 3 },
+      { adresse: null, raison },
+      null,
+    ];
+    for (const issue of issues) {
+      for (const ecouteur of ecouteurs.get(CANAL_LIEN)) ecouteur({ sender: null }, structuredClone(issue));
+    }
+    assert.deepEqual(messages, [
+      [{ type: CANAL_LIEN, adresse: ADRESSE, raison: '' }, '*'],
+      [{ type: CANAL_LIEN, adresse: ADRESSE, raison }, '*'],
+    ]);
+    const panneau = readFileSync(PANNEAU_APROPOS, 'utf8');
+    assert.ok(panneau.includes(`'${CANAL_LIEN}'`), "le panneau « À propos » n'écoute pas ce type");
   });
 });

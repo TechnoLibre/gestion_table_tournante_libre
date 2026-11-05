@@ -38,7 +38,9 @@
 // annonce. Les logos des participants ajoutent quatre productions de l'A6
 // — logos lus et posés, logo introuvable, une réédition sans logo sous des
 // voisins qui en portent et la même sans aucun logo —, sur des PNG composés
-// ici. Les noms sont inventés ; la version vient du module engendré.
+// ici ; la case qui laisse en blanc le nom des doublons, trois — cochée,
+// décochée, une réédition. Les noms sont inventés ; la version vient du
+// module engendré.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
@@ -179,16 +181,20 @@ async function deposer(fs, charge, { format = FORMAT, racine = DOC } = {}) {
 // par défaut, le modèle de badge et le papier choisis quand ils sont donnés
 // — l'A6 par défaut, le modèle que ces épreuves éprouvent ; null garde
 // Avery 5392, celui d'une machine qui n'a rien choisi ; la case du pied
-// TechnoLibre décochée, sauf pour les épreuves qui le portent ; les données
-// de retirees décochées dans la section, aucune par défaut ; la trace part
-// ensuite, vide.
+// TechnoLibre décochée, sauf pour les épreuves qui le portent ; la case de
+// l'organisation en gros décochée de même, la planche gardant ainsi les
+// octets d'avant cette case ; les données de retirees décochées dans la
+// section, aucune par défaut ; les colonnes de la liste choisies quand elles
+// sont données ; la trace part ensuite, vide.
 async function monter(
   charge = chargeLucioles(),
   {
     papier = 'A4',
     modeleBadge = 'a6',
     piedTechnolibre = false,
+    organisationEnGros = false,
     retirees = [],
+    colonnesListe = null,
     fs = creerFichiersSimules({ documents: DOCUMENTS }),
     format,
     cle = cleEvenement(BASE, BASE),
@@ -214,7 +220,9 @@ async function monter(
   });
   if (modeleBadge !== null) await seance.choisirModeleBadge(modeleBadge);
   if (!piedTechnolibre) await seance.choisirPiedTechnolibre(false);
+  if (!organisationEnGros) await seance.choisirOrganisationEnGros(false);
   for (const donnee of retirees) await seance.choisirDonneeBadge(donnee, false);
+  if (colonnesListe !== null) await seance.choisirColonnesListe(colonnesListe);
   if (papier !== null) await seance.choisirPapier(papier);
   await seance.ouvrir(cle);
   const trace = tracer(fs);
@@ -289,8 +297,11 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
           piedTechnolibre: false,
           textePiedTechnolibre: PROMOTION,
           donneesBadge: TOUTES_COCHEES,
+          cacherNumero: true,
+          organisationEnGros: false,
           sansTechnolibre: null,
           logos: null,
+          imageBadges: null,
         },
         nom,
       );
@@ -411,8 +422,11 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
       piedTechnolibre: false,
       textePiedTechnolibre: PROMOTION,
       donneesBadge: TOUTES_COCHEES,
+      cacherNumero: true,
+      organisationEnGros: false,
       sansTechnolibre: null,
       logos: null,
+      imageBadges: null,
     });
     await refusee(sans.seance.produirePlanche(), 'PLANCHE_SANS_PLACEMENT');
     await assert.rejects(sans.seance.preparerPlanche({ ordre: 'hasard' }), TypeError);
@@ -725,8 +739,11 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
       piedTechnolibre: false,
       textePiedTechnolibre: PROMOTION,
       donneesBadge: TOUTES_COCHEES,
+      cacherNumero: true,
+      organisationEnGros: false,
       sansTechnolibre: null,
       logos: null,
+      imageBadges: null,
     });
     assert.match(nomCartes, /\.badges_avery5392_/);
     assert.deepEqual(trace, []);
@@ -857,7 +874,7 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     assert.deepEqual(recus, [nomCartes]);
   });
 
-  test('un libellé de table au plus long que la saisie admet s’abrège sur la carte, entre ses parenthèses ; la liste en CSV le garde entier', async () => {
+  test('un libellé de table au plus long que la saisie admet se replie sur la carte, entier, sans marque ; la liste en CSV le garde entier', async () => {
     const libelle = 'Verrière du jardin d’hiver, près des grandes baies, côté sud';
     assert.equal([...libelle].length, LIBELLE_TABLE_MAX);
     const charge = chargeLucioles();
@@ -865,13 +882,16 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     const { fs, seance } = await monter(charge, { modeleBadge: null });
     const { nom } = await seance.produirePlanche();
     const textes = textesDe((await lirePdf(fs.octets('documents', ICI + nom))).pages[0]);
-    // Iris Ombrelle, à la table 1 aux deux tours : sa ligne unique.
-    const ligne = textes.find((texte) => texte.startsWith('Toute la soirée — table 1 ('));
-    assert.ok(ligne !== undefined, textes.join(' | '));
-    assert.match(ligne, /^Toute la soirée — table 1 \(Verri[^)]*…\)$/u);
+    // Iris Ombrelle, à la table 1 aux deux tours : sa ligne unique, que sa
+    // suite complète sur la ligne d'après.
+    const rang = textes.findIndex((texte) => texte.startsWith('Toute la soirée — table 1 ('));
+    assert.ok(rang >= 0, textes.join(' | '));
+    assert.notEqual(textes[rang], `Toute la soirée — table 1 (${libelle})`);
+    assert.equal(`${textes[rang]} ${textes[rang + 1]}`, `Toute la soirée — table 1 (${libelle})`);
+    assert.ok(textes.every((texte) => !texte.includes('\u{2026}')), textes.join(' | '));
     const liste = await seance.produireListeBadges();
     const texte = new TextDecoder().decode(fs.octets('documents', ICI + liste.nom));
-    assert.ok(texte.includes(`Toute la soirée — table 1 (${libelle})`), texte);
+    assert.ok(texte.includes(`;table 1 (${libelle});table 1 (${libelle})\r\n`), texte);
   });
 
   test('sous web, les deux fichiers se téléchargent, les cartes d’abord, rien dans le dossier', async () => {
@@ -896,12 +916,20 @@ describe('planche dans la séance : la liste des badges en CSV (§ 11.6)', () =>
     return charge;
   };
   const NOM_LISTE = nomCsvBadges(BASE, { horodatage: H_RETENU });
+  // La liste d'une machine qui n'a rien choisi : une colonne par tour.
   const LISTE =
+    '\u{FEFF}Nom;Prénom;Organisation;Tour 1;Tour 2\r\n' +
+    'Grisaille;;;table 2;table 2\r\n' +
+    'Lacasse;Ondine;;table 2;table 1 (Terrasse)\r\n' +
+    'Ombrelle;Iris;Club des Merles;table 1 (Terrasse);table 1 (Terrasse)\r\n' +
+    'Pervenche;Théo;;table 1 (Terrasse);table 2\r\n';
+  // La même, ses tours dans une seule colonne.
+  const LISTE_UNIQUE =
     '\u{FEFF}Nom;Prénom;Organisation;Tours\r\n' +
     'Grisaille;;;Toute la soirée — table 2\r\n' +
-    'Lacasse;Ondine;;"Tour 1 — table 2\nTour 2 — table 1 (Terrasse)"\r\n' +
+    'Lacasse;Ondine;;"Tour 1 — table 2 ; Tour 2 — table 1 (Terrasse)"\r\n' +
     'Ombrelle;Iris;Club des Merles;Toute la soirée — table 1 (Terrasse)\r\n' +
-    'Pervenche;Théo;;"Tour 1 — table 1 (Terrasse)\nTour 2 — table 2"\r\n';
+    'Pervenche;Théo;;"Tour 1 — table 1 (Terrasse) ; Tour 2 — table 2"\r\n';
   const texteDe = (octets) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(octets);
 
   test('en lecture, la liste se dépose dans le dossier de l’événement, seule écriture, et rend son chemin et son nom ; deux productions, mêmes octets', async () => {
@@ -914,6 +942,27 @@ describe('planche dans la séance : la liste des badges en CSV (§ 11.6)', () =>
     assert.equal(texteDe(premiers), LISTE);
     await seance.produireListeBadges();
     assert.deepEqual(fs.octets('documents', ICI + NOM_LISTE), premiers);
+  });
+
+  test('les colonnes de la machine : une seule colonne, sous le même nom, remplace la liste d’une colonne par tour', async () => {
+    const { fs, seance } = await monter(libellee(), { colonnesListe: 'unique' });
+    assert.deepEqual(await seance.produireListeBadges(), { chemin: `${DANS}\\${NOM_LISTE}`, nom: NOM_LISTE });
+    assert.equal(texteDe(fs.octets('documents', ICI + NOM_LISTE)), LISTE_UNIQUE);
+    await seance.choisirColonnesListe('parTour');
+    await seance.produireListeBadges();
+    assert.equal(texteDe(fs.octets('documents', ICI + NOM_LISTE)), LISTE);
+  });
+
+  test('des colonnes de la lecture hors des deux formes sont une faute du code, TypeError avant le refus du placement ; absentes, la liste se demande', async () => {
+    const planches = creerPlanches({ polices: async () => POLICES, logo: async () => LOGO, provenance: 'production', version: V1 });
+    const lecture = { charge: chargeLucioles({ plan: null, etat: 'propose' }), papier: null };
+    await refusee(planches.produireListe(lecture), 'PLANCHE_SANS_PLACEMENT');
+    await refusee(planches.produireListe({ ...lecture, colonnesListe: 'unique' }), 'PLANCHE_SANS_PLACEMENT');
+    for (const faute of ['par_tour', 'toString', null, true]) {
+      const attendue = (erreur) => erreur instanceof TypeError && /colonnesListe/.test(erreur.message);
+      await assert.rejects(planches.produireListe({ ...lecture, colonnesListe: faute }), attendue, JSON.stringify(faute));
+      await assert.rejects(planches.enregistrerListeSous({ ...lecture, colonnesListe: faute }), attendue, JSON.stringify(faute));
+    }
   });
 
   test('l’ordre par table, une réédition et une proposition passent à la liste ; la proposition porte BROUILLON dans le nom', async () => {
@@ -1061,20 +1110,20 @@ describe('planche dans la séance : le pied TechnoLibre (§ 11.4)', () => {
 });
 
 // Le texte du pied TechnoLibre (§ 8.5, § 11.4, § 11.5) : la phrase
-// d'origine tant que la machine n'en garde pas d'autre, et alors les octets
-// d'avant, empreintes comprises ; un texte choisi se pose sous chaque badge,
+// d'origine tant que la machine n'en garde pas d'autre, et alors les mêmes
+// octets, empreintes comprises ; un texte choisi se pose sous chaque badge,
 // sans toucher la feuille de contrôle ; vide, le logo seul ; un caractère
 // que la police n'a pas se nomme comme ceux des badges.
 describe('planche dans la séance : le texte du pied TechnoLibre (§ 8.5, § 11.4, § 11.5)', () => {
   const sha256 = (octets) => createHash('sha256').update(octets).digest('hex');
   const lu = (pdf) => pdf.pages.map((page) => textesDe(page).join(' ')).join(' ').replace(/\s+/g, ' ');
   const zones = (pdf) => pdf.pages.flatMap((page) => page.zonesRemplies);
-  // Les empreintes des octets que la planche rendait avant que le texte ne
-  // se choisisse, le pied TechnoLibre coché : les cartes Avery 5392 et leur
-  // feuille de contrôle d'une machine neuve, puis l'A6 sur A4.
-  const EMPREINTE_CARTES_PIED = '846fb854b2cddf8aa13c3d2ddbef8f354a3311146f6915edc674cbe79aca1f9d';
+  // Les empreintes des octets que rend la phrase d'origine, le pied
+  // TechnoLibre coché : les cartes Avery 5392 et leur feuille de contrôle
+  // d'une machine neuve, puis l'A6 sur A4.
+  const EMPREINTE_CARTES_PIED = 'f77a69dd153dd5a4a836ac52aa5e7d774ee023cb6a5e65ad707c6ce22e470f32';
   const EMPREINTE_CONTROLE_PIED = 'd845ef7cbbb84a91b5de2e480ea426d498505f93305b5f2fa1f8d7d2a868332d';
-  const EMPREINTE_A6_PIED = 'b54a46711c1aab291392c3310d5337a78d98e5541a011a12df318d428cf34141';
+  const EMPREINTE_A6_PIED = '90c05ef6468a8cacdee31d083154d5deea9d29e824cef3a9dc8b544bd174ee05';
   const CHOISI = 'Atelier coopératif des Hérons cendrés : menuiserie et réparation de vélos';
 
   test('la phrase d’origine, gardée ou choisie de nouveau entre des blancs : l’annonce la porte, et les PDF gardent leurs octets, empreintes comprises', async () => {
@@ -1497,6 +1546,118 @@ describe('planche dans la séance : les logos des participants (§ 11.4, § 11.5
   });
 });
 
+// L'image des badges (§ 8.9, § 11.4) : l'événement la porte, case,
+// chemin et position ; la séance lit son image comme un logo, par la même
+// garde, la planche la pose sur chaque badge qui a sa place, et l'annonce la
+// compte. Introuvable ou illisible, elle ne refuse rien ; décochée, rien ne
+// se lit et les octets ne changent pas.
+describe('planche dans la séance : l’image des badges (§ 8.9, § 11.4)', () => {
+  const mot = (n) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+  const morceau = (type, donnees) => {
+    const corps = [...new TextEncoder().encode(type), ...donnees];
+    return [...mot(donnees.length), ...corps, ...mot(crc32(Uint8Array.from(corps)))];
+  };
+  const pngUni = (largeur, hauteur, couleur) => {
+    const ligne = [0, ...Array.from({ length: largeur }, () => couleur).flat()];
+    const idat = [...deflateSync(Uint8Array.from(Array.from({ length: hauteur }, () => ligne).flat()))];
+    const ihdr = [...mot(largeur), ...mot(hauteur), 8, 2, 0, 0, 0];
+    return Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...morceau('IHDR', ihdr), ...morceau('IDAT', idat), ...morceau('IEND', [])]);
+  };
+  const IMAGE = `logo/${'9'.repeat(64)}.png`;
+  const LOGO_COMMUN = `logo/${'5'.repeat(64)}.png`;
+  // La soirée d'essai, son image des badges donnée.
+  const chargeAvecImage = (imageBadges, logos = {}) => {
+    const charge = chargeLucioles();
+    charge.evenement.imageBadges = imageBadges;
+    for (const membre of charge.participants) if (logos[membre.id] !== undefined) membre.logo = logos[membre.id];
+    return charge;
+  };
+  const lectures = (fs) => {
+    const lus = [];
+    const lire = fs.lireOctets;
+    fs.lireOctets = (racine, chemin) => {
+      lus.push(chemin);
+      return lire(racine, chemin);
+    };
+    return lus;
+  };
+  // Les octets de la planche produite d'une séance, et ses images.
+  async function produite(montage) {
+    const { nom } = await montage.seance.produirePlanche();
+    const octets = montage.fs.octets('documents', ICI + nom);
+    return { octets, pdf: await lirePdf(octets) };
+  }
+
+  test('cochée, l’image se lit une fois, se pose sur chaque badge et s’annonce ; la feuille de contrôle ne change pas', async () => {
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const montage = await monter(chargeAvecImage({ active: true, chemin: IMAGE, position: 'centre' }), { fs });
+    fs.deposerOctets('documents', ICI + IMAGE, pngUni(6, 3, [20, 120, 60]));
+    const lus = lectures(fs);
+    const annonce = await montage.seance.preparerPlanche();
+    assert.equal(annonce.refus, null);
+    assert.deepEqual(annonce.imageBadges, { position: 'centre', chemin: IMAGE, posees: 4, sansPlace: 0, introuvable: null });
+    assert.deepEqual(lus, [ICI + IMAGE]);
+    const { pdf } = await produite(montage);
+    assert.equal(lus.length, 1);
+    assert.equal(pdf.images, 1);
+    assert.equal(pdf.pages.reduce((n, page) => n + page.images.length, 0), 4);
+    assert.deepEqual(pdf.pages[0].images, []);
+    const sans = await produite(await monter(chargeLucioles()));
+    assert.deepEqual(textesDe(pdf.pages[0]), textesDe(sans.pdf.pages[0]));
+  });
+
+  test('décochée, ou cochée sans image : rien ne se lit, et la planche est celle de l’événement sans le champ, octet pour octet', async () => {
+    const sans = await produite(await monter(chargeLucioles()));
+    for (const [imageBadges, attendue] of [
+      [{ active: false, chemin: IMAGE, position: 'bas' }, null],
+      [{ active: true, chemin: null, position: 'bas' }, { position: 'bas', chemin: null, posees: 0, sansPlace: 0, introuvable: null }],
+    ]) {
+      const fs = creerFichiersSimules({ documents: DOCUMENTS });
+      const montage = await monter(chargeAvecImage(imageBadges), { fs });
+      fs.deposerOctets('documents', ICI + IMAGE, pngUni(6, 3, [20, 120, 60]));
+      const lus = lectures(fs);
+      assert.deepEqual((await montage.seance.preparerPlanche()).imageBadges, attendue);
+      const { octets } = await produite(montage);
+      assert.deepEqual(lus, []);
+      assert.deepEqual(octets, sans.octets);
+    }
+  });
+
+  test('introuvable ou illisible, l’image s’annonce sans refus, et les badges s’impriment sans elle ; remise, elle se lit à la préparation suivante', async () => {
+    const sans = await produite(await monter(chargeLucioles()));
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const montage = await monter(chargeAvecImage({ active: true, chemin: IMAGE, position: 'haut' }), { fs });
+    const absente = await montage.seance.preparerPlanche();
+    assert.equal(absente.refus, null);
+    assert.deepEqual(absente.imageBadges, { position: 'haut', chemin: IMAGE, posees: 0, sansPlace: 0, introuvable: 'ABSENT' });
+    assert.deepEqual((await produite(montage)).octets, sans.octets);
+    fs.deposerOctets('documents', ICI + IMAGE, new TextEncoder().encode('pas une image'));
+    assert.equal((await montage.seance.preparerPlanche()).imageBadges.introuvable, 'ILLISIBLE');
+    fs.deposerOctets('documents', ICI + IMAGE, pngUni(6, 3, [20, 120, 60]));
+    const remise = await montage.seance.preparerPlanche();
+    assert.deepEqual(remise.imageBadges, { position: 'haut', chemin: IMAGE, posees: 4, sansPlace: 0, introuvable: null });
+  });
+
+  test('l’image qui est aussi le logo d’une personne se lit une fois ; la liste en CSV ne la lit pas, et ses octets ne changent pas', async () => {
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const montage = await monter(chargeAvecImage({ active: true, chemin: LOGO_COMMUN, position: 'bas' }, { 1: LOGO_COMMUN }), { fs });
+    fs.deposerOctets('documents', ICI + LOGO_COMMUN, pngUni(3, 3, [180, 40, 40]));
+    const lus = lectures(fs);
+    const annonce = await montage.seance.preparerPlanche();
+    assert.deepEqual(lus, [ICI + LOGO_COMMUN]);
+    assert.equal(annonce.imageBadges.posees, 4);
+    assert.equal(annonce.logos.poses, 1);
+    const { pdf } = await produite(montage);
+    assert.equal(pdf.pages.reduce((n, page) => n + page.images.length, 0), 5);
+    lus.length = 0;
+    const { nom } = await montage.seance.produireListeBadges();
+    assert.deepEqual(lus, []);
+    const sans = await monter(chargeLucioles());
+    const second = await sans.seance.produireListeBadges();
+    assert.deepEqual(fs.octets('documents', ICI + nom), sans.fs.octets('documents', ICI + second.nom));
+  });
+});
+
 describe('planche dans la séance : les cases de ce que le badge imprime (§ 11.3, § 11.4)', () => {
   const lu = (pdf, depuis = 0) => pdf.pages.slice(depuis).flatMap((page) => textesDe(page));
   const sha256 = (octets) => createHash('sha256').update(octets).digest('hex');
@@ -1586,6 +1747,21 @@ describe('planche dans la séance : les cases de ce que le badge imprime (§ 11.
     assert.ok(allegee.sansTechnolibre < toutes.sansTechnolibre, `${allegee.sansTechnolibre} sur ${toutes.sansTechnolibre}`);
   });
 
+  test('le nom de l’événement décoché, ses caractères absents se nomment encore : la feuille de contrôle, qui l’écrit, les donne par leur point de code', async () => {
+    const charge = chargeLucioles();
+    const nomEvenement = `${BASE} \u{674E}`;
+    charge.evenement.nom = nomEvenement;
+    const cle = cleEvenement(nomEvenement, nomEvenement);
+    const { fs, seance } = await monter(charge, { retirees: ['evenement'], cle });
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual([annonce.refus, annonce.absents], [null, ['\u{674E}']]);
+    const pdf = await lirePdf(fs.octets('documents', `${nomEvenement}/${(await seance.produirePlanche()).nom}`));
+    const controle = controleLu(pdf);
+    assert.ok(controle.includes(libelle('planche.controle.absents', { points: ['U+674E'] })), controle);
+    assert.ok(controle.includes(`${BASE} U+674E`) && !controle.includes('\u{674E}'), controle);
+    assert.ok(!lu(pdf, 1).some((texte) => texte.includes(BASE)), lu(pdf, 1).join(' | '));
+  });
+
   test('une case décochée garde au pied ce que les autres gardent : l’identifiant des homonymes, et l’horodatage inconnu d’un retenu qui n’en porte pas', async () => {
     const personnes = [
       personne(1, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' }),
@@ -1628,5 +1804,180 @@ describe('planche dans la séance : les cases de ce que le badge imprime (§ 11.
     const date = libelle('planche.pied.date', { date: '2031-05-17' });
     assert.equal(badges.filter((texte) => texte === date).length, charge.participants.length, badges.join(' | '));
     assert.ok(!badges.some((texte) => texte.includes(BASE)), badges.join(' | '));
+  });
+
+  test('un nom au-delà de trois lignes, le nom de l’événement décoché : le badge n’a rien perdu, et garde le pied TechnoLibre que le nom perdu faute de place lui retire', async () => {
+    const charge = chargeLucioles();
+    charge.participants[2].nom = 'Lacasse-Ombrelle '.repeat(8).trim();
+    const coche = await monter(charge, { piedTechnolibre: true });
+    assert.equal((await coche.seance.preparerPlanche()).sansTechnolibre, 1);
+    const decoche = await monter(charge, { piedTechnolibre: true, retirees: ['evenement'] });
+    const annonce = await decoche.seance.preparerPlanche();
+    assert.deepEqual([annonce.refus, annonce.sansTechnolibre], [null, 0]);
+  });
+});
+
+// L'organisation en gros (§ 8.5, § 11.4) : la case de la machine, que la
+// lecture porte, pose l'organisation d'un badge en gros, au-dessus du nom en
+// petit ; un badge sans organisation garde son nom en gros. La feuille de
+// contrôle et la liste en CSV ne la lisent pas.
+describe('planche dans la séance : l’organisation en gros (§ 8.5, § 11.4)', () => {
+  const sha256 = (octets) => createHash('sha256').update(octets).digest('hex');
+  // Le premier fragment de texte posé d'une page de badges, par son texte.
+  const fragment = (page, texte) => page.textes.find((t) => t.texte === texte);
+  const badgesDe = async (options) => {
+    const { fs, seance } = await monter(chargeLucioles(), options);
+    const annonce = await seance.preparerPlanche();
+    const { nom } = await seance.produirePlanche();
+    const octets = fs.octets('documents', ICI + nom);
+    return { annonce, octets, pdf: await lirePdf(octets), fs, seance };
+  };
+
+  test('cochée, l’organisation se pose en gros au-dessus du nom en petit ; décochée, l’inverse ; un badge sans organisation ne change pas', async () => {
+    const coche = await badgesDe({ organisationEnGros: true });
+    const decoche = await badgesDe({});
+    assert.deepEqual([coche.annonce.refus, coche.annonce.organisationEnGros], [null, true]);
+    assert.deepEqual([decoche.annonce.refus, decoche.annonce.organisationEnGros], [null, false]);
+    const [club, iris] = ['Club des Merles', 'Iris Ombrelle'].map((texte) => fragment(coche.pdf.pages[1], texte));
+    assert.ok(club.h > iris.h && club.y + club.h <= iris.y, JSON.stringify([club, iris]));
+    const [clubAvant, irisAvant] = ['Club des Merles', 'Iris Ombrelle'].map((texte) => fragment(decoche.pdf.pages[1], texte));
+    assert.ok(irisAvant.h > clubAvant.h && irisAvant.y + irisAvant.h <= clubAvant.y, JSON.stringify([clubAvant, irisAvant]));
+    for (const sans of ['Théo Pervenche', 'Ondine Lacasse', 'Grisaille']) {
+      assert.deepEqual(fragment(coche.pdf.pages[1], sans), fragment(decoche.pdf.pages[1], sans), sans);
+    }
+    // La feuille de contrôle, page 1 de l'A6, ne change pas.
+    assert.deepEqual(coche.pdf.pages[0].textes, decoche.pdf.pages[0].textes);
+  });
+
+  test('l’organisation décochée laisse le nom en gros : les octets sont ceux de la case décochée ; la feuille de contrôle d’Avery 5392 et la liste en CSV gardent leurs octets', async () => {
+    const sansOrganisation = await badgesDe({ organisationEnGros: true, retirees: ['organisation'] });
+    const reference = await badgesDe({ retirees: ['organisation'] });
+    assert.equal(sha256(sansOrganisation.octets), sha256(reference.octets));
+
+    const cartes = await monter(chargeLucioles(), { papier: null, modeleBadge: null, organisationEnGros: true });
+    const avant = await monter(chargeLucioles(), { papier: null, modeleBadge: null });
+    const [produite, attendue] = [await cartes.seance.produirePlanche(), await avant.seance.produirePlanche()];
+    assert.notEqual(sha256(cartes.fs.octets('documents', ICI + produite.nom)), sha256(avant.fs.octets('documents', ICI + attendue.nom)));
+    assert.deepEqual(cartes.fs.octets('documents', ICI + produite.controle.nom), avant.fs.octets('documents', ICI + attendue.controle.nom));
+    const [liste, listeAvant] = [await cartes.seance.produireListeBadges(), await avant.seance.produireListeBadges()];
+    assert.deepEqual(cartes.fs.octets('documents', ICI + liste.nom), avant.fs.octets('documents', ICI + listeAvant.nom));
+  });
+
+  test('une organisation trop longue pour le gros texte se refuse PLANCHE_NOM_TROP_LONG, organisation vrai, la personne nommée ; décochée, elle se replie en petit', async () => {
+    const charge = chargeLucioles();
+    charge.participants[0].organisation = `Merles${'w'.repeat(1990)}`;
+    const annonce = await (await monter(charge, { organisationEnGros: true })).seance.preparerPlanche();
+    assert.deepEqual(annonce.refus, {
+      code: 'PLANCHE_NOM_TROP_LONG',
+      details: { organisation: true, participant: 1, personne: 'Iris Ombrelle', remede: { geste: 'ouvrirSection', section: 'participants' } },
+    });
+    assert.equal((await (await monter(charge)).seance.preparerPlanche()).refus, null);
+  });
+
+  test('avec le nom des doublons laissé en blanc, l’organisation reste en gros et le nom ne se pose pas', async () => {
+    const charge = chargeLucioles({
+      personnes: [
+        personne(1, 'Roger', 'Galet 01', { nomNumerote: true, organisation: 'Club des Merles' }),
+        personne(2, 'Roger', 'Galet 02', { nomNumerote: true }),
+        personne(3, 'Zoé', 'Galet', { organisation: 'Club des Merles' }),
+        personne(4, 'Louis', 'Arc 14'),
+      ],
+    });
+    const { fs, seance } = await monter(charge, { organisationEnGros: true });
+    const pdf = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche()).nom));
+    const textes = pdf.pages[1].textes.map(({ texte }) => texte);
+    assert.ok(!textes.some((texte) => texte.includes('Roger')), textes.join(' | '));
+    const clubs = pdf.pages[1].textes.filter(({ texte }) => texte === 'Club des Merles');
+    const zoe = fragment(pdf.pages[1], 'Zoé Galet');
+    assert.equal(clubs.length, 2);
+    for (const club of clubs) assert.ok(club.h > zoe.h, JSON.stringify([club, zoe]));
+  });
+
+  test('la lecture porte la case : absente, décochée ; un booléen tel quel ; une valeur qui n’est pas un booléen est une faute du code, TypeError', async () => {
+    const planches = creerPlanches({ polices: async () => POLICES, logo: async () => LOGO, provenance: 'production', version: V1 });
+    const lecture = { charge: chargeLucioles({ plan: null, etat: 'propose' }), papier: null, piedTechnolibre: true };
+    const enGrosLu = async (champs) => (await planches.preparer({ ...lecture, ...champs })).organisationEnGros;
+    assert.equal(await enGrosLu({}), false);
+    assert.equal(await enGrosLu({ organisationEnGros: true }), true);
+    assert.equal(await enGrosLu({ organisationEnGros: false }), false);
+    for (const faute of ['oui', 1, null, {}]) {
+      await assert.rejects(
+        enGrosLu({ organisationEnGros: faute }),
+        (erreur) => erreur instanceof TypeError && /organisationEnGros/.test(erreur.message),
+        JSON.stringify(faute),
+      );
+    }
+  });
+});
+
+describe('planche dans la séance : le nom des doublons laissé en blanc (§ 8.5, § 11.4, § 11.6)', () => {
+  const lu = (pdf, depuis = 0) => pdf.pages.slice(depuis).flatMap((page) => textesDe(page));
+  const NUMEROTES = ['Louis Arc 14', 'Zoé Galet', 'Roger Galet 01', 'Roger Galet 02'];
+  // Les textes posés d'une page, sans les noms donnés.
+  const horsNoms = (page, noms) => page.textes.filter(({ texte }) => !noms.includes(texte));
+  // Deux « Roger Galet » numérotés par l'import, une « Zoé Galet » et un
+  // « Louis Arc 14 » dont le numéro est saisi à la main, sans marque.
+  const numerotes = () =>
+    chargeLucioles({
+      personnes: [
+        personne(1, 'Roger', 'Galet 01', { nomNumerote: true }),
+        personne(2, 'Roger', 'Galet 02', { nomNumerote: true }),
+        personne(3, 'Zoé', 'Galet'),
+        personne(4, 'Louis', 'Arc 14'),
+      ],
+    });
+
+  test('cochée par défaut, chaque badge marqué ne porte aucun nom, prénom compris, dans la couche de texte, le reste de sa carte posé comme sous le nom entier, sans ligne « Identifiant » ; décochée, le nom entier ; la liste en CSV garde ses octets', async () => {
+    const { fs, seance } = await monter(numerotes());
+    const cochee = await seance.preparerPlanche();
+    assert.deepEqual([cochee.refus, cochee.cacherNumero, cochee.homonymes], [null, true, []]);
+    const liste = fs.octets('documents', ICI + (await seance.produireListeBadges()).nom);
+    const pdf = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche()).nom));
+    assert.deepEqual(nomsParCellule(pdf.pages[1], 'A4', NUMEROTES), ['Louis Arc 14', 'Zoé Galet', null, null]);
+    assert.ok(!lu(pdf, 1).some((texte) => texte.includes('Roger') || texte.includes('Galet 0')), lu(pdf, 1).join(' | '));
+    assert.ok(!lu(pdf, 1).some((texte) => texte.startsWith('Identifiant')), lu(pdf, 1).join(' | '));
+
+    await seance.choisirCacherNumero(false);
+    const decochee = await seance.preparerPlanche();
+    assert.deepEqual([decochee.refus, decochee.cacherNumero, decochee.homonymes], [null, false, []]);
+    const entier = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche()).nom));
+    assert.deepEqual(nomsParCellule(entier.pages[1], 'A4', NUMEROTES), ['Louis Arc 14', 'Zoé Galet', 'Roger Galet 01', 'Roger Galet 02']);
+    assert.deepEqual(horsNoms(pdf.pages[1], NUMEROTES), horsNoms(entier.pages[1], NUMEROTES));
+    assert.deepEqual(fs.octets('documents', ICI + (await seance.produireListeBadges()).nom), liste);
+  });
+
+  test('le nom entier reste celui du refus PLANCHE_NOM_TROP_LONG, des logos introuvables et de la liste de réédition', async () => {
+    const long = `Galet${'w'.repeat(1990)} 01`;
+    const trop = numerotes();
+    trop.participants[0].nom = long;
+    const annonceTrop = await (await monter(trop)).seance.preparerPlanche();
+    assert.deepEqual(annonceTrop.refus, {
+      code: 'PLANCHE_NOM_TROP_LONG',
+      details: { participant: 1, personne: `Roger ${long}`, remede: { geste: 'ouvrirSection', section: 'participants' } },
+    });
+
+    const charge = numerotes();
+    charge.participants[1].logo = `logo/${'7'.repeat(64)}.png`;
+    const { fs, seance } = await monter(charge);
+    const annonce = await seance.preparerPlanche({ selection: [2, 1] });
+    assert.deepEqual([annonce.refus, annonce.cacherNumero], [null, true]);
+    assert.deepEqual(annonce.logos.introuvables, [{ participant: 2, nom: 'Roger Galet 02', cause: 'ABSENT' }]);
+    const pdf = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche({ selection: [2, 1] })).nom));
+    const controle = textesDe(pdf.pages[0]);
+    assert.ok(controle.includes('Roger Galet 01') && controle.includes('Roger Galet 02'), controle.join(' | '));
+    assert.deepEqual(nomsParCellule(pdf.pages[1], 'A4', NUMEROTES), [null, null, null, null]);
+    assert.ok(!lu(pdf, 1).some((texte) => texte.includes('Roger')), lu(pdf, 1).join(' | '));
+  });
+
+  test('la lecture porte la case : absente, décochée ; un booléen tel quel ; une valeur qui n’est pas un booléen est une faute du code, TypeError', async () => {
+    const planches = creerPlanches({ polices: async () => POLICES, logo: async () => LOGO, provenance: 'production', version: V1 });
+    const lecture = { charge: chargeLucioles({ plan: null, etat: 'propose' }), papier: null, piedTechnolibre: true };
+    const cacherLu = async (champs) => (await planches.preparer({ ...lecture, ...champs })).cacherNumero;
+    assert.equal(await cacherLu({}), false);
+    assert.equal(await cacherLu({ cacherNumero: true }), true);
+    assert.equal(await cacherLu({ cacherNumero: false }), false);
+    for (const faute of ['oui', 1, null, {}]) {
+      await assert.rejects(cacherLu({ cacherNumero: faute }), (erreur) => erreur instanceof TypeError && /cacherNumero/.test(erreur.message), JSON.stringify(faute));
+    }
   });
 });

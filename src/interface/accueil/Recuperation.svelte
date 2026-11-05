@@ -7,8 +7,9 @@
   // — le texte de l'ETAT_ILLISIBLE qu'a levé l'ouverture —, puis offre les
   // secours lisibles dans l'ordre du § 8.8, la version précédente puis le
   // dernier instant du journal (secoursOfferts), chacun ouvert en lecture
-  // par seance.ouvrirSecours, sans rien écrire. Sans secours lisible, elle
-  // le dit, et rien ne s'ouvre ni ne se crée. Le retour rend la liste.
+  // par seance.ouvrirSecours, sous l'indicateur d'activité (activite.js),
+  // sans rien écrire. Sans secours lisible, elle le dit, et rien ne s'ouvre
+  // ni ne se crée. Le retour rend la liste.
   //
   // evenement, chemin : la clé de l'événement de la ligne (cleEvenement) et
   // son chemin ; refus : { code, details } de l'ouverture refusée ;
@@ -17,6 +18,7 @@
   // Sous le titre de l'écran, une carte : le fichier, la raison, les secours
   // — le premier offert est l'action principale —, puis le retour.
   import { getContext } from 'svelte';
+  import { suivre } from '../activite.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
@@ -48,7 +50,7 @@
               <Commande
                 {cle}
                 variante={rang === 0 ? 'principale' : 'secondaire'}
-                executer={() => surLaListe(() => seance.ouvrirSecours(evenement, source))}
+                executer={() => surLaListe(() => suivre(() => seance.ouvrirSecours(evenement, source)))}
               />
             </li>
           {/each}

@@ -256,26 +256,44 @@ export async function surLaListe(operation) {
 
 /**
  * Codes d'un refus que la création de l'accueil lève elle-même, avant la
- * façade, leur texte dans src/application/libelles/evenements.js :
+ * façade :
  *   DATE_INCOMPLETE {remede} : le sélecteur de date porte une saisie
  *     commencée qu'il ne lit pas comme une date, incomplète ou absente du
- *     calendrier ; remède null.
+ *     calendrier ; remède null. Son texte est dans
+ *     src/application/libelles/evenements.js.
+ *   accueil.creation.anneeAvantMinimum {minimum, remede} : le sélecteur lit
+ *     une date complète dont l'année précède minimum, ANNEE_MINIMALE ;
+ *     remède null. Le code est la clé de son texte, dans la table de
+ *     l'accueil (libelles/accueil.js).
  */
 
+/** L'année la plus ancienne qu'admet le sélecteur de date de la création :
+ *  son attribut min est le 1er janvier de cette année. */
+export const ANNEE_MINIMALE = 1900;
+
 /**
- * Le refus d'une date commencée que le sélecteur ne lit pas. Un champ de
- * type date à moitié rempli, ou rempli d'un jour absent du calendrier,
- * rend une valeur vide et validity.badInput vrai, sans distinguer les deux
- * cas : créer sans date perdrait la saisie en silence. Un champ vide ou une
- * date que le sélecteur lit ne refusent rien ici : la commande juge la date
+ * Le refus d'une date que le sélecteur lit mal, d'après champ.validity :
+ * - badInput : un champ de type date à moitié rempli, ou rempli d'un jour
+ *   absent du calendrier, rend une valeur vide et badInput vrai, sans
+ *   distinguer les deux cas : créer sans date perdrait la saisie en silence.
+ *   DATE_INCOMPLETE ;
+ * - rangeUnderflow : une date complète sous l'attribut min du champ, que le
+ *   schéma admettrait — une année avant 1900, par exemple tapée sur deux ou
+ *   trois chiffres, « 0203 ». accueil.creation.anneeAvantMinimum, qui nomme
+ *   ANNEE_MINIMALE.
+ * badInput passe d'abord. Un champ vide ou une date que le sélecteur lit
+ * dans ses bornes ne refusent rien ici : la commande juge la date
  * (DATE_INVALIDE).
  *
- * @param {{validity: {badInput: boolean}}} champ  l'entrée de la date
- * @returns {{code: 'DATE_INCOMPLETE', details: {remede: null}}|null}
+ * @param {{validity: {badInput: boolean, rangeUnderflow: boolean}}} champ
+ *   l'entrée de la date, telle que le navigateur la tient
+ * @returns {{code: string, details: Object}|null}
  */
 export function refusDeLaDate(champ) {
-  if (!champ.validity.badInput) return null;
-  return { code: 'DATE_INCOMPLETE', details: { remede: null } };
+  const { badInput, rangeUnderflow } = champ.validity;
+  if (badInput) return { code: 'DATE_INCOMPLETE', details: { remede: null } };
+  if (rangeUnderflow) return { code: 'accueil.creation.anneeAvantMinimum', details: { minimum: ANNEE_MINIMALE, remede: null } };
+  return null;
 }
 
 // Le champ que désigne chaque refus d'un nom ou d'une date saisis.
@@ -284,12 +302,14 @@ const CHAMPS_DES_REFUS = new Map([
   ['NOM_EVENEMENT_TROP_LONG', 'nom'],
   ['DATE_INVALIDE', 'date'],
   ['DATE_INCOMPLETE', 'date'],
+  ['accueil.creation.anneeAvantMinimum', 'date'],
 ]);
 
 /**
  * Le champ contre lequel un refus se pose : 'nom' pour NOM_REQUIS et
- * NOM_EVENEMENT_TROP_LONG, 'date' pour DATE_INVALIDE et DATE_INCOMPLETE ;
- * null pour tout autre refus, qui se pose contre la commande, et sans refus.
+ * NOM_EVENEMENT_TROP_LONG, 'date' pour DATE_INVALIDE, DATE_INCOMPLETE et
+ * accueil.creation.anneeAvantMinimum ; null pour tout autre refus, qui se
+ * pose contre la commande, et sans refus.
  *
  * @param {{code: string}|null} refus
  * @returns {'nom'|'date'|null}

@@ -4,7 +4,8 @@
 <script>
   // La grille éditable des participants (§ 10.2) : une ligne par personne
   // de lignes, dans l'ordre que lui donne SectionParticipants, une cellule
-  // par colonne de COLONNES (grille.js), puis les commandes de la ligne.
+  // par colonne de colonnes — celles de COLONNES (grille.js) que la section
+  // montre, colonnesMontrees —, puis les commandes de la ligne.
   //
   // Au clavier, une seule cellule est dans l'ordre de tabulation, la cellule
   // active ; flèches, Tab et Maj+Tab la déplacent (celluleSuivante), et Tab
@@ -44,12 +45,32 @@
   // liste entière (commandeDeCellule), une seule entrée pour le geste. Sans
   // autre organisation, le groupe le dit, et prend le focus.
   //
+  // Les inclusions (§ 4, § 10.2), juste après les conflits du placement,
+  // s'affichent en pastilles neutres à l'icône « ajouter », une par
+  // organisation incluse, puis le libellé de chaque personne incluse
+  // (libelleDeCible, liste_inclusions.js) ; la cellule est vide sans
+  // inclusion. Entrée ou F2 les ouvre en deux choix multiples compacts, dans
+  // un même éditeur (data-editeur-inclusions) : une case par organisation de
+  // l'événement hors la sienne, puis une case par personne hors elle-même,
+  // exclues comprises (choixDeParticipants), sous une zone de recherche. La
+  // saisie est la paire canonique des deux listes (liste_inclusions.js), sur
+  // la même machine. Tab et Maj+Tab passent d'abord d'un contrôle de
+  // l'éditeur à l'autre — les cases des organisations, la recherche, les
+  // cases des personnes — ; Tab depuis le dernier, Maj+Tab depuis le
+  // premier, valident et mènent à la cellule voisine, comme Entrée et la
+  // sortie de l'éditeur valident. La validation exécute une seule commande,
+  // changerInclusions des listes que la saisie change (commandeDeValidation),
+  // une entrée pour le geste, que Défaire reprend d'un coup. Masquer la
+  // colonne pendant son édition abandonne celle-ci, sans rien écrire.
+  //
   // Un refus se pose dans la cellule où le geste a eu lieu, avec son
   // remède : celui de la séance, lu dans etat().refus avant d'ouvrir
   // l'édition, ou celui de la commande, la saisie gardée.
   //
-  // « Voir sur le plan » met la personne en évidence et ouvre le plan, au
-  // tour montré (§ 7.1, § 8.4) : un geste de regard, qui n'écrit rien.
+  // « Voir sur le plan » met la personne en évidence et ouvre le plan
+  // (§ 7.1, § 8.4) au tour montré quand elle y a une chaise, sinon au
+  // premier tour où elle en a une, sa chaise au centre de la vue : un geste
+  // de regard, qui n'écrit rien.
   //
   // L'en-tête trie : un clic sur une colonne la trie croissante, un second
   // décroissante ; le sens se lit en texte et dans aria-sort. Un collage sur
@@ -103,16 +124,42 @@
   // comme sans placement montré. Elle se lit seulement : sa cellule prend
   // le focus, Entrée et F2 n'y ouvrent rien, son en-tête ne trie pas, elle
   // ne se groupe ni ne se filtre, et l'export ne l'écrit pas.
-  import { getContext, onDestroy, tick } from 'svelte';
+  //
+  // La colonne « Inclusions du placement » (MESURES), juste après celle des
+  // inclusions et masquée avec elle, se lit de même, dans le placement que
+  // la fiche lit (inclusionsDuPlacement, inclusionsDePersonne,
+  // qualite/inclusions.js), les mêmes avis que le tableau des propositions
+  // et la liste de travail du plan : ses inclusions satisfaites sur ses
+  // inclusions actives, « liste au-delà du plafond » quand la sienne
+  // dépasse ce qu'elle peut rencontrer, puis « sans » et l'autre partie de
+  // chaque avis qui la concerne — la personne ou l'organisation incluse, ou
+  // la personne qui l'inclut —, chaque nom dans son propre nœud ; un tiret
+  // sans rien de cela, ni placement mesuré ni inclusion active, et « non
+  // comptées » pour un placement montré qui ne se mesure pas.
+  //
+  // La colonne « Animation » (MESURES), juste après le titre pressenti, se
+  // lit de même : les numéros affichés des tables que la personne anime,
+  // « 3 » ou « 3, 5 », lus dans tablesAnimees
+  // (src/application/animateurs.js) sur la charge entière, ou « à
+  // désigner » en pastille d'avis à triangle pour une personne non exclue
+  // qui porte la marque de l'animation réservée sans animer de table
+  // (celluleAnimation, grille.js), vide sinon.
+  import { getContext, onDestroy, tick, untrack } from 'svelte';
+  import { tablesAnimees } from '../../application/animateurs.js';
   import { conflitsDuPlacement } from '../../application/conflits_placement.js';
   import { organisationsDe } from '../../application/conflits_organisation.js';
   import { cleNormalisee } from '../../application/csv.js';
   import { nomAffiche } from '../../application/personnes.js';
+  import { etatPlaces } from '../../application/places.js';
+  import { nomsDesTours } from '../../application/tours.js';
+  import { tourAffiche, tourPourVoir } from '../plan/vue_plan.js';
   import { creerMachineChamp } from '../primitives/champ.js';
   import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
+  import { nomDe } from '../propositions/modele.js';
+  import { inclusionsDePersonne, inclusionsDuPlacement } from '../qualite/inclusions.js';
   import { effetDe } from '../raccourcis.js';
   import CasesPresence from './CasesPresence.svelte';
   import ChoixMultiple from './ChoixMultiple.svelte';
@@ -122,16 +169,29 @@
     MESURES,
     TRIABLES,
     basculerGroupe,
+    celluleAnimation,
     celluleSuivante,
     cheminDe,
     cleDeColonne,
-    commandeDeCellule,
+    commandeDeValidation,
     deplierChemin,
     entreeValide,
     lignesVisibles,
     ligneVoisine,
+    rangDeColonne,
   } from './grille.js';
   import { choixDeConflits, lectureConflits, saisieApresBasculeConflit, saisieConflitsEnregistree } from './liste_conflits.js';
+  import {
+    choixDeParticipants,
+    ciblesDeParticipants,
+    lectureInclusions,
+    libelleDeCible,
+    nomDeCible,
+    participantsInclus,
+    partiesDInclusions,
+    saisieApresBasculeInclusion,
+    saisieInclusionsEnregistree,
+  } from './liste_inclusions.js';
   import { affichagesPresence, casesDeSaisie, lecturePresence, saisieApresBascule, saisieEnregistree } from './presence.js';
 
   let {
@@ -144,21 +204,34 @@
     conflits = new Map(),
     enConflit = new Map(),
     tours = 1,
+    colonnes = COLONNES,
   } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
   const ui = getContext('ui');
 
+  // Met la personne en évidence et ouvre le plan au tour où elle a une
+  // chaise (tourPourVoir), dans le placement que le plan montre, en
+  // demandant au plan de centrer sa chaise ; le tour montré, et le choix en
+  // attente avec lui, ne change que si elle n'y en a pas.
   function voirSurLePlan(id) {
-    ui.mettreEnEvidence(id);
+    const { charge } = seance.etat();
+    if (charge !== null) {
+      const { tour: demande, proposition } = ui.etat();
+      const montre = tourAffiche(demande, charge.evenement.tours);
+      const tour = tourPourVoir(id, charge.evenement.tours, montre, (r) => etatPlaces(charge, { tour: r, proposition }));
+      if (tour !== montre) ui.montrerTour(tour);
+    }
+    ui.mettreEnEvidence(id, { centrer: true });
     ui.allerA('plan');
   }
   const uid = $props.id();
   const geste = creerGeste(seance);
 
-  // La cellule active : l'identifiant de sa ligne et le rang de sa colonne.
-  let actif = $state({ id: null, colonne: 0 });
+  // La cellule active : l'identifiant de sa ligne et le nom de sa colonne,
+  // qui la garde quand une colonne se montre ou se masque devant elle.
+  let actif = $state({ id: null, colonne: COLONNES[0] });
   // La cellule en édition, {id, colonne}, et le texte saisi.
   let edition = $state.raw(null);
   let saisie = $state('');
@@ -168,12 +241,24 @@
   let tableau;
   let entree = $state(null);
   // Le groupe des cases en édition : celles de la présence (CasesPresence),
-  // ou celles des conflits (ChoixMultiple).
+  // celles des conflits (ChoixMultiple), ou l'éditeur des inclusions, qui
+  // porte deux choix multiples.
   let editeur = $state(null);
 
   // Les organisations de l'événement, exclus compris : celles qu'un conflit
-  // peut nommer. La grille ne reçoit que ses lignes, que le filtre réduit.
+  // ou une inclusion peut nommer ; ses personnes, par identifiant, celles
+  // qu'une inclusion peut nommer. La grille ne reçoit que ses lignes, que le
+  // filtre réduit.
   const organisations = $derived($seance.charge === null ? new Set() : organisationsDe($seance.charge));
+  const cibles = $derived($seance.charge === null ? new Map() : ciblesDeParticipants($seance.charge.participants));
+  const libelleCible = (id) => libelleDeCible(cibles, id, t);
+  // La recherche des personnes dans l'éditeur des inclusions.
+  const filtrePersonnes = {
+    nom: t('participants.inclusions.recherche'),
+    aucun: (texte) => t('participants.inclusions.aucunResultat', { texte }),
+    cle: cleNormalisee,
+    lu: (id) => nomDeCible(cibles, id),
+  };
 
   // Les conflits du placement montré de chaque personne, tour par tour ;
   // une table vide sans placement montré. Un placement montré — proposition
@@ -187,6 +272,19 @@
     $seance.charge !== null && conflitsBruts === null && ($ui.proposition !== null || $seance.charge.retenu !== null),
   );
 
+  // Les inclusions du placement montré ; ce qu'elles disent d'une personne,
+  // null hors d'un placement mesuré.
+  const inclusionsBrutes = $derived($seance.charge === null ? null : inclusionsDuPlacement($seance.charge, $ui.proposition));
+  const inclusionsNonComptees = $derived(inclusionsBrutes?.statut === 'nonMesurable');
+  const inclusionsDe = (id) =>
+    inclusionsBrutes?.statut === 'mesuree'
+      ? inclusionsDePersonne(inclusionsBrutes.inclusions, id, (autre) => nomDe($seance.charge, autre))
+      : null;
+
+  // Les tables que chaque personne anime, lues sur la charge entière : la
+  // grille ne reçoit que ses lignes.
+  const animees = $derived($seance.charge === null ? new Map() : tablesAnimees($seance.charge));
+
   // Les lignes que la grille montre, dans leur ordre, et le rang de chacune
   // parmi elles, par identifiant.
   const visibles = $derived(groupes === null ? lignes : lignesVisibles(groupes, replies));
@@ -194,9 +292,14 @@
 
   // Le rang de la ligne active ; la première quand l'active n'est plus affichée.
   const rangActif = $derived(rangs.get(actif.id) ?? 0);
+  // Le rang de la colonne active parmi celles que la grille montre, ou de sa
+  // voisine quand elle est masquée (rangDeColonne).
+  const colonneActive = $derived(rangDeColonne(actif.colonne, colonnes));
 
   // L'affichage au repos de la présence de chaque personne, par identifiant.
   const affichages = $derived(affichagesPresence(lignes));
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived($seance.charge === null ? [] : nomsDesTours($seance.charge));
 
   const idRefus = (id, colonne) => `${uid}-refus-${id}-${colonne}`;
   const enEdition = (id, colonne) => edition !== null && edition.id === id && edition.colonne === colonne;
@@ -209,18 +312,22 @@
   const lire = (texte) => ({ valeur: texte.normalize('NFC').trim() });
 
   // Les colonnes qui s'éditent en cases, dans un groupe.
-  const EN_CASES = new Set(['presence', 'conflits']);
+  const EN_CASES = new Set(['presence', 'conflits', 'inclusions']);
 
   // Le contrôle de la cellule en édition — le groupe des cases de la
-  // présence ou des conflits, le champ de texte sinon —, vrai quand le
-  // focus est en lui, et le focus qui y revient : la case active, le groupe
-  // des conflits quand il n'en porte aucune, ou le champ.
+  // présence ou des conflits, l'éditeur des inclusions, le champ de texte
+  // sinon —, vrai quand le focus est en lui, et le focus qui y revient : la
+  // case active, la première de l'éditeur des inclusions, le groupe des
+  // conflits ou le premier des inclusions quand il n'en porte aucune, ou le
+  // champ.
   const controleEnEdition = () => (EN_CASES.has(edition?.colonne) ? editeur : entree);
   const focusDans = (controle) => controle !== null && controle.contains(document.activeElement);
   function focaliserEdition() {
     if (edition?.colonne === 'presence') editeur?.querySelector('[data-presence-tour][tabindex="0"]')?.focus();
     else if (edition?.colonne === 'conflits') (editeur?.querySelector('[data-choix][tabindex="0"]') ?? editeur)?.focus();
-    else entree?.focus();
+    else if (edition?.colonne === 'inclusions') {
+      (editeur?.querySelector('[data-choix][tabindex="0"]') ?? editeur?.querySelector('[data-editeur-choix]'))?.focus();
+    } else entree?.focus();
   }
 
   function trier(colonne) {
@@ -238,9 +345,9 @@
 
   async function activer(rang, colonne) {
     const ligne = visibles[rang];
-    actif = { id: ligne.id, colonne };
+    actif = { id: ligne.id, colonne: colonnes[colonne] };
     await tick();
-    cellule(ligne.id, COLONNES[colonne])?.focus();
+    cellule(ligne.id, colonnes[colonne])?.focus();
   }
 
   function refuser(id, colonne, erreur) {
@@ -257,6 +364,7 @@
     refusCellule = null;
     if (colonne === 'presence') machine = creerMachineChamp({ stockee: saisieEnregistree(personne, tours), lire: lecturePresence(tours) });
     else if (colonne === 'conflits') machine = creerMachineChamp({ stockee: saisieConflitsEnregistree(personne), lire: lectureConflits });
+    else if (colonne === 'inclusions') machine = creerMachineChamp({ stockee: saisieInclusionsEnregistree(personne), lire: lectureInclusions });
     else machine = creerMachineChamp({ stockee: texteDe(personne[colonne]), lire });
     saisie = machine.saisie;
     edition = { id: personne.id, colonne };
@@ -279,25 +387,29 @@
   }
 
   // Valide la saisie de la cellule en édition : rien quand elle se lit comme
-  // la valeur enregistrée, la commande sinon. Rend une promesse de vrai quand
-  // l'édition se clôt, de faux quand la commande est refusée : l'édition
-  // reste alors ouverte sur la saisie, le refus contre elle, le focus dans
-  // le champ.
+  // la valeur enregistrée, ou qu'elle ne change plus rien à la personne ;
+  // sa commande sinon (commandeDeValidation), lue contre la saisie de
+  // l'ouverture et la personne à la validation. Rend une promesse de vrai
+  // quand l'édition se clôt, de faux quand la commande est refusée :
+  // l'édition reste alors ouverte sur la saisie, le refus contre elle, le
+  // focus dans le champ.
   async function valider() {
     if (edition === null) return true;
     const { id, colonne } = edition;
+    const ouverture = machine.stockee;
     const rendu = machine.valider();
     saisie = machine.saisie;
-    if (rendu.action !== 'executer') {
+    const personne = seance.etat().charge?.participants.find((p) => p.id === id) ?? { id };
+    const commande = rendu.action === 'executer' ? commandeDeValidation(colonne, personne, rendu.valeur, ouverture) : null;
+    if (commande === null) {
       await fermerEdition();
       return true;
     }
     const enCours = machine;
     const rangAvant = rangs.get(id) ?? 0;
-    const { nom, args } = commandeDeCellule(colonne, id, rendu.valeur);
     let promesse;
     try {
-      promesse = seance.executer(nom, args);
+      promesse = seance.executer(commande.nom, commande.args);
     } catch (erreur) {
       await echouer(enCours, id, colonne, erreur);
       return false;
@@ -334,7 +446,7 @@
     if (actuel !== null && actuel !== document.body) return;
     const voisine = ligneVoisine(rangAvant, visibles.length);
     if (rangs.has(id)) cellule(id, colonne)?.focus();
-    else if (voisine !== null) activer(voisine, COLONNES.indexOf(colonne));
+    else if (voisine !== null) activer(voisine, colonnes.indexOf(colonne));
   }
 
   async function echouer(enCours, id, colonne, erreur) {
@@ -354,6 +466,13 @@
     return fermerEdition();
   }
 
+  // Une colonne que la section masque pendant son édition — une saisie
+  // refusée y reste ouverte, son geste tenu — abandonne cette édition :
+  // rien ne s'écrit, le refus tombe et le geste se libère.
+  $effect(() => {
+    if (edition !== null && !colonnes.includes(edition.colonne)) untrack(abandonner);
+  });
+
   function surSaisie(evenement) {
     machine.saisir(evenement.currentTarget.value);
     saisie = machine.saisie;
@@ -371,6 +490,12 @@
   }
   function surBasculeConflit(organisation, coche) {
     machine.saisir(saisieApresBasculeConflit(machine.saisie, organisation, coche));
+    saisie = machine.saisie;
+    refusCellule = null;
+    geste.tenir(machine.enCours);
+  }
+  function surBasculeInclusion(sorte, valeur, coche) {
+    machine.saisir(saisieApresBasculeInclusion(machine.saisie, sorte, valeur, coche));
     saisie = machine.saisie;
     refusCellule = null;
     geste.tenir(machine.enCours);
@@ -407,11 +532,30 @@
       // le champ, dont la sortie validerait une seconde fois.
       evenement.preventDefault();
       const { id } = edition;
-      const colonne = COLONNES.indexOf(edition.colonne);
+      const colonne = colonnes.indexOf(edition.colonne);
       if (!(await valider())) return;
       await tick();
       tabulerDepuis(id, rang, colonne, touche);
     }
+  }
+
+  // Dans l'éditeur des inclusions, Tab et Maj+Tab mènent d'abord au contrôle
+  // voisin de l'éditeur, que le navigateur atteint de lui-même : une case
+  // active, la recherche, ou le groupe sans case qui a le focus. Depuis le
+  // dernier contrôle, Tab, et depuis le premier, Maj+Tab, valident comme
+  // dans toute cellule en édition.
+  function surToucheInclusions(evenement, rang) {
+    const tabulation = effetDe('grille', toucheDeGrille(evenement));
+    if (tabulation === 'suivante' || tabulation === 'precedente') {
+      const actuel = document.activeElement;
+      const controles = [...(editeur?.querySelectorAll('input, [data-editeur-choix]') ?? [])].filter(
+        (controle) => controle === actuel || (controle instanceof HTMLInputElement && controle.tabIndex >= 0),
+      );
+      const ici = controles.indexOf(actuel);
+      const voisin = tabulation === 'suivante' ? ici + 1 : ici - 1;
+      if (ici >= 0 && voisin >= 0 && voisin < controles.length) return;
+    }
+    surToucheEntree(evenement, rang);
   }
 
   // Tab ou Maj+Tab depuis la cellule validée de la personne id, au rang
@@ -424,7 +568,7 @@
   function tabulerDepuis(id, rangAvant, colonne, touche) {
     const rang = rangs.get(id) ?? -1;
     if (rang >= 0) return deplacer(rang, colonne, touche);
-    const suivante = effetDe('grille', touche) === 'suivante' ? { ligne: rangAvant, colonne: 0 } : { ligne: rangAvant - 1, colonne: COLONNES.length - 1 };
+    const suivante = effetDe('grille', touche) === 'suivante' ? { ligne: rangAvant, colonne: 0 } : { ligne: rangAvant - 1, colonne: colonnes.length - 1 };
     if (suivante.ligne < 0 || suivante.ligne >= visibles.length) return false;
     activer(suivante.ligne, suivante.colonne);
     return true;
@@ -443,7 +587,7 @@
   }
 
   function deplacer(rang, colonne, touche) {
-    const suivante = celluleSuivante({ ligne: rang, colonne }, touche, { lignes: visibles.length, colonnes: COLONNES.length });
+    const suivante = celluleSuivante({ ligne: rang, colonne }, touche, { lignes: visibles.length, colonnes: colonnes.length });
     if (suivante === null) return false;
     activer(suivante.ligne, suivante.colonne);
     return true;
@@ -474,9 +618,9 @@
       if (deplacer(rang, colonne, touche)) evenement.preventDefault();
     } else if (effet === 'editer') {
       evenement.preventDefault();
-      if (MESURES.includes(COLONNES[colonne])) return;
-      if (COLONNES[colonne] === 'exclu') basculerExclusion(personne);
-      else ouvrirEdition(personne, COLONNES[colonne]);
+      if (MESURES.includes(colonnes[colonne])) return;
+      if (colonnes[colonne] === 'exclu') basculerExclusion(personne);
+      else ouvrirEdition(personne, colonnes[colonne]);
     } else if (effet === 'effacer') {
       refusCellule = null;
     }
@@ -496,15 +640,15 @@
 
 {#snippet rangee(personne, rang, dans)}
   <tr data-participant={personne.id} data-groupe-ligne={dans}>
-    {#each COLONNES as colonne, rangColonne (colonne)}
+    {#each colonnes as colonne, rangColonne (colonne)}
       {@const refus = refusDe(personne.id, colonne)}
       <td
         role="gridcell"
         data-champ={colonne}
-        tabindex={rang === rangActif && rangColonne === actif.colonne ? 0 : -1}
+        tabindex={rang === rangActif && rangColonne === colonneActive ? 0 : -1}
         aria-describedby={refus === null || enEdition(personne.id, colonne) ? undefined : idRefus(personne.id, colonne)}
         onfocus={(evenement) => {
-          if (evenement.target === evenement.currentTarget) actif = { id: personne.id, colonne: rangColonne };
+          if (evenement.target === evenement.currentTarget) actif = { id: personne.id, colonne };
         }}
         onkeydown={(evenement) => surToucheCellule(evenement, personne, rang, rangColonne)}
       >
@@ -525,6 +669,7 @@
             compact
             cases={casesDeSaisie(saisie, tours)}
             nom={nomAffiche(personne)}
+            {nomsTours}
             invalide={refus !== null}
             decrit={refus === null ? undefined : idRefus(personne.id, colonne)}
             bind:conteneur={editeur}
@@ -545,6 +690,34 @@
             toucher={(evenement) => surToucheEntree(evenement, rang)}
             sortir={surSortieGroupe}
           />
+        {:else if enEdition(personne.id, colonne) && colonne === 'inclusions'}
+          {@const parties = partiesDInclusions(saisie)}
+          <div class="editeur-inclusions" data-editeur-inclusions bind:this={editeur}>
+            <ChoixMultiple
+              compact
+              choix={choixDeConflits(parties.organisations, organisations, personne.organisation, cleNormalisee)}
+              nom={t('participants.inclusions.editeurOrganisations', { nom: nomAffiche(personne) })}
+              vide={t('participants.inclusions.aucuneOrganisation')}
+              invalide={refus !== null}
+              decrit={refus === null ? undefined : idRefus(personne.id, colonne)}
+              basculer={(valeur, coche) => surBasculeInclusion('organisation', valeur, coche)}
+              toucher={(evenement) => surToucheInclusions(evenement, rang)}
+              sortir={surSortieGroupe}
+            />
+            <ChoixMultiple
+              compact
+              choix={choixDeParticipants(parties.participants, cibles, personne.id, cleNormalisee)}
+              libelle={libelleCible}
+              filtre={filtrePersonnes}
+              nom={t('participants.inclusions.editeurParticipants', { nom: nomAffiche(personne) })}
+              vide={t('participants.inclusions.aucunParticipant')}
+              invalide={refus !== null}
+              decrit={refus === null ? undefined : idRefus(personne.id, colonne)}
+              basculer={(valeur, coche) => surBasculeInclusion('participant', valeur, coche)}
+              toucher={(evenement) => surToucheInclusions(evenement, rang)}
+              sortir={surSortieGroupe}
+            />
+          </div>
         {:else if enEdition(personne.id, colonne)}
           <input
             type="text"
@@ -563,7 +736,7 @@
             <span class="presence-tous" data-presence="tous">{t(vue.cle)}</span>
           {:else}
             <span class="donnee-pastille" data-presence="partielle">
-              <Pastille sorte="statut" valeur="information" icone="calendrier" libelle={t(vue.cle, vue.details)} />
+              <Pastille sorte="statut" valeur="information" icone="calendrier" libelle={t(vue.cle, { nomsTours, ...vue.details })} />
             </span>
           {/if}
         {:else if colonne === 'exclu'}
@@ -582,12 +755,26 @@
               {/each}
             </ul>
           {/if}
+        {:else if colonne === 'inclusions'}
+          {@const inclus = participantsInclus(personne.inclusionsParticipant, cibles, cleNormalisee)}
+          {#if personne.inclusionsOrganisation !== undefined || inclus.length > 0}
+            <ul class="liste-inclusions" data-inclusions-personne>
+              {#each personne.inclusionsOrganisation ?? [] as organisation (organisation)}
+                <li class="donnee-pastille" data-inclusion-organisation>
+                  <Pastille sorte="statut" valeur="neutre" icone="ajouter" libelle={organisation} />
+                </li>
+              {/each}
+              {#each inclus as id (id)}
+                <li class="valeur" data-inclusion-participant>{libelleCible(id)}</li>
+              {/each}
+            </ul>
+          {/if}
         {:else if colonne === 'conflitsPlacement'}
           {#if conflitsDesPersonnes.has(personne.id)}
             <ul class="conflits-placement">
               {#each conflitsDesPersonnes.get(personne.id) as { tour, regles } (tour)}
                 <li>
-                  <span class="tour">{t('participants.conflit.tour', { tour })}</span>
+                  <span class="tour">{t('participants.conflit.tour', { tour, nomsTours })}</span>
                   <span>{texteDuTour(regles, t)}</span>
                 </li>
               {/each}
@@ -596,6 +783,34 @@
             <span class="sans-conflit">{t('participants.conflit.nonCompte')}</span>
           {:else}
             <span class="sans-conflit">{t('participants.conflit.aucun')}</span>
+          {/if}
+        {:else if colonne === 'inclusionsPlacement'}
+          {@const siennes = inclusionsDe(personne.id)}
+          {#if siennes !== null && (siennes.compte !== null || siennes.autres.length > 0)}
+            <ul class="conflits-placement" data-inclusions-placement>
+              {#if siennes.compte !== null}
+                <li>{t('participants.inclusionsPlacement.compte', siennes.compte)}</li>
+              {/if}
+              {#if siennes.auDela !== null}
+                <li>{t('participants.inclusionsPlacement.auDela')}</li>
+              {/if}
+              {#each siennes.autres as autre, rang (rang)}
+                <li><span>{t('participants.inclusionsPlacement.sans')}</span><span class="valeur">{autre.nom}</span></li>
+              {/each}
+            </ul>
+          {:else if inclusionsNonComptees}
+            <span class="sans-conflit">{t('participants.inclusionsPlacement.nonCompte')}</span>
+          {:else}
+            <span class="sans-conflit">{t('participants.conflit.aucun')}</span>
+          {/if}
+        {:else if colonne === 'animation'}
+          {@const animation = celluleAnimation(personne, animees)}
+          {#if animation.sorte === 'tables'}
+            <span class="valeur" data-animation="tables">{t('participants.animation.tables', { numeros: animation.numeros })}</span>
+          {:else if animation.sorte === 'aDesigner'}
+            <span class="donnee-pastille" data-animation="aDesigner">
+              <Pastille sorte="statut" valeur="avis" icone="triangle" libelle={t('participants.animation.aDesigner')} />
+            </span>
           {/if}
         {:else if colonne === 'organisation' && personne.organisation !== null}
           <span class="donnee-pastille">
@@ -646,7 +861,7 @@
 {#snippet bloc(groupe)}
   {@const replie = replies.has(groupe.cle)}
   <tr class="groupe" data-groupe={groupe.cle} data-niveau={groupe.niveau}>
-    <th scope={groupe.niveau === 1 ? 'rowgroup' : 'row'} colspan={COLONNES.length + 1}>
+    <th scope={groupe.niveau === 1 ? 'rowgroup' : 'row'} colspan={colonnes.length + 1}>
       <button
         type="button"
         data-commande="basculerGroupe"
@@ -656,7 +871,7 @@
       >
         <span class="etat" data-groupe-etat>{t(replie ? 'participants.groupe.deplier' : 'participants.groupe.replier')}</span>
         {#if groupe.libelle === null}
-          <span class="libelle" data-groupe-libelle>{t(groupe.cleLibelle, groupe.detailsLibelle ?? {})}</span>
+          <span class="libelle" data-groupe-libelle>{t(groupe.cleLibelle, { nomsTours, ...groupe.detailsLibelle })}</span>
         {:else}
           <span class="libelle valeur" data-groupe-libelle>{groupe.libelle}</span>
         {/if}
@@ -670,14 +885,14 @@
   {#if !replie}
     {#if groupe.sousGroupes === null && conflits.has(groupe.cle)}
       <tr class="conflits" data-conflits={groupe.cle}>
-        <td colspan={COLONNES.length + 1}>
+        <td colspan={colonnes.length + 1}>
           <ul>
             {#each conflits.get(groupe.cle) as conflit (conflit.cle)}
               <li data-conflit>
-                <span>{t('participants.conflit.lieu', { tour: conflit.tour, numero: conflit.numero })}</span>
+                <span>{t('participants.conflit.lieu', { tour: conflit.tour, numero: conflit.numero, nomsTours })}</span>
                 {#each conflit.noms as nom, rang (rang)}{' '}{#if rang > 0}<span>{t('participants.conflit.et')}</span>{' '}{/if}<span
                     class="valeur">{nom}</span
-                  >{/each}{' '}<span>{t(cleDeRaison(conflit.regle), { numero: conflit.numero, deja: conflit.deja })}</span>
+                  >{/each}{' '}<span>{t(cleDeRaison(conflit.regle), { numero: conflit.numero, deja: conflit.deja, nomsTours })}</span>
               </li>
             {/each}
           </ul>
@@ -706,7 +921,7 @@
   >
     <thead>
       <tr>
-        {#each COLONNES as colonne (colonne)}
+        {#each colonnes as colonne (colonne)}
           {#if TRIABLES.includes(colonne)}
             <th scope="col" class:etroite={colonne === 'exclu' || colonne === 'presence'} aria-sort={ariaSort(colonne)}>
               <button type="button" data-commande="trier" data-cible={colonne} onclick={() => trier(colonne)}>
@@ -717,7 +932,9 @@
               </button>
             </th>
           {:else}
-            <th scope="col" class="mesure">{t(cleDeColonne(colonne))}</th>
+            <th scope="col" class="mesure" class:replie={colonne === 'conflitsPlacement' || colonne === 'inclusionsPlacement'} class:etroite={colonne === 'animation'}
+              >{t(cleDeColonne(colonne))}</th
+            >
           {/if}
         {/each}
         <th scope="col">{t('participants.grille.actions')}</th>
@@ -781,10 +998,12 @@
     padding-right: var(--espace-5);
   }
 
-  /* Les en-têtes en petit corps : les dix colonnes, dont chacune prend au
-     moins la largeur de son plus long mot d'en-tête, tiennent dans les
-     cartes décrites plus bas. Sous 80rem de place, un en-tête se replie
-     entre ses mots : celui des conflits d'organisation sur deux lignes. */
+  /* Les en-têtes en petit corps : les onze colonnes montrées par défaut,
+     dont chacune prend au moins la largeur de son plus long mot d'en-tête,
+     tiennent dans les cartes décrites plus bas ; la colonne des inclusions
+     montrée, le tableau défile au besoin dans son conteneur. Sous 80rem de
+     place, un en-tête se replie entre ses mots : celui des conflits
+     d'organisation sur deux lignes. */
   thead th {
     font-size: var(--taille-texte-petit);
     border-top: 1px solid var(--couleur-carte-filet);
@@ -792,15 +1011,29 @@
     background-color: var(--couleur-carte-fond-sourd);
   }
 
-  /* Sous 86rem de place, les cellules se serrent, les bords de la ligne
-     aussi : les dix colonnes et les actions tiennent dans la carte pleine
-     largeur d'une fenêtre de 1024 px, sans défiler, et dans celle d'une
-     fenêtre de 1 366 px avec leurs en-têtes sur une ligne. */
+  /* L'animation, l'exclusion et la présence, en mots courts ou en
+     pastille : un retrait plus étroit leur suffit. */
+  th.etroite,
+  td[data-champ='animation'],
+  td[data-champ='exclu'],
+  td[data-champ='presence'] {
+    padding-right: var(--espace-2);
+    padding-left: var(--espace-2);
+  }
+
+  /* Sous 86rem de place, les cellules se serrent à un quart de rem de
+     chaque côté, étroites comprises, les bords de la ligne à trois quarts :
+     les onze colonnes montrées par défaut et les actions tiennent dans la
+     carte pleine largeur d'une fenêtre de 1024 px, sans défiler, et dans
+     celle d'une fenêtre de 1 366 px avec leurs en-têtes sur une ligne, un
+     tri compris. */
   @container (max-width: 86rem) {
     th,
-    td {
-      padding-right: var(--espace-2);
-      padding-left: var(--espace-2);
+    td,
+    th.etroite,
+    td[data-champ] {
+      padding-right: var(--espace-1);
+      padding-left: var(--espace-1);
     }
 
     th:first-child,
@@ -821,16 +1054,6 @@
 
   td[data-champ='nom'] {
     font-weight: bold;
-  }
-
-  /* L'exclusion et la présence, qui disent qui vient, en mots courts ou en
-     pastille : un retrait plus étroit leur suffit, et les dix colonnes
-     tiennent dans la carte pleine largeur d'une fenêtre de 1024 px. */
-  th.etroite,
-  td[data-champ='exclu'],
-  td[data-champ='presence'] {
-    padding-right: var(--espace-2);
-    padding-left: var(--espace-2);
   }
 
   td[data-champ='notes'] {
@@ -862,6 +1085,26 @@
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  /* Les inclusions d'une personne : une pastille par organisation incluse,
+     puis le nom de chaque personne incluse, qui passent à la ligne quand la
+     cellule est étroite. Dans l'éditeur, les deux choix multiples l'un sous
+     l'autre. */
+  .liste-inclusions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--espace-1) var(--espace-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .editeur-inclusions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-2);
   }
 
   /* Les conflits du placement d'une personne : une ligne par tour, le tour
@@ -1044,16 +1287,16 @@
   }
 
   /* À partir de 80rem de place, celle de la carte d'une fenêtre de
-     1 366 px, chaque en-tête tient sur une ligne — hors de celui des
-     conflits du placement, une mesure, qui se replie toujours entre ses
-     mots : sur une ligne, il ferait déborder la grille —, les quatre actions d'une
-     ligne vont sur deux rangées de deux, en colonnes alignées d'une ligne à
-     l'autre, un prénom ne se coupe qu'entre ses mots, et les tours nommés
-     de la présence ne se coupent pas. En deçà, les en-têtes se replient
-     entre leurs mots, et les actions passent à la ligne quand leur colonne
-     est étroite. */
+     1 366 px, chaque en-tête tient sur une ligne — hors de ceux des
+     conflits et des inclusions du placement (replie), qui se replient
+     toujours entre leurs mots : sur une ligne, ils feraient déborder la
+     grille —, les quatre actions d'une ligne vont sur deux rangées de deux,
+     en colonnes alignées d'une ligne à l'autre, un prénom ne se coupe
+     qu'entre ses mots, et les tours nommés de la présence ne se coupent
+     pas. En deçà, les en-têtes se replient entre leurs mots, et les actions
+     passent à la ligne quand leur colonne est étroite. */
   @container (min-width: 80rem) {
-    thead th:not(.mesure) {
+    thead th:not(.replie) {
       white-space: nowrap;
     }
 

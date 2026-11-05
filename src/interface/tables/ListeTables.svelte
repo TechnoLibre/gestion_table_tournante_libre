@@ -28,12 +28,14 @@
   // Chaque table porte la rangée « Animateurs » (§ 2.1 étape 6) : ses
   // animateurs en pastilles, par siège (animateursNommes), chacun avec son
   // retrait, puis « Ajouter… », qui ouvre la fenêtre d'ajout
-  // (ChoixAnimateurs). Le retrait exécute retirerAnimateur, l'ajout
-  // designerAnimateurs, en une entrée chacun, par executerSurTable : leurs
-  // avertissements se lisent contre la ligne. La fenêtre fermée, ou le
-  // retrait abouti, le focus passe à « Ajouter… » de la table. En lecture
-  // et sur un plan bloqué — le refus courant de la séance —, les pastilles
-  // restent, sans retrait ni « Ajouter… ».
+  // (ChoixAnimateurs). Une animatrice absente à un tour y reste tant que sa
+  // réservation et son titre existent, sa pastille suivie de ses tours
+  // d'absence, « Absence au tour 3 » (toursDAbsence). Le retrait exécute
+  // retirerAnimateur, l'ajout designerAnimateurs, en une entrée chacun, par
+  // executerSurTable : leurs avertissements se lisent contre la ligne. La
+  // fenêtre fermée, ou le retrait abouti, le focus passe à « Ajouter… » de
+  // la table. En lecture et sur un plan bloqué — le refus courant de la
+  // séance —, les pastilles restent, sans retrait ni « Ajouter… ».
   //
   // Supprimer une table qui porte une réservation, un titre ou un objectif
   // ouvre la fenêtre à confirmer, qui les nomme (bilanSuppressionTable) ;
@@ -76,10 +78,12 @@
   // modifier, elle part en lecture et sur un plan bloqué.
   import { getContext, tick } from 'svelte';
   import { on } from 'svelte/events';
+  import { toursDAbsence } from '../../application/animateurs.js';
   import { bilanSuppressionTable } from '../../application/bilans.js';
   import { lireEntier } from '../../application/capacite.js';
   import { exporterObjectifs } from '../../application/csv.js';
   import { ErreurCommande } from '../../application/erreurs.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import Carte from '../primitives/Carte.svelte';
   import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
@@ -150,6 +154,15 @@
   let ajout = $state.raw(null);
   let listeTables = $state(null);
   const gestesAnimateurs = $derived($seance.refus === null);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived(nomsDesTours(charge));
+  // Les tours d'absence de l'animatrice id, croissants ; [] pour une
+  // personne présente à chaque tour.
+  const absencesDe = (id) =>
+    toursDAbsence(
+      charge.participants.find((personne) => personne.id === id),
+      charge.evenement.tours,
+    );
 
   const complementDe = (id) => {
     const complement = complements[id];
@@ -299,7 +312,7 @@
   // détails, puis la table ; et pour un objectif, son texte, la portée de
   // vue, puis la table.
   const nomDeTable = (numero, cle, details = {}) => t('tables.nom.table', { cle, details, numero });
-  const nomDObjectif = (numero, cle, vue) => t('tables.nom.objectif', { cle, tour: vue.tour, numero });
+  const nomDObjectif = (numero, cle, vue) => t('tables.nom.objectif', { cle, tour: vue.tour, numero, nomsTours });
 
   // Une frappe ou Échap dans le champ de la table id retire le complément
   // de son refus : le champ retire le refus au même instant.
@@ -340,8 +353,8 @@
       <Champ
         cle={`objectif-${vue.cle}`}
         etiquette={vue.tour === null ? 'tables.objectif.soiree' : 'tables.objectif.tour'}
-        details={{ tour: vue.tour }}
-        nom={nomDeTable(table.numero, vue.tour === null ? 'tables.objectif.soiree' : 'tables.objectif.tour', { tour: vue.tour })}
+        details={{ tour: vue.tour, nomsTours }}
+        nom={nomDeTable(table.numero, vue.tour === null ? 'tables.objectif.soiree' : 'tables.objectif.tour', { tour: vue.tour, nomsTours })}
         valeur={vue.texte}
         lire={lireTexte}
         executer={(texte) => poser(table, vue, texte)}
@@ -380,7 +393,7 @@
   {#each [...retenuesDe(vue.cle), ...vue.avis] as avis, rang (rang)}
     <div class="message avis" data-avertissement={avis.code} role="status">
       <span class="signe"><Icone nom="triangle" /></span>
-      <div class="texte"><p>{t(avis.code, avis.details)}</p></div>
+      <div class="texte"><p>{t(avis.code, { nomsTours, ...avis.details })}</p></div>
     </div>
   {/each}
 {/snippet}
@@ -459,8 +472,12 @@
             {:else}
               <ul class="pastilles">
                 {#each animateurs as animateur (animateur.participant)}
+                  {@const absences = absencesDe(animateur.participant)}
                   <li data-participant={animateur.participant}>
                     <Pastille sorte="statut" valeur="neutre" libelle={animateur.nom} />
+                    {#if absences.length > 0}
+                      <span class="absence" data-absence>{t('tables.animateurs.statut.absente', { tours: absences, nomsTours })}</span>
+                    {/if}
                     {#if gestesAnimateurs}
                       <Commande
                         cle="tables.animateurs.retirer"
@@ -498,7 +515,7 @@
               <div class="message avis" data-avertissement={avertissement.code} role="status">
                 <span class="signe"><Icone nom="triangle" /></span>
                 <div class="texte">
-                  <p>{t(avertissement.code, avertissement.details)}</p>
+                  <p>{t(avertissement.code, { nomsTours, ...avertissement.details })}</p>
                   {#if avertissement.noms.length > 0}
                     <ul>
                       {#each avertissement.noms as nom, rangNom (rangNom)}
@@ -649,6 +666,12 @@
     display: inline-flex;
     align-items: center;
     gap: var(--espace-1);
+  }
+
+  /* Les tours d'absence d'une animatrice, après sa pastille, en encre
+     secondaire. */
+  .absence {
+    color: var(--couleur-page-texte-secondaire);
   }
 
   /* Un message de ligne : son signe, un texte de l'encre de la page, sur

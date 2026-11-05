@@ -522,7 +522,13 @@ describe('l’en-tête et le profil dans la page (§ 12, § 19.4)', () => {
     const cellules = await attendre(() => {
       const ligne = m.racine.querySelector(`[data-proposition="${id}"]`);
       expect(ligne).not.toBeNull();
-      return new Map([...ligne.querySelectorAll('td[data-colonne]')].map((td) => [td.dataset.colonne, texteDe(td)]));
+      // Le chiffre de chaque cellule, sans les lignes écrites dessous.
+      const chiffreDe = (td) => {
+        const copie = td.cloneNode(true);
+        for (const sous of copie.querySelectorAll('[data-sous]')) sous.remove();
+        return texteDe(copie);
+      };
+      return new Map([...ligne.querySelectorAll('td[data-colonne]')].map((td) => [td.dataset.colonne, chiffreDe(td)]));
     });
     m.ui.montrerProposition(id);
     m.ui.allerA('qualite');

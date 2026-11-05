@@ -20,19 +20,25 @@
   // le corps du document avec le bouton détruit.
   //
   // Il offre aussi « Donner un titre » et « Désigner », sur la personne
-  // choisie, au niveau de la table : sous des sièges non attribués, aucun
-  // choix de siège n'est offert — l'application prend le siège (A5) — ;
-  // sous des sièges attribués, le numéro se choisit ([data-champ=siege]),
-  // le plus petit siège sans titre d'abord. Un refus se pose sur la table
-  // (executerSurPlace), LIBELLE_VIDE à côté du champ.
+  // choisie, au niveau de la table : sous des sièges non attribués, aucun choix
+  // de siège n'est offert — l'application prend le siège (A5) — ; sous des
+  // sièges attribués, le numéro se choisit ([data-champ=siege]), le plus petit
+  // siège sans titre d'abord. Un refus se pose sur la table (executerSurPlace),
+  // LIBELLE_VIDE à côté du champ. Un libellé tapé que ni « Donner un titre » ni
+  // « Désigner » n'a encore appliqué est une saisie non validée : un geste
+  // ouvert (geste.js), qui suspend le compte d'inactivité de la séance (§ 8.4).
+  // La commande aboutie sur lui, une autre table sélectionnée ou le panneau
+  // refermé le rendent ; un refus le laisse ouvert, la saisie gardée.
   //
   // Échap referme le panneau et rend le focus à la racine du plan. Le
   // panneau lit 'seance' et 'ui' au contexte ; etatTour, l'état des places
   // du tour affiché, que SectionPlan calcule, ou null sans événement.
-  import { getContext, tick, untrack } from 'svelte';
+  import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { comptesTitres } from '../../application/listes_travail.js';
   import { libellePropose } from '../../application/places.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import Commande from '../primitives/Commande.svelte';
+  import { creerGeste } from '../primitives/geste.js';
   import { effetDe } from '../raccourcis.js';
   import { libellePlace } from './gestes.js';
   import { detailConflits, executerSurPlace, ligneListe, partiesLigne, textesLigne } from './modele.js';
@@ -46,6 +52,8 @@
   const uid = $props.id();
 
   const charge = $derived($seance.charge);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived(charge === null ? [] : nomsDesTours(charge));
   const selection = $derived($ui.selection);
   const table = $derived(charge !== null && selection !== null && (selection.siege ?? null) === null ? selection.table : null);
   const etat = $derived(table === null ? null : etatTour);
@@ -62,15 +70,18 @@
   });
   const nommee = $derived(etatTable === undefined ? null : libellePlace({ numero: etatTable.numero, siege: null }));
   const lignes = $derived(
-    etatTable === undefined ? [] : etatTable.chaises.map((chaise) => partiesLigne(textesLigne(ligneListe(chaise, nomDe), t))),
+    etatTable === undefined ? [] : etatTable.chaises.map((chaise) => partiesLigne(textesLigne(ligneListe(chaise, nomDe, null, nomsTours), t))),
   );
   const choix = $derived($ui.choix);
   const personne = $derived(choix !== null && choix.genre === 'personne' ? choix : null);
   const propose = $derived(charge === null ? '' : libellePropose(charge, personne === null ? 0 : personne.participant));
 
   // La saisie du libellé, null tant que l'opérateur n'a rien tapé ; le
-  // siège choisi sous des sièges attribués, null pour le premier sans titre.
+  // dernier libellé qu'une commande aboutie a appliqué depuis le champ, null
+  // sans lui ; le siège choisi sous des sièges attribués, null pour le
+  // premier sans titre.
   let saisi = $state(null);
+  let applique = $state(null);
   let siege = $state(null);
   const libelleSaisi = $derived(saisi ?? propose);
   const premierSansTitre = $derived(etatTable === undefined ? 1 : (etatTable.chaises.find(({ titre }) => titre === null)?.siege ?? 1));
@@ -83,27 +94,34 @@
       if (lue === tableSuivie) return;
       tableSuivie = lue;
       saisi = null;
+      applique = null;
       siege = null;
     });
   });
+
+  // Le geste suit la saisie tapée que rien n'a appliquée.
+  const geste = creerGeste(seance);
+  $effect(() => geste.tenir(saisi !== null && saisi !== applique));
+  onDestroy(() => geste.liberer());
 
   const dependances = { seance, ui };
   const lieu = () => ({ table });
   const siegeDuTitre = () => (etat.siegesAttribues ? siegeChoisi : null);
 
+  // Exécute la commande sur le libellé du champ ; aboutie, elle l'applique.
+  async function avecLibelle(commande, args) {
+    const libelle = libelleSaisi;
+    const rendu = await executerSurPlace(dependances, lieu(), commande, { ...args, libelle }, { locaux: ['LIBELLE_VIDE'] });
+    if (rendu !== null) applique = libelle;
+  }
+
   async function donnerTitre() {
-    await executerSurPlace(dependances, lieu(), 'poserTitre', { table, siege: siegeDuTitre(), libelle: libelleSaisi }, { locaux: ['LIBELLE_VIDE'] });
+    await avecLibelle('poserTitre', { table, siege: siegeDuTitre() });
   }
 
   async function designer() {
     if (personne === null) return;
-    await executerSurPlace(
-      dependances,
-      lieu(),
-      'designer',
-      { participant: personne.participant, table, siege: siegeDuTitre(), libelle: libelleSaisi },
-      { locaux: ['LIBELLE_VIDE'] },
-    );
+    await avecLibelle('designer', { participant: personne.participant, table, siege: siegeDuTitre() });
   }
 
   // Sélectionne le siège, puis porte le focus au panneau de la place : à

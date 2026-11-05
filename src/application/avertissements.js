@@ -15,9 +15,10 @@
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { LIBRE, normaliser, placesManquantesParTour } from '../moteur/configuration.js';
 import { verifierInvariants } from '../moteur/verification.js';
-import { capacite } from '../stockage/document.js';
+import { capacite, nomsDesTours } from '../stockage/document.js';
 import { examiner, planDepuisFichier } from '../stockage/placements.js';
 import { configurationDe } from './configuration.js';
+import { organisationsDe } from './conflits_organisation.js';
 import { nomAffiche } from './personnes.js';
 import { aDesAbsences, placesTenues, presentsAuTour, reservationsCouvrantes } from './places.js';
 
@@ -122,6 +123,43 @@ export function violationsDuRetenu(charge, retenu, instance) {
   return [...violations, ...siegesNonTenus(charge, retenu, instance)];
 }
 
+// Les inclusions qu'un conflit d'organisation contredit dans une instance
+// (§ 4, raison 'conflit' de inclusionsHorsAtteinte), chacune sous une clé
+// qui dit sa source et sa cible : {participant, cible}, la source par son
+// identifiant, la cible telle que l'instance la porte. La clé nomme une
+// organisation cible sous son libellé passé par renommes, de → vers, quand
+// il y figure : les contradictions d'avant se comparent ainsi à celles
+// d'après sous les libellés d'après. Une Map vide sans instance.
+function contredites(instance, renommes = new Map()) {
+  const parCle = new Map();
+  if (instance === null) return parCle;
+  for (const { p, cible, raison } of instance.inclusionsHorsAtteinte) {
+    if (raison !== 'conflit') continue;
+    const participant = instance.ids[p];
+    const vers = Object.hasOwn(cible, 'organisation')
+      ? `organisation:${renommes.get(cible.organisation) ?? cible.organisation}`
+      : `participant:${cible.participant}`;
+    parCle.set(`${participant}|${vers}`, { participant, cible });
+  }
+  return parCle;
+}
+
+// Les renommages que les listes d'une charge d'après ont pu suivre
+// (suivreOrganisations) : de → vers pour chaque personne qui quittait une
+// organisation que la charge d'après ne porte plus, et en porte une autre.
+// C'est la condition sous laquelle modifierParticipant fait suivre conflits
+// et inclusions. Une Map, vide quand aucune organisation ne disparaît ainsi.
+function renommagesSuivis(avant, apres) {
+  const presentes = organisationsDe(apres);
+  const organisationApres = new Map(apres.participants.map(({ id, organisation }) => [id, organisation]));
+  const renommes = new Map();
+  for (const { id, organisation } of avant.participants) {
+    const vers = organisationApres.get(id) ?? null;
+    if (organisation !== null && vers !== null && !presentes.has(organisation)) renommes.set(organisation, vers);
+  }
+  return renommes;
+}
+
 // Les violations du retenu cohérent d'une charge (violationsDuRetenu). []
 // sans retenu, pour un retenu fautif, ou sans instance.
 function violationsCourantes(charge, examen, instance) {
@@ -155,12 +193,15 @@ function indexDesNoms(charges) {
 // pas changer entre deux appels.
 function nommeurSur(charges) {
   let index = null;
+  const premiere = charges.find((charge) => charge?.evenement?.nomsTours !== undefined);
+  const nomsTours = premiere === undefined ? null : nomsDesTours(premiere);
   return (raisons) => {
     if (raisons.length === 0) return [];
     index ??= indexDesNoms(charges);
     const { personnes, numeros } = index;
     return raisons.map((raison) => {
       const nommee = { ...raison };
+      if (Array.isArray(raison.tours) && nomsTours !== null) nommee.nomsTours = nomsTours;
       if (raison.participant !== undefined && personnes.has(raison.participant)) {
         const personne = nomAffiche(personnes.get(raison.participant));
         if (personne !== null) nommee.personne = personne;
@@ -181,9 +222,11 @@ function nommeurSur(charges) {
  * les porte, et en elle sur sa première entrée. Un nom affiché ou un numéro
  * null n'ajoute pas de champ, et la lecture ne passe pas à la charge
  * suivante ; une personne ou une table qu'aucune ne porte garde son seul
- * identifiant. Les charges se lisent une fois par appel, en deux index par
- * identifiant (indexDesNoms), quel que soit le nombre de raisons. Rend des
- * objets neufs.
+ * identifiant. Une raison qui nomme des tours (tours, une liste) gagne
+ * nomsTours, les noms des tours de la première charge qui en porte
+ * (nomsDesTours), quand une charge en porte. Les charges se lisent une fois
+ * par appel, en deux index par identifiant (indexDesNoms), quel que soit le
+ * nombre de raisons. Rend des objets neufs.
  *
  * @param {Object[]} raisons
  * @param {...import('../stockage/types.js').Charge} charges
@@ -328,7 +371,17 @@ export function invariantViole(charge, examen = examiner(charge)) {
  *     l'autre puisque l'instance qui les viole en vient. Au siège, les
  *     détails portent en plus siege et occupant, ceux de la violation : le
  *     geste qui la lève est l'échange de la personne avec l'occupant
- *     (echangerDansRetenu), ou, chaise vide, son déplacement au siège.
+ *     (echangerDansRetenu), ou, chaise vide, son déplacement au siège ;
+ *   INCLUSION_CONTREDITE {contredites: [{participant, personne, cible}]}
+ *     les inclusions qu'un conflit d'organisation contredit dans l'instance
+ *     d'après et que celle d'avant ne contredisait pas (aucune quand elle ne
+ *     se normalisait pas), quel que soit le geste — une inclusion posée, un
+ *     conflit posé, une personne qui change d'organisation ou revient —, dans
+ *     l'ordre de l'instance ; personne, le nom affiché de la source ; cible,
+ *     {organisation} ou {participant, personne}, lus sur la charge d'après.
+ *     Une organisation renommée que les listes suivent garde ses
+ *     contradictions : celles d'avant se lisent sous le nouveau libellé.
+ *     L'inclusion reste dans sa liste : elle est hors d'atteinte.
  *
  * @param {import('../stockage/types.js').Charge} avant
  * @param {import('../stockage/types.js').Charge} apres
@@ -374,5 +427,18 @@ export function avertissementsApres(avant, apres) {
     const auSiege = siege === null ? {} : { siege, occupant: violation.occupant };
     rendus.push(avertissement('RESERVATION_NON_HONOREE', { participant, table, tour, personne, numero, ...auSiege }));
   }
+
+  const dejaContredites = contredites(instanceAvant, renommagesSuivis(avant, apres));
+  const nommer = (id) => nomAffiche(apres.participants.find((personne) => personne.id === id));
+  const nouvelles = [...contredites(instance)]
+    .filter(([cle]) => !dejaContredites.has(cle))
+    .map(([, { participant, cible }]) => ({
+      participant,
+      personne: nommer(participant),
+      cible: Object.hasOwn(cible, 'organisation')
+        ? { organisation: cible.organisation }
+        : { participant: cible.participant, personne: nommer(cible.participant) },
+    }));
+  if (nouvelles.length > 0) rendus.push(avertissement('INCLUSION_CONTREDITE', { contredites: nouvelles }));
   return rendus;
 }

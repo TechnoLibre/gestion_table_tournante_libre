@@ -7,8 +7,9 @@
 // séparateur nommés, l'association par en-tête, l'ambiguïté, les refus
 // d'une ligne et les refus globaux, les étiquettes en pastilles et leurs
 // fusions à part, le rapport, le CSV des refus, les modes, l'import selon
-// l'état, le collage, le modèle à télécharger, la colonne de la présence,
-// les doublons nommés et « Rendre les noms uniques ».
+// l'état, le collage, le modèle à télécharger et le guide de l'import, la
+// colonne de la présence, les doublons nommés et « Rendre les noms
+// uniques ».
 // Chaque épreuve monte App par
 // monterApp, sur le système de fichiers simulé, ouvre un événement et sa
 // section d'import ; le dialogue de choix sert, dans l'ordre, les fichiers
@@ -30,11 +31,12 @@ import { TABLES_APPLICATION, libelle } from '../../application/libelles.js';
 import { creerFormat } from '../../application/format.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { apercevoir } from '../../csv/apercu.js';
+import { ENTETES_DES_CHAMPS } from '../../csv/colonnes.js';
 import { decoder } from '../../csv/encodage.js';
 import { bilanRemplacement, exporterRefus as exporterRefusCsv } from '../../csv/import.js';
 import { decouper } from '../../csv/lecture.js';
 import { modeleParticipants } from '../../csv/export.js';
-import { apercevoirObjectifs, bilanRemplacementObjectifs, modeleObjectifs } from '../../csv/objectifs.js';
+import { ENTETES_DES_OBJECTIFS, apercevoirObjectifs, bilanRemplacementObjectifs, modeleObjectifs } from '../../csv/objectifs.js';
 import { serialiser } from '../../stockage/canonique.js';
 import { creerCharge } from '../../stockage/document.js';
 import { lireJournal } from '../../stockage/journal.js';
@@ -501,6 +503,65 @@ describe("un conflit d'organisation fautif refuse le fichier entier (§ 10.1)", 
   });
 });
 
+describe('une inclusion fautive refuse le fichier entier (§ 10.1, § 10.3)', () => {
+  test("une personne inconnue : cause, ligne et remède, rien d'écrit ; corrigé, le fichier s'importe, chaque personne incluse en pastille à « ajouter »", async () => {
+    // Le refus vide l'aperçu : il se montre sur un texte à part, jamais sur
+    // un fichier d'exemple.
+    const e = await ouvrir({ participants: [personne(1, 'Houle', 'Basile', { organisation: 'Club des Merles' })] });
+    const avant = ecritures(e);
+    const entete = 'nom;prenom;organisation;inclusion_organisation;inclusion_participant';
+    await choisir(e, 'inclusions.csv', enUtf8(`${entete}\r\nOmbrelle;Iris;Atelier Ressac;club des merles;Basile Houle\r\nPervenche;Théo;;;Ondine Lacase\r\n`));
+    const pose = dans(e, '[data-apercu] [data-refus="INCLUSION_PARTICIPANT_INCONNU"]');
+    expect(pose).not.toBeNull();
+    expect(vu(pose)).toBe(true);
+    const textes = [...pose.querySelectorAll('p')].map(texteDe);
+    expect(textes).toContain(
+      "Aucune personne ne s'appelle « Ondine Lacase » (ligne 3, colonne des inclusions de participant) : " +
+        "une inclusion nomme une personne par son prénom et son nom. Rien n'est importé.",
+    );
+    expect(textes).toContain(t('import.remede.inclusionInconnue', { ligne: 3 }));
+    expect(dans(e, '[data-apercu] [data-lignes]')).toBeNull();
+    expect(commande(e, 'importer')).toBeNull();
+    expect(ecritures(e)).toBe(avant);
+
+    await choisir(
+      e,
+      'inclusions-corrige.csv',
+      enUtf8(`${entete}\r\nOmbrelle;Iris;Atelier Ressac;club des merles;Basile Houle | ondine lacasse\r\nPervenche;Théo;;;\r\nLacasse;Ondine;;;Iris Ombrelle\r\n`),
+    );
+    expect(dans(e, '[data-apercu] [data-refus]')).toBeNull();
+    const pastilles = tous(e, '[data-lignes] [data-ligne="2"] [data-cellule="inclusion_participant"] li');
+    expect(pastilles.map(texteDe)).toEqual(['Basile Houle', 'Ondine Lacasse']);
+    expect(tous(e, '[data-lignes] [data-ligne="2"] [data-cellule="inclusion_organisation"] li').map(texteDe)).toEqual(['Club des Merles']);
+    const { refus } = await importer(e);
+    expect(refus).toBeNull();
+    const ids = new Map(participantsDe(e).map(({ nom, id }) => [nom, id]));
+    expect(participantsDe(e).map(({ inclusionsOrganisation, inclusionsParticipant }) => [inclusionsOrganisation, inclusionsParticipant])).toEqual([
+      [undefined, undefined],
+      [['Club des Merles'], [ids.get('Houle'), ids.get('Lacasse')].sort((a, b) => a - b)],
+      [undefined, undefined],
+      [undefined, [ids.get('Ombrelle')]],
+    ]);
+  });
+
+  test('un nom que portent deux personnes : la cause, et le remède qui dit de les distinguer, rien d’écrit', async () => {
+    const e = await ouvrir({
+      participants: [
+        personne(1, 'Galet', 'Roger', { organisation: 'Club des Merles' }),
+        personne(2, 'Galet', 'Roger', { organisation: 'Atelier Ressac' }),
+      ],
+    });
+    const avant = ecritures(e);
+    await choisir(e, 'ambigu.csv', enUtf8('nom;inclusion_participant\r\nOmbrelle;Roger Galet\r\n'));
+    const pose = dans(e, '[data-apercu] [data-refus="INCLUSION_PARTICIPANT_AMBIGU"]');
+    expect(pose).not.toBeNull();
+    expect(texteDe(pose)).toContain(t('INCLUSION_PARTICIPANT_AMBIGU', { ligne: 2, nom: 'Roger Galet' }));
+    expect(texteDe(pose)).toContain(t('import.remede.inclusionAmbigue', { ligne: 2 }));
+    expect(commande(e, 'importer')).toBeNull();
+    expect(ecritures(e)).toBe(avant);
+  });
+});
+
 describe('une ligne fausse n’arrête pas le reste (§ 10.1, § 2.1)', () => {
   test('la grande démonstration, « peut-être » à l’enregistrement 213 : 259 lignes valides, la ligne 213 et sa valeur ; l’import en ajoute 259', async () => {
     const e = await ouvrir();
@@ -912,6 +973,35 @@ describe('remplacer annonce ce qu’il détruit (§ 10.1)', () => {
   });
 });
 
+describe('remplacer annonce les logos qu’il retire (§ 10.1, § 8.9)', () => {
+  // Deux chemins de logo de la forme du schéma, logo/<empreinte>.png, que
+  // rien ne dépose : seul le lien compte ici.
+  const LOGO_A = `logo/${'a1'.repeat(32)}.png`;
+  const LOGO_B = `logo/${'b2'.repeat(32)}.png`;
+
+  test('deux personnes à logo : la fenêtre dit « 2 logos seront retirés » après les quatre comptes ; l’avis d’après le geste reste', async () => {
+    const e = await ouvrir({
+      participants: [
+        personne(1, 'Ombrelle', 'Iris', { logo: LOGO_A }),
+        personne(2, 'Pervenche', 'Théo', { logo: LOGO_B }),
+        personne(3, 'Lacasse', 'Ondine'),
+      ],
+    });
+    await choisir(e, 'remplace.csv', enUtf8('nom;prenom\r\nTisserin;Basilie\r\n'));
+    choisirMode(e, 'remplacer');
+    commande(e, 'importer').click();
+    await vi.waitFor(() => expect(dans(e, 'dialog')?.open).toBe(true));
+    const elements = [...dans(e, 'dialog').querySelectorAll('li')].map((li) => li.textContent);
+    expect(elements).toHaveLength(5);
+    expect(elements.at(-1)).toBe(t('import.remplacer.logos', { n: 2 }));
+    expect(elements.at(-1)).toBe('2 logos seront retirés');
+    dans(e, 'dialog [data-commande="confirmer"]').click();
+    await vi.waitFor(() => expect(dans(e, '[data-rapport]')).not.toBeNull());
+    const { avertissements } = await e.espion.mock.results.at(-1).value;
+    expect(avertissements).toContainEqual({ code: 'IMPORT_LOGOS_RETIRES', details: { logos: 2 } });
+  });
+});
+
 describe('importer selon l’état (§ 10.1, § 9)', () => {
   const FICHIER = 'nom;prenom\r\nMorillon;Aurèle\r\n';
 
@@ -1141,6 +1231,32 @@ describe('l’habillage : cartes et messages classés en refus, avis ou informat
     const rapport = dans(e, '[data-rapport]');
     const rien = [...rapport.querySelectorAll('section')].find((bloc) => texteDe(bloc).includes(t('import.rapport.rienEcrit'))) ?? null;
     exigerSorte(rien, 'information', 'rapport, rien d’écrit');
+  });
+
+  // L'import ne désigne personne : les personnes marquées qui n'animent
+  // aucune table se comptent en information, non exclues seulement.
+  test('un import qui laisse des personnes à désigner animatrices les compte en information, avec le geste qui les désigne', async () => {
+    const e = await ouvrir();
+    await choisir(
+      e,
+      'animation.csv',
+      enUtf8('nom;exclu;animation_reservee\r\nOmbrelle;;oui\r\nPervenche;;x\r\nLacasse;oui;oui\r\nGrisaille;;non\r\n'),
+    );
+    expect(cellule(dans(e, '[data-apercu]'), 2, 'animation_reservee')).toBe(t('import.exclu.oui'));
+    await importer(e);
+    const rapport = dans(e, '[data-rapport]');
+    const phrase = rapport.querySelector('[data-a-designer]');
+    expect(phrase.querySelector('[data-nombre]').textContent).toBe(format.nombre(2));
+    expect(texteDe(phrase)).toContain(t('import.rapport.aDesigner', { n: 2 }));
+    exigerSorte(phrase.closest('section'), 'information', 'rapport, personnes à désigner');
+    expect(e.m.seance.etat().charge.reservations).toEqual([]);
+  });
+
+  test('sans personne à désigner, le rapport n’en dit rien', async () => {
+    const e = await ouvrir();
+    await choisir(e, 'sans.csv', enUtf8('nom;animation_reservee\r\nOmbrelle;non\r\n'));
+    await importer(e);
+    expect(dans(e, '[data-rapport] [data-a-designer]')).toBeNull();
   });
 
   // Un import d'objectifs n'écrit rien quand chaque couple du fichier porte
@@ -1662,17 +1778,163 @@ describe('le modèle à télécharger, de la nature cochée (§ 10.1, § 10.4)',
   });
 });
 
+describe("le guide de l'import, replié sous le modèle (§ 10.1, § 10.4)", () => {
+  // Le bouton du guide, son contenu ouvert, et la ligne d'un champ.
+  const bouton = (e) => commande(e, 'guideImport');
+  const contenu = (e) => dans(e, '[data-guide-import]');
+  const ligneDuGuide = (e, champ) => dans(e, `[data-guide-import] [data-guide-colonne="${champ}"]`);
+  // Les cellules d'une ligne, après son en-tête : obligatoire, texte,
+  // synonymes.
+  const celluleDuGuide = (e, champ, rang) => ligneDuGuide(e, champ).querySelectorAll('td')[rang];
+  const texteDuGuide = (e, champ) => celluleDuGuide(e, champ, 1);
+  // Chaque ligne du tableau : son en-tête, puis ses synonymes, tels que
+  // l'écran les écrit en code.
+  const lignesDuGuide = (e) =>
+    tous(e, '[data-guide-import] [data-guide-colonne]').map((ligne) => [
+      ligne.dataset.guideColonne,
+      [...ligne.querySelectorAll('code')].map((code) => code.textContent),
+    ]);
+  // Celles qu'attend une table d'en-têtes de src/csv : une graphie par
+  // apostrophe, la première.
+  const droite = (texte) => texte.replaceAll('\u{2019}', "'");
+  const attendues = (table) =>
+    table.map(([champ, entetes]) => [
+      champ,
+      entetes.filter((entete, rang) => !entetes.slice(0, rang).some((avant) => droite(avant) === droite(entete))),
+    ]);
+
+  test('fermé à l’ouverture de la section, dernier de la carte de l’import : « Guide import », aria-expanded faux, aucun contenu', async () => {
+    const e = await ouvrir();
+    const guide = bouton(e);
+    expect(guide.localName).toBe('button');
+    expect(guide.getAttribute('type')).toBe('button');
+    expect(guide).toHaveAccessibleName(tEcran('import.guide.titre'));
+    expect(texteDe(guide)).toBe(tEcran('import.guide.titre'));
+    expect(guide.getAttribute('aria-expanded')).toBe('false');
+    expect(guide.hasAttribute('aria-controls')).toBe(false);
+    expect(contenu(e)).toBeNull();
+    expect(vu(guide)).toBe(true);
+    const modele = commande(e, 'telechargerModele');
+    expect(modele.compareDocumentPosition(guide) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(dans(e, '[data-apercu]')).toBeNull();
+  });
+
+  test('au clavier : Entrée l’ouvre, aria-controls désigne le contenu, Espace le ferme ; le bouton qui a le focus porte l’anneau de l’application', async () => {
+    const e = await ouvrir();
+    const guide = bouton(e);
+    guide.focus();
+    await touche('Enter');
+    await vi.waitFor(() => expect(guide.getAttribute('aria-expanded')).toBe('true'));
+    expect(contenu(e)).not.toBeNull();
+    expect(guide.getAttribute('aria-controls')).toBe(contenu(e).id);
+    expect(document.getElementById(guide.getAttribute('aria-controls'))).toBe(contenu(e));
+    expect(vu(contenu(e).querySelector('li'))).toBe(true);
+    expect(document.activeElement).toBe(guide);
+    expect(guide.matches(':focus-visible')).toBe(true);
+    const style = getComputedStyle(guide);
+    expect(style.outlineStyle).toBe('solid');
+    const sonde = document.createElement('span');
+    sonde.style.color = 'var(--couleur-focus)';
+    document.body.append(sonde);
+    expect(style.outlineColor).toBe(getComputedStyle(sonde).color);
+    sonde.remove();
+
+    await touche(' ');
+    await vi.waitFor(() => expect(guide.getAttribute('aria-expanded')).toBe('false'));
+    expect(guide.hasAttribute('aria-controls')).toBe(false);
+    expect(contenu(e)).toBeNull();
+    expect(document.activeElement).toBe(guide);
+    expect(e.espion).not.toHaveBeenCalled();
+  });
+
+  test('ouvert sous Participants : les consignes, puis une ligne par colonne reconnue, dans l’ordre de la table, ses synonymes ceux de la table, « nom » seul obligatoire', async () => {
+    const e = await ouvrir();
+    bouton(e).click();
+    flushSync();
+    expect(texteDe(contenu(e).querySelector('caption'))).toBe(tEcran('import.guide.legende.participants'));
+    expect([...contenu(e).querySelectorAll('thead th')].map(texteDe)).toEqual(
+      ['import.guide.entete', 'import.guide.obligatoire', 'import.guide.contenu', 'import.guide.synonymes'].map((cle) => tEcran(cle)),
+    );
+    expect([...contenu(e).firstElementChild.children].map(texteDe)).toEqual(
+      ['entetes', 'fichier', 'modele', 'apercu'].map((nom) => enLigne(tEcran(`import.guide.consigne.${nom}`))),
+    );
+    expect(lignesDuGuide(e)).toEqual(attendues(ENTETES_DES_CHAMPS));
+    for (const [champ] of ENTETES_DES_CHAMPS) {
+      const obligatoire = celluleDuGuide(e, champ, 0);
+      expect(texteDe(obligatoire), champ).toBe(tEcran(champ === 'nom' ? 'import.guide.oui' : 'import.guide.non'));
+    }
+    expect(texteDe(celluleDuGuide(e, 'nom', 2))).toBe(tEcran('import.guide.aucunSynonyme'));
+    expect(ligneDuGuide(e, 'exclu').querySelector('th').getAttribute('scope')).toBe('row');
+  });
+
+  test('la ligne « conflit_organisation » dit que « ; », « | » ou un retour à la ligne séparent, et qu’une virgule reste dans le nom', async () => {
+    const e = await ouvrir();
+    bouton(e).click();
+    flushSync();
+    const ligne = ligneDuGuide(e, 'conflit_organisation');
+    expect(texteDe(ligne.querySelector('th'))).toBe('conflit_organisation');
+    const texte = texteDe(texteDuGuide(e, 'conflit_organisation'));
+    expect(texte).toBe(enLigne(tEcran('import.guide.colonne.conflits')));
+    expect(texte).toContain('pas par une virgule, qui reste dans le nom');
+    // texteDe ramène les insécables de l'écran à des espaces.
+    for (const separateur of [';', '|']) expect(texte).toContain(`« ${separateur} »`);
+    expect(texte).not.toContain('« , »');
+    expect(texteDe(texteDuGuide(e, 'etiquettes'))).toContain('« , »');
+  });
+
+  test('le contenu suit la nature cochée, le guide restant ouvert : les colonnes des objectifs, « table » et « objectif » obligatoires, puis celles des participants', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    bouton(e).click();
+    flushSync();
+    choisirNature(e, 'objectifs');
+    expect(bouton(e).getAttribute('aria-expanded')).toBe('true');
+    expect(texteDe(contenu(e).querySelector('caption'))).toBe(tEcran('import.guide.legende.objectifs'));
+    expect(lignesDuGuide(e)).toEqual(attendues(ENTETES_DES_OBJECTIFS));
+    expect(
+      ENTETES_DES_OBJECTIFS.map(([champ]) => texteDe(celluleDuGuide(e, champ, 0))),
+    ).toEqual(['import.guide.oui', 'import.guide.non', 'import.guide.oui', 'import.guide.non'].map((cle) => tEcran(cle)));
+    expect(texteDe(texteDuGuide(e, 'regle'))).toBe(enLigne(tEcran('import.guide.colonne.regle')));
+    expect(ligneDuGuide(e, 'conflit_organisation')).toBeNull();
+
+    choisirNature(e, 'participants');
+    expect(texteDe(contenu(e).querySelector('caption'))).toBe(tEcran('import.guide.legende.participants'));
+    expect(lignesDuGuide(e)).toEqual(attendues(ENTETES_DES_CHAMPS));
+    expect(ligneDuGuide(e, 'regle')).toBeNull();
+  });
+
+  test('ouvert, le tableau tient dans sa carte à 1 366 × 700 ; dans la fenêtre d’un téléphone, il défile dans la carte, jamais la page', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    const page = document.documentElement;
+    try {
+      await fixerCadre(1366, 700);
+      const e = await ouvrir();
+      bouton(e).click();
+      flushSync();
+      const defile = contenu(e).querySelector('table').parentElement;
+      expect(defile.scrollWidth, 'le tableau défile en largeur').toBeLessThanOrEqual(defile.clientWidth);
+      expect(defile.getBoundingClientRect().right).toBeLessThanOrEqual(section(e).getBoundingClientRect().right);
+      await fixerCadre(414, 896);
+      expect(page.scrollWidth, 'la page défile en largeur').toBeLessThanOrEqual(page.clientWidth);
+      expect(defile.getBoundingClientRect().right).toBeLessThanOrEqual(section(e).getBoundingClientRect().right);
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+});
+
 describe('la colonne de la présence (§ 10.1)', () => {
-  test('le modèle téléchargé porte la neuvième colonne, « presence », puis les conflits ; importé sous quatre tours, son aperçu montre « tours 2 et 3 » et « tours 1 à 3 », les autres vides', async () => {
+  test('le modèle téléchargé porte la neuvième colonne, « presence », puis les conflits, l’animation réservée et les inclusions ; importé sous quatre tours, son aperçu montre « tours 2 et 3 » et « tours 1 à 3 », les autres vides', async () => {
     const e = await ouvrir({ tours: 4 });
     commande(e, 'telechargerModele').click();
     await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
     const octets = e.enregistres[0].octets;
     expect([...octets]).toEqual([...modeleParticipants({ tours: 4 })]);
     const [entete] = decouper(decoder(octets).texte, ';').enregistrements;
-    expect(entete.length).toBe(10);
+    expect(entete.length).toBe(13);
     expect(entete[8]).toBe('presence');
     expect(entete[9]).toBe('conflit_organisation');
+    expect(entete[10]).toBe('animation_reservee');
+    expect(entete.slice(11)).toEqual(['inclusion_organisation', 'inclusion_participant']);
     await choisir(e, 'modele-participants.csv', octets);
     const apercu = dans(e, '[data-apercu]');
     expect(new Map(association(apercu)).get('presence')).toBe(t('import.champ.presence'));
@@ -1681,6 +1943,10 @@ describe('la colonne de la présence (§ 10.1)', () => {
     await importer(e);
     expect(participantsDe(e).map(({ presence }) => presence)).toEqual([undefined, [2, 3], undefined, [1, 2, 3]]);
     expect(participantsDe(e).map(({ conflits }) => conflits)).toEqual([undefined, undefined, undefined, ['Atelier Ressac']]);
+    expect(participantsDe(e).map(({ animationReservee }) => animationReservee)).toEqual([true, undefined, undefined, undefined]);
+    expect(participantsDe(e).map(({ inclusionsOrganisation }) => inclusionsOrganisation)).toEqual([undefined, ['Atelier Ressac'], undefined, undefined]);
+    const basile = participantsDe(e).find(({ nom }) => nom === 'Tourteau').id;
+    expect(participantsDe(e).map(({ inclusionsParticipant }) => inclusionsParticipant)).toEqual([[basile], undefined, undefined, undefined]);
   });
 
   test('l’aperçu montre « tours 2 à 4 » et « tous les tours » ; une ligne refusée porte son motif, à son rang', async () => {
@@ -1711,16 +1977,23 @@ describe('la colonne de la présence (§ 10.1)', () => {
 });
 
 describe('l’aperçu dans une fenêtre de 1 366 × 700 (§ 10.1)', () => {
-  test('le modèle de quatre tours : le tableau tient dans sa carte, les tours nommés d’un tenant', async () => {
+  test('le modèle de quatre tours, sans ses deux colonnes d’inclusions : le tableau tient dans sa carte, les tours nommés d’un tenant', async () => {
     const avant = { largeur: innerWidth, hauteur: innerHeight };
     await fixerCadre(1366, 700);
     try {
       const e = await ouvrir({ tours: 4, participants: [personne(1, 'Houle', 'Agathe', { organisation: 'Atelier Ressac' })] });
-      const modele = new TextDecoder().decode(modeleParticipants({ tours: 4 }));
-      await choisir(e, 'modele.csv', new TextEncoder().encode(`${modele}Houle;Agathe;;;;;;;;\r\n`));
+      // Les onze premières colonnes du modèle : aucune de ses cellules ne
+      // porte « ; ».
+      const modele = new TextDecoder()
+        .decode(modeleParticipants({ tours: 4 }))
+        .split('\r\n')
+        .map((ligne) => (ligne === '' ? ligne : ligne.split(';').slice(0, 11).join(';')))
+        .join('\r\n');
+      await choisir(e, 'modele.csv', new TextEncoder().encode(`${modele}Houle;Agathe;;;;;;;;;\r\n`));
       const tableau = dans(e, '[data-apercu] [data-lignes]');
       const entetes = [...tableau.tHead.rows[0].cells];
-      expect(entetes.at(-1).textContent).toBe(t('import.champ.conflits'));
+      expect(entetes.at(-2).textContent).toBe(t('import.champ.conflits'));
+      expect(entetes.at(-1).textContent).toBe(t('import.champ.animationReservee'));
       // Aucune colonne ne se cache au-delà du bord du conteneur qui défile :
       // il ne défile pas en largeur, et chaque en-tête tient dans sa cellule.
       const defile = tableau.parentElement;
@@ -1731,6 +2004,25 @@ describe('l’aperçu dans une fenêtre de 1 366 × 700 (§ 10.1)', () => {
       const lues = [...tableau.querySelectorAll('[data-cellule="presence"]')].filter((c) => /^tours /.test(texteDe(c)));
       expect(lues.map(texteDe).sort()).toEqual(['tours 1 à 3', 'tours 2 et 3']);
       for (const presence of lues) expect(rangeesDeTexte(presence), texteDe(presence)).toBe(1);
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+
+  test('le modèle entier, ses deux colonnes d’inclusions comprises : le tableau défile au besoin dans son conteneur, jamais la page', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    await fixerCadre(1366, 700);
+    try {
+      const e = await ouvrir({ tours: 4 });
+      await choisir(e, 'modele.csv', modeleParticipants({ tours: 4 }));
+      const tableau = dans(e, '[data-apercu] [data-lignes]');
+      const entetes = [...tableau.tHead.rows[0].cells];
+      expect(entetes.at(-2).textContent).toBe(t('import.champ.inclusionsOrganisation'));
+      expect(entetes.at(-1).textContent).toBe(t('import.champ.inclusionsParticipant'));
+      const defile = tableau.parentElement;
+      expect(defile.getBoundingClientRect().right).toBeLessThanOrEqual(section(e).getBoundingClientRect().right);
+      expect(document.documentElement.scrollWidth, 'la page défile en largeur').toBeLessThanOrEqual(innerWidth);
+      for (const entete of entetes) expect(entete.scrollWidth, entete.textContent).toBeLessThanOrEqual(entete.clientWidth);
     } finally {
       await fixerCadre(avant.largeur, avant.hauteur);
     }

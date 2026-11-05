@@ -44,6 +44,23 @@
 // ligne ; l'annonce nomme toujours les homonymes, et la liste en CSV ne lit
 // aucune case.
 //
+// La case qui laisse en blanc le nom des doublons suit aussi la machine,
+// que la lecture porte : cochée, le badge d'une personne marquée
+// nomNumerote garde la place de son nom sans le poser (modelePlanche). Le
+// nom entier reste celui que la mise en page mesure, celui du refus
+// PLANCHE_NOM_TROP_LONG, des logos introuvables, des homonymes et de la
+// liste de réédition ; la liste en CSV ne la lit pas. Sans personne
+// marquée, les octets ne changent pas.
+//
+// La case qui met l'organisation en gros au-dessus du nom suit aussi la
+// machine, que la lecture porte : cochée, le badge d'une personne qui a une
+// organisation la pose en gros, à la place et à la règle du nom, et le nom
+// en petit sous elle (modelePlanche). Une organisation que sa case retire
+// laisse le nom en gros. Le refus PLANCHE_NOM_TROP_LONG d'une organisation
+// en gros le dit (organisation vrai) ; la feuille de contrôle et la liste
+// en CSV ne la lisent pas. Sans organisation imprimée, les octets ne
+// changent pas.
+//
 // Le logo d'un participant arrive en octets, lus du dossier de l'événement
 // par lireOctets au chemin que porte son badge : chaque chemin distinct se
 // lit une fois par étude, dans l'ordre de la pile, et ses octets se
@@ -55,6 +72,15 @@
 // leur badge s'imprime sans lui, et la feuille de contrôle compte, d'une
 // ligne de texte, les logos posés, sans place et introuvables, quand un
 // badge en désigne un. La liste en CSV ne lit aucun logo.
+//
+// L'image des badges vient de l'événement (imageBadgesDe) : sa case cochée
+// et une image choisie, ses octets se lisent comme ceux d'un logo, par la
+// même garde, et la mise en page la pose sur chaque badge où elle trouve sa
+// place, à la position choisie. Une image introuvable ou illisible ne
+// refuse rien : l'annonce le dit, et les badges s'impriment sans elle.
+// L'annonce compte les badges où elle se pose et ceux où elle manque de
+// place ; la feuille de contrôle et la liste en CSV ne la lisent pas. Sa
+// case décochée, les octets ne changent pas.
 //
 // Une demande désigne la source — le retenu, ou une proposition par son
 // identifiant, toujours BROUILLON (Q3) —, l'imposition, l'ordre de la pile
@@ -71,7 +97,9 @@
 //
 // La liste en CSV se tire du même modèle que la planche (listeBadges) :
 // elle subit les refus du placement, jamais ceux de la mise en page, et ne
-// charge ni la police ni pdf-lib.
+// charge ni la police ni pdf-lib. Ses colonnes suivent la machine, que la
+// lecture porte : une par tour, ou une seule. Elles ne changent pas son
+// nom, qui ne porte que ce qui change la pile.
 //
 // Le nom du fichier (nomPlanche) porte tout ce qui change la pile : la
 // source, l'imposition, l'ordre, le placement. Une réédition, une base qui
@@ -88,7 +116,8 @@ import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js'
 import { nombrePlanches } from '../pdf/imposition.js';
 import { ErreurPng, lirePng } from '../pdf/png.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
-import { DONNEES_BADGE, normaliserTextePied } from '../stockage/reglages_locaux.js';
+import { imageBadgesDe } from '../stockage/document.js';
+import { COLONNES_LISTE_BADGES, DONNEES_BADGE, normaliserTextePied } from '../stockage/reglages_locaux.js';
 import { nomControle, nomCsvBadges, nomCsvBadgesExigeListe, nomPlanche, nomPlancheExigeListe } from '../stockage/noms.js';
 import { cheminAffiche } from '../stockage/systeme_fichiers.js';
 import { ErreurCommande, refus } from './erreurs.js';
@@ -134,6 +163,15 @@ const chargerProduction = () => import('../pdf/planche.js');
  * @property {Object<string, boolean>} [donneesBadge]   les cases de ce que le
  *           badge imprime, un booléen par donnée de DONNEES_BADGE ; toutes
  *           cochées quand la lecture ne les porte pas
+ * @property {boolean} [cacherNumero]   la case qui laisse en blanc le nom
+ *           des doublons, des réglages locaux ; faux quand la lecture ne la
+ *           porte pas
+ * @property {'parTour'|'unique'} [colonnesListe]   les colonnes de la liste
+ *           en CSV, des réglages locaux ; une par tour quand la lecture ne
+ *           les porte pas
+ * @property {boolean} [organisationEnGros]   la case qui met l'organisation
+ *           en gros au-dessus du nom, des réglages locaux ; faux quand la
+ *           lecture ne la porte pas
  *
  * @typedef {Object} DemandePlanche
  * @property {'retenu'|'proposition'} [source]   'retenu' par défaut
@@ -162,6 +200,10 @@ const chargerProduction = () => import('../pdf/planche.js');
  *           la lecture, normalisé, vide pour le logo seul
  * @property {Object<string, boolean>} donneesBadge   les cases de la lecture,
  *           une par donnée de DONNEES_BADGE, dans leur ordre
+ * @property {boolean} cacherNumero   la case du nom des doublons de la
+ *           lecture
+ * @property {boolean} organisationEnGros   la case de l'organisation en
+ *           gros de la lecture
  * @property {number|null} sansTechnolibre   le nombre de badges d'où le pied
  *           TechnoLibre se retire, faute de place ; null sans la case, et
  *           sans modèle
@@ -172,6 +214,13 @@ const chargerProduction = () => import('../pdf/planche.js');
  *           fichier manque au dossier de l'événement (ABSENT) ou ne se lit pas
  *           comme un PNG (ILLISIBLE) ; null quand aucun badge ne désigne de
  *           logo, et sans modèle
+ * @property {null|{position: 'haut'|'centre'|'bas', chemin: string|null, posees: number, sansPlace: number,
+ *           introuvable: null|'ABSENT'|'ILLISIBLE'}} imageBadges
+ *           l'image des badges, quand sa case est cochée : sa position, son
+ *           chemin, null sans image choisie, les badges où elle se pose et
+ *           ceux où elle ne trouve pas de place, et la cause d'une image qui
+ *           manque au dossier de l'événement ou ne se lit pas, null sinon ;
+ *           null quand la case est décochée, et sans modèle
  */
 
 // La demande lue, ses défauts posés ; une imposition ou un ordre hors de sa
@@ -231,17 +280,46 @@ function donneesDe({ donneesBadge = null }) {
   return Object.fromEntries(DONNEES_BADGE.map((donnee) => [donnee, donneesBadge[donnee]]));
 }
 
+// La case qui laisse en blanc le nom des doublons d'une lecture, contrôlée,
+// fausse quand elle ne la porte pas ; une valeur qui n'est pas un booléen
+// est une faute du code.
+function cacherDe({ cacherNumero = false }) {
+  if (typeof cacherNumero !== 'boolean') throw new TypeError(`cacherNumero : booléen attendu, reçu ${JSON.stringify(cacherNumero)}`);
+  return cacherNumero;
+}
+
+// La case qui met l'organisation en gros d'une lecture, contrôlée, fausse
+// quand elle ne la porte pas ; une valeur qui n'est pas un booléen est une
+// faute du code.
+function enGrosDe({ organisationEnGros = false }) {
+  if (typeof organisationEnGros !== 'boolean') {
+    throw new TypeError(`organisationEnGros : booléen attendu, reçu ${JSON.stringify(organisationEnGros)}`);
+  }
+  return organisationEnGros;
+}
+
+// Les colonnes de la liste en CSV d'une lecture, contrôlées, une par tour
+// quand elle ne les porte pas ; une valeur hors de COLONNES_LISTE_BADGES
+// est une faute du code, levée avant tout refus du placement.
+function colonnesDe({ colonnesListe = COLONNES_LISTE_BADGES[0] }) {
+  if (!COLONNES_LISTE_BADGES.includes(colonnesListe)) {
+    throw new TypeError(`colonnesListe : ${COLONNES_LISTE_BADGES.join(' ou ')} attendue, reçu ${JSON.stringify(colonnesListe)}`);
+  }
+  return colonnesListe;
+}
+
 // Les données que les cases retirent, dans l'ordre de DONNEES_BADGE.
 const retireesDe = (donnees) => DONNEES_BADGE.filter((donnee) => !donnees[donnee]);
 
 // Le modèle tel que le badge l'imprime sous les cases : toutes cochées, le
 // modèle reçu ; sinon un modèle neuf dont chaque badge perd, de ses textes,
-// l'organisation décochée, et dont le pied se recompose sans les données
-// décochées. Le pied porte le nom de l'événement suivi de sa date, l'un ou
-// l'autre seul, ou aucun ; puis l'horodatage, puis l'identifiant d'un
-// homonyme. Le pied réduit, celui d'un badge qui perd le nom de l'événement
-// faute de place, garde la date quand sa case la garde. Les données du
-// badge, et tout le reste du modèle, ne changent pas.
+// l'organisation décochée et sa marque organisationEnGros, le nom restant alors
+// en gros, et dont le pied se recompose sans les données décochées. Le pied
+// porte le nom de l'événement suivi de sa date, l'un ou l'autre seul, ou
+// aucun ; puis l'horodatage, puis l'identifiant d'un homonyme. Le pied réduit,
+// celui d'un badge qui perd le nom de l'événement faute de place, garde la date
+// quand sa case la garde. Les données du badge, et tout le reste du modèle, ne
+// changent pas.
 function modeleImprime(modele, donnees) {
   if (retireesDe(donnees).length === 0) return modele;
   const { evenement, horodatage } = modele;
@@ -254,8 +332,9 @@ function modeleImprime(modele, donnees) {
     const { identifiant, textes } = badge;
     const lignesIdentifiant = donnees.identifiant && identifiant !== null ? [libelle('planche.pied.identifiant', { identifiant })] : [];
     const fin = [...lignesHorodatage, ...lignesIdentifiant];
-    const organisation = donnees.organisation ? textes.organisation : null;
-    return { ...badge, textes: { ...textes, organisation, pied: [...lignesEvenement, ...fin], piedReduit: [...lignesDate, ...fin] } };
+    const { organisationEnGros: _marque, ...sansMarque } = textes;
+    const gardes = donnees.organisation ? textes : { ...sansMarque, organisation: null };
+    return { ...badge, textes: { ...gardes, pied: [...lignesEvenement, ...fin], piedReduit: [...lignesDate, ...fin] } };
   });
   return { ...modele, badges };
 }
@@ -324,18 +403,19 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
   // événement repart d'une garde vide.
   let logosGardes = { cle: null, octets: new Map() };
 
-  // Les logos des badges d'un modèle : octets, par chemin, ceux qui se lisent
-  // et se contrôlent comme un PNG, dans l'ordre de la pile ; echecs, par
-  // chemin, la cause de ceux qui ne se lisent pas — ABSENT, le fichier
+  // Les images de chemins donnés — les logos des badges, dans l'ordre de la
+  // pile, puis l'image des badges ; null n'en désigne aucune : octets, par
+  // chemin, celles qui se lisent et se contrôlent comme un PNG ; echecs, par
+  // chemin, la cause de celles qui ne se lisent pas — ABSENT, le fichier
   // manque ; ILLISIBLE, il ne se lit pas, ou n'est pas un PNG. Un chemin
   // gardé ne se relit pas ; la garde ne retient ensuite que les chemins
-  // lus de ce modèle. Une erreur d'une autre nature remonte.
-  async function logosDe({ fs, racine, dossier }, modele) {
+  // lus de cette étude. Une erreur d'une autre nature remonte.
+  async function imagesDe({ fs, racine, dossier }, chemins) {
     const cle = JSON.stringify([racine?.id ?? null, racine?.chemin ?? null, dossier ?? null]);
     const gardes = logosGardes.cle === cle ? logosGardes.octets : new Map();
     const octets = new Map();
     const echecs = new Map();
-    for (const { logo } of modele.badges) {
+    for (const logo of chemins) {
       if (logo === null || octets.has(logo) || echecs.has(logo)) continue;
       if (gardes.has(logo)) {
         octets.set(logo, gardes.get(logo));
@@ -365,8 +445,9 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
 
   // L'étude d'une demande : le refus du placement, ou le modèle, ses logos
   // lus, son analyse par la mise en page et le refus qu'elle porte. Un refus
-  // de mise en page reçoit la personne du badge refusé, que src/pdf ne
-  // connaît pas. logos : null quand aucun badge ne désigne de logo, sinon
+  // de mise en page se relaie avec le badge refusé, où refusProduction lit
+  // la personne, que src/pdf ne connaît pas, par son nom entier
+  // (Badge.nom). logos : null quand aucun badge ne désigne de logo, sinon
   // les comptes de l'annonce. Rien ne s'écrit.
   async function etudier(lecture, demande) {
     const { charge } = lecture;
@@ -376,28 +457,40 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
     const pied = piedDe(lecture);
     const texte = texteDe(lecture);
     const donnees = donneesDe(lecture);
+    const cacher = cacherDe(lecture);
+    const enGros = enGrosDe(lecture);
     const papier = papierDesBadges(modeleBadge, lecture.papier);
     const imposition = aCartes(modeleBadge) ? 'feuille' : lue.imposition;
     const rejet = refusPlanche(charge, { source, proposition });
-    if (rejet !== null) return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge, pied, texte, donnees };
+    if (rejet !== null) {
+      return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge, pied, texte, donnees, cacher, enGros };
+    }
     if (typeof provenance !== 'string') throw new TypeError('provenance : le mode de construction attendu');
-    const modele = modeleImprime(modelePlanche(charge, { source, proposition, ordre, selection, provenance, version }), donnees);
+    const options = { source, proposition, ordre, selection, cacherNumero: cacher, organisationEnGros: enGros, provenance, version };
+    const modele = modeleImprime(modelePlanche(charge, options), donnees);
     const octets = await lesPolices();
     const technolibre = await technolibreDe(pied, texte);
-    const { octets: logosParticipants, echecs } = await logosDe(lecture, modele);
+    const image = imageBadgesDe(charge);
+    const cheminImage = image.active ? image.chemin : null;
+    const cheminsLogos = modele.badges.map(({ logo }) => logo);
+    const { octets: lues, echecs } = await imagesDe(lecture, [...cheminsLogos, cheminImage]);
+    const logosParticipants = new Map([...lues].filter(([chemin]) => cheminsLogos.includes(chemin)));
+    const imageBadges = lues.has(cheminImage) ? { octets: lues.get(cheminImage), position: image.position } : null;
     const { analyserPlanche } = await chargerProduction();
-    const analyse = await analyserPlanche({ modele, polices: octets, modeleBadge, technolibre, logosParticipants });
+    const analyse = await analyserPlanche({ modele, polices: octets, modeleBadge, technolibre, logosParticipants, imageBadges });
     let leRefus = null;
     if (analyse.refus !== null) {
       const { code, details, rang } = analyse.refus;
-      const badge = modele.badges[rang];
-      const personne = code === 'PLANCHE_NOM_TROP_LONG' ? { participant: badge.participant, personne: badge.nom } : {};
-      leRefus = refusProduction(code, { ...details, ...personne });
+      leRefus = refusProduction(code, details, modele.badges[rang]);
     }
     const introuvables = modele.badges
       .filter(({ logo }) => echecs.has(logo))
       .map(({ participant, nom, logo }) => ({ participant, nom, cause: echecs.get(logo) }));
     const logos = modele.badges.some(({ logo }) => logo !== null) ? { ...analyse.logosParticipants, introuvables } : null;
+    const comptesImage = analyse.imageBadges ?? { posees: 0, sansPlace: 0 };
+    const annonceImage = image.active
+      ? { position: image.position, chemin: image.chemin, ...comptesImage, introuvable: echecs.get(cheminImage) ?? null }
+      : null;
     return {
       refus: leRefus,
       modele,
@@ -410,10 +503,14 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       pied,
       texte,
       donnees,
+      cacher,
+      enGros,
       technolibre,
       sansTechnolibre: pied ? analyse.sansTechnolibre : null,
       logosParticipants,
       logos,
+      imageBadges,
+      annonceImage,
     };
   }
 
@@ -516,12 +613,14 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
   }
 
   // Les octets de la liste d'une demande et son nom, sous le dossier de la
-  // lecture quand avecDossier est vrai, sans dossier sinon. Le refus du
-  // placement lève, ErreurCommande, avant que rien ne se produise ; une
-  // liste refusée du dossier lève PLANCHE_NON_ECRITE sans rien écrire.
+  // lecture quand avecDossier est vrai, sans dossier sinon ; ses colonnes,
+  // celles de la lecture. Le refus du placement lève, ErreurCommande, avant
+  // que rien ne se produise ; une liste refusée du dossier lève
+  // PLANCHE_NON_ECRITE sans rien écrire.
   async function listeDe(lecture, demande, { avecDossier }) {
     const { charge, base } = lecture;
     const { source, proposition, ordre, selection } = demandeLue(demande);
+    const colonnes = colonnesDe(lecture);
     const rejet = refusPlanche(charge, { source, proposition });
     if (rejet !== null) throw new ErreurCommande(rejet.code, rejet.details);
     if (typeof provenance !== 'string') throw new TypeError('provenance : le mode de construction attendu');
@@ -541,7 +640,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
         throw await nonListe(lecture, erreur, nomCsvBadges(base, options), 'liste');
       }
     }
-    return { octets: listeBadges(modele, charge), nom: nomCsvBadges(base, { ...options, dossier }) };
+    return { octets: listeBadges(modele, charge, { colonnes }), nom: nomCsvBadges(base, { ...options, dossier }) };
   }
 
   // Les octets de la planche d'une demande, et son nom : sous le dossier de
@@ -564,7 +663,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       }
     }
     const nom = nomDe(lecture.base, etude, dossier);
-    const { modele, papier, imposition, absents, modeleBadge, technolibre, logosParticipants } = etude;
+    const { modele, papier, imposition, absents, modeleBadge, technolibre, logosParticipants, imageBadges } = etude;
     const planches = nombrePlanches(modele.badges.length, papier, modeleBadge);
     const logos = etude.logos === null ? null : { ...etude.logos, introuvables: etude.logos.introuvables.length };
     const controle = controleAvecRetirees(
@@ -582,7 +681,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       filigrane: libelle('planche.brouillon'),
       modeleBadge,
     };
-    const octets = await produirePlanche({ ...entrees, technolibre, logosParticipants });
+    const octets = await produirePlanche({ ...entrees, technolibre, logosParticipants, imageBadges });
     if (!aCartes(modeleBadge)) return { octets, nom, controle: null };
     return { octets, nom, controle: { octets: await produireControle(entrees), nom: nomControleDe(lecture.base, etude, dossier) } };
   }
@@ -596,11 +695,13 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
      * annonce ne demande le papier. La case du pied TechnoLibre de la lecture
      * s'y lit, avec son texte, et, quand elle est cochée et le modèle
      * présent, le nombre de badges d'où il se retire ; les cases de ce que
-     * le badge imprime s'y lisent de même. Les logos des participants s'y
-     * comptent quand un badge en désigne un, les introuvables nommés ; aucun
-     * ne refuse la planche. Le nom est celui que la production donnerait,
-     * rang compris ; sans dossier, donc sans rang, quand le dossier ne se
-     * liste pas. Rien ne s'écrit.
+     * le badge imprime, celle du nom des doublons et celle de l'organisation
+     * en gros s'y lisent de même ; les homonymes restent ceux du nom entier.
+     * Les logos des participants s'y comptent quand un badge en désigne un,
+     * les introuvables nommés ; aucun ne refuse la planche. L'image des
+     * badges s'y compte de même quand sa case est cochée. Le nom est celui
+     * que la production donnerait, rang compris ; sans dossier, donc sans
+     * rang, quand le dossier ne se liste pas. Rien ne s'écrit.
      *
      * @throws {TypeError} une demande hors de son domaine, une séance sans
      *         polices ou sans provenance, une case cochée sans le chargement
@@ -627,8 +728,11 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
           piedTechnolibre: etude.pied,
           textePiedTechnolibre: etude.texte,
           donneesBadge: etude.donnees,
+          cacherNumero: etude.cacher,
+          organisationEnGros: etude.enGros,
           sansTechnolibre: null,
           logos: null,
+          imageBadges: null,
         };
       }
       const { modele } = etude;
@@ -652,8 +756,11 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
         piedTechnolibre: etude.pied,
         textePiedTechnolibre: etude.texte,
         donneesBadge: etude.donnees,
+        cacherNumero: etude.cacher,
+        organisationEnGros: etude.enGros,
         sansTechnolibre: etude.sansTechnolibre,
         logos: etude.logos,
+        imageBadges: etude.annonceImage,
       };
     },
 
@@ -719,12 +826,15 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
      * planche : dans le dossier de l'événement, sous le nom de
      * nomCsvBadges, et rend {chemin, nom} ; sous web, téléchargée, chemin
      * null. La demande est celle de la planche — source, ordre, sélection ;
-     * l'imposition n'y change rien. Seuls les refus du placement la gardent
+     * l'imposition n'y change rien. Les colonnes sont celles de la lecture,
+     * une par tour ou une seule. Seuls les refus du placement la gardent
      * (refusPlanche) ; une écriture refusée lève PLANCHE_NON_ECRITE, fichier
      * 'liste', remède « Enregistrer sous… », comme pour la planche.
      *
      * @throws {ErreurCommande} le refus du placement ; PLANCHE_NON_ECRITE ;
      *         PROPOSITION_INCONNUE, PARTICIPANT_INCONNU, PERSONNE_EXCLUE
+     * @throws {TypeError} une demande hors de son domaine ; des colonnes de
+     *         la lecture hors de COLONNES_LISTE_BADGES
      */
     async produireListe(lecture, demande) {
       const { octets, nom } = await listeDe(lecture, demande, { avecDossier: true });

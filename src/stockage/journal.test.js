@@ -830,8 +830,8 @@ describe('la lecture s’arrête à la première ligne illisible et compte ce qu
     assert.deepEqual(bilan(sans51), { evenement: EVENEMENT, entrees: 50, derniere: 50, jalons: 0, ecartees: 50 });
     // Un journal peut commencer à une révision quelconque : sa cadence part de
     // sa première entrée. Commencé à 137, il porte ses instantanés à 137 et
-    // 187 ; un compte depuis la révision 1 les attendrait à 151 et 201, et la
-    // lecture s'arrêterait à 151.
+    // 187 ; un compte depuis la révision 1 en attendrait un à 151, le seul de
+    // sa cadence entre 137 et 200, et la lecture s'arrêterait à 151.
     const depuis137 = journalDe(suite(64), { premiere: 137 });
     assert.deepEqual(bilan(depuis137), { evenement: EVENEMENT, entrees: 64, derniere: 200, jalons: 0, ecartees: 0 });
     assert.deepEqual(

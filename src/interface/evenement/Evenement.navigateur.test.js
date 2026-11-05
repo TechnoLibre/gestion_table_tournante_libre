@@ -194,8 +194,9 @@ describe('aucun assistant (§ 2.1)', () => {
       const bouton = dans(m, `[data-commande="section"][data-cible="${nom}"]`);
       expect(visible(bouton), nom).toBe(true);
       bouton.click();
-      flushSync();
-      expect(m.ui.etat().section).toBe(nom);
+      // L'onglet de l'impression ouvre sa section sous l'indicateur
+      // d'activité, une fois la pastille peinte.
+      await attendre(() => expect(m.ui.etat().section).toBe(nom));
       const section = dans(m, `[data-section="${nom}"]`);
       expect(section, nom).not.toBeNull();
       expect(section.textContent).toContain(t(`coquille.section.${nom}`));
@@ -684,24 +685,31 @@ describe('le panneau d’historique (§ 8.3, § 8.4)', () => {
     expect(panneau(m).contains(document.elementFromPoint(cote.left + cote.width / 2, cote.top + cote.height / 2))).toBe(true);
   });
 
-  test('à 414 px, la barre d’un téléphone : « Historique… » ne montre que son icône, nommé par son libellé, dans une cible de 24 px au moins, et ne fait pas passer la barre sur une ligne de plus', async () => {
+  test('à 414 px, la barre d’un téléphone : « Historique… » ne montre que son icône, nommé par son libellé, dans une cible de 24 px au moins, sur la ligne de « Défaire », sans faire passer son groupe sur une ligne de plus', async () => {
     await fixerCadre(414, 896);
     const m = await neuf();
     await m.seance.passerEnEcriture();
     await m.seance.executer('ajouterParticipant', { champs: { nom: NOMS[0] } });
     flushSync();
     const bouton = boutonHistorique(m);
-    const barre = bouton.closest('[role="group"]');
     expect(bouton.textContent).toBe(t('evenement.commande.historique'));
     expect(bouton.getAttribute('aria-label')).toBeNull();
     const libelleBouton = [...bouton.children].find((enfant) => enfant.textContent === t('evenement.commande.historique'));
     expect(boite(libelleBouton).width).toBeLessThanOrEqual(1);
     const cible = boite(bouton);
     expect(Math.min(cible.width, cible.height)).toBeGreaterThanOrEqual(24);
-    const hauteur = boite(barre).height;
+    // Le groupe de l'historique tient sur une ligne : l'icône seule ne
+    // passe pas sous « Défaire », et le groupe garde la hauteur qu'il a
+    // sans le bouton. La barre entière peut, elle, prendre une ligne de
+    // plus : la place fixe, le libellé et « Défaire » seul remplissent sa
+    // première ligne, et le groupe passe alors entier sur la suivante.
+    const groupe = bouton.parentElement;
+    const defaire = groupe.querySelector('[data-commande="defaire"]');
+    expect(boite(defaire).top).toBe(cible.top);
+    const hauteur = boite(groupe).height;
     bouton.style.display = 'none';
     try {
-      expect(boite(barre).height).toBe(hauteur);
+      expect(boite(groupe).height).toBe(hauteur);
     } finally {
       bouton.style.display = '';
     }

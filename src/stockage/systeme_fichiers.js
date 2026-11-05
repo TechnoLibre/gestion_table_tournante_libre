@@ -111,7 +111,9 @@ import { LOGO_SOURCE_MAX_OCTETS } from './logos.js';
  * @property {(r: Racine) => Promise<{inscriptible: boolean, cause: string|null}>} sonder
  *           crée la racine, parents compris, efface un .gtt-temoin resté
  *           d'une séance précédente, écrit .gtt-temoin, le relit, l'efface
- *           (§ 8.6) ; un échec rend sa cause, sans lever
+ *           (§ 8.6) ; un échec rend sa cause, sans lever : celle de la
+ *           plateforme, ou RELECTURE_DIFFERENTE, sous toute plateforme,
+ *           pour un témoin relu autrement qu'écrit
  * @property {(r: Racine) => Promise<'amovible'|'fixe'|'inconnu'>} typeSupport
  * @property {(r: Racine, chemin: string) => Promise<string>} lireTexte
  *           le texte tel qu'écrit : marque d'ordre d'octets, fins de ligne et
@@ -184,7 +186,9 @@ import { LOGO_SOURCE_MAX_OCTETS } from './logos.js';
  *           montre dans l'explorateur du système le dossier que désigne
  *           chemin, '' par défaut : la racine elle-même ; un dossier absent,
  *           ou un fichier, lève ABSENT ; là où il n'y a pas d'explorateur,
- *           NON_DISPONIBLE, une fois le chemin admis
+ *           NON_DISPONIBLE {primitive}, une fois le chemin admis ; un
+ *           explorateur qui ne s'ouvre pas, NON_DISPONIBLE {cause}, la raison
+ *           de son échec en cause
  * @property {(options?: {genre: 'image'}) => Promise<{nom: string, octets: Uint8Array}|null>} choisirFichierAImporter
  *           le nom et les octets du fichier que l'opérateur choisit, null
  *           quand il annule. Sans option, tout fichier, sans plafond. Un

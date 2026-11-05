@@ -24,7 +24,16 @@ import { rechercher } from '../../moteur/recherche.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { VERSION } from '../../version.genere.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { COLONNES, GROUPES_COLONNES, explicationDeColonne, lireColonne, tableau, texteCellule } from '../propositions/modele.js';
+import {
+  COLONNES,
+  GROUPES_COLONNES,
+  explicationDeColonne,
+  lireColonne,
+  lireSecondaires,
+  tableau,
+  texteCellule,
+  texteSecondaires,
+} from '../propositions/modele.js';
 import { TUILES_A_POURCENTAGE, enteteDe } from './entete.js';
 import { celluleDeTuile, presenceDeCharge } from './entete.js';
 
@@ -419,6 +428,11 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
     const { animateurs } = vue.detail.bornes;
     assert.notEqual(animateurs, null);
     const rencontres = tuile(enteteDe(vue, outils), 'animateursRencontres');
+    // Les ancrés sont les animateurs, réservés à leur table, qu'aucune borne
+    // des animateurs ne concerne : la population de m(p) n'a pas d'ancré, et
+    // la tuile tait ses lignes secondaires.
+    assert.equal(vue.ligne.mesures.animateurs.agregat.ancres.min, null);
+    assert.equal(lireSecondaires(vue.ligne, 'animateursRencontres'), null);
     assert.deepEqual(rencontres.bornes, [
       t('qualite.tuile.personne', { nom: nomDe(vue.detail, animateurs.id) }),
       t('qualite.tuile.borneAnimateurs', { borne: animateurs.borne }),
@@ -440,6 +454,76 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
         assert.ok(!texte.includes('%'), `${tuileDe.nom} : ${texte}`);
       }
     }
+  });
+});
+
+describe('enteteDe : les lignes secondaires des agrégats, mobiles et ancrés (§ 5.4, § 12.2, § 12.10.4)', () => {
+  // Chaque agrégat et sa mesure sur une population de la ligne
+  // d'évaluation, lue ici sans passer par le modèle ; le taux de diversité
+  // au centième.
+  const AGREGATS = new Map([
+    ['organisationsVues', (l, population) => l.mesures.aggOrganisationsVues[population].min],
+    ['diversite', (l, population) => l.mesures.aggDiversite[population].min],
+    ['manqueMax', (l, population) => l.troisChiffres.manqueMax[population]],
+    ['effectifManque', (l, population) => l.troisChiffres.effectifManque[population]],
+    ['ecartItineraireMax', (l, population) => l.troisChiffres.ecartItineraireMax[population]],
+    ['toursSelonObjectif', (l, population) => l.mesures.objectifs.agregat[population].min],
+  ]);
+  const ecrit = (valeur, decimales) => (valeur === null ? t('format.vide') : format.nombre(valeur, { decimales }));
+  const estSecondaire = (ligne) => ligne.startsWith('mobiles ');
+
+  test('avec des mobiles et des ancrés, chaque tuile d’un agrégat écrit les deux sur une ligne, après sa borne et avant son plancher', () => {
+    // Les six personnes sont concernées par l'objectif, que porte la table
+    // des deux ancrés : sa population les compte.
+    const charge = chargeSix({ reservees: true, objectifs: true, finance: 6 });
+    charge.tables[1].objectifs = charge.tables[0].objectifs;
+    delete charge.tables[0].objectifs;
+    const vue = vueDe(generee(charge));
+    const entete = enteteDe(vue, outils);
+    for (const [nom, lire] of AGREGATS) {
+      const { bornes } = tuile(entete, nom);
+      const decimales = nom === 'diversite' ? 2 : 0;
+      const attendue = t('propositions.secondaires', {
+        mobiles: ecrit(lire(vue.ligne, 'mobiles'), decimales),
+        ancres: ecrit(lire(vue.ligne, 'ancres'), decimales),
+      });
+      assert.equal(bornes.filter(estSecondaire).length, 1, nom);
+      assert.equal(bornes.indexOf(attendue), bornes.length - 1 - lignesDePlancher(bornes).length, `${nom} : ${bornes.join(' | ')}`);
+      assert.equal(texteSecondaires(lireSecondaires(vue.ligne, nom), outils), attendue, nom);
+    }
+    // Le minimum brut a les siennes en tuiles, et les autres tuiles n'en
+    // écrivent aucune.
+    for (const tuileDe of tuiles(entete).filter(({ nom }) => !AGREGATS.has(nom))) {
+      assert.deepEqual(tuileDe.bornes.filter(estSecondaire), [], tuileDe.nom);
+    }
+    assert.equal(tuile(entete, 'rencontresAncres').texte, format.nombre(vue.ligne.mesures.aggRencontres.ancres.min));
+  });
+
+  test('sans ancré, aucune tuile n’écrit de ligne secondaire : l’une serait « — », l’autre le chiffre de tête', () => {
+    const vue = vueDe(generee(chargeSix({ objectifs: true })));
+    assert.equal(vue.ligne.mesures.aggRencontres.ancres.min, null);
+    const entete = enteteDe(vue, outils);
+    for (const tuileDe of tuiles(entete)) assert.deepEqual(tuileDe.bornes.filter(estSecondaire), [], tuileDe.nom);
+    for (const nom of AGREGATS.keys()) assert.equal(lireSecondaires(vue.ligne, nom), null, nom);
+  });
+
+  test('sans ancré concerné, le minimum de s(p) tait ses lignes secondaires : sa population est celle des concernés', () => {
+    // Les trois concernés par l'objectif sont mobiles ; les deux ancrés ne
+    // le sont pas.
+    const vue = vueDe(generee(chargeSix({ reservees: true, objectifs: true })));
+    assert.notEqual(vue.ligne.mesures.aggRencontres.ancres.min, null);
+    assert.equal(vue.ligne.mesures.objectifs.agregat.ancres.min, null);
+    assert.equal(lireSecondaires(vue.ligne, 'toursSelonObjectif'), null);
+    assert.deepEqual(tuile(enteteDe(vue, outils), 'toursSelonObjectif').bornes.filter(estSecondaire), []);
+    assert.notEqual(lireSecondaires(vue.ligne, 'manqueMax'), null);
+  });
+
+  test('sans organisation, le minimum de A(p) tait ses lignes secondaires, comme le taux de diversité « — »', () => {
+    const vue = vueDe(generee(chargeSix({ reservees: true, organisations: false })));
+    const entete = enteteDe(vue, outils);
+    assert.equal(tuile(entete, 'diversite').texte, t('format.vide'));
+    assert.deepEqual(tuile(entete, 'organisationsVues').bornes, [t('qualite.tuile.sansOrganisation')]);
+    assert.notEqual(lireSecondaires(vue.ligne, 'manqueMax'), null);
   });
 });
 

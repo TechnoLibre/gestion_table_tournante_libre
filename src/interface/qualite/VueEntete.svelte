@@ -14,20 +14,22 @@
   // Une tuile porte son libellé, sa valeur écrite comme au tableau, « ne
   // classe pas » quand le tableau ne porte pas sa colonne, son pourcentage
   // et le compte du pire (Pourcentage) sur trois tuiles seulement, puis les
-  // lignes de sa borne, celles d'une personne qu'elle nomme, et en dernier,
-  // quand le détail en porte un, son plancher, qui ne nomme personne : il
-  // borne la mesure de la tuile. Un plancher que la présence par tour
-  // retire laisse à sa place la phrase qui le dit non prouvé. Le libellé
-  // est un terme : le survol et le focus du clavier ouvrent l'infobulle de
-  // son explication, celle de la colonne au tableau (Infobulle, primitive),
-  // à laquelle la tuile du minimum brut ajoute la présence de la personne
-  // au rang 1 quand elle manque un tour, lue sur la charge de la séance.
+  // lignes de sa borne, celles d'une personne qu'elle nomme, celle des
+  // lignes secondaires d'un agrégat, mobiles et ancrés, et en dernier, quand
+  // le détail en porte un, son plancher, qui ne nomme personne : il borne la
+  // mesure de la tuile. Un plancher que la présence par tour retire laisse à
+  // sa place la phrase qui le dit non prouvé. Le libellé est un terme : le
+  // survol et le focus du clavier ouvrent l'infobulle de son explication,
+  // celle de la colonne au tableau (Infobulle, primitive), à laquelle la
+  // tuile du minimum brut ajoute la présence de la personne au rang 1 quand
+  // elle manque un tour, lue sur la charge de la séance.
   //
   // Désignations : data-vue-qualite sur le <div> qui enveloppe la carte,
   // que la carte ne transmet pas ; data-tuile sur chaque tuile, par le nom
   // de sa colonne ; data-terme sur son libellé ; data-plancher-non-prouve
   // sur la phrase d'un plancher retiré.
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import Carte from '../primitives/Carte.svelte';
   import Infobulle from '../primitives/Infobulle.svelte';
   import Pourcentage from './graphiques/Pourcentage.svelte';
@@ -42,7 +44,8 @@
   const idExplication = `${uid}-explication`;
 
   const presenceDe = $derived(presenceDeCharge($seance?.charge ?? null));
-  const entete = $derived(enteteDe({ detail, ligne, table }, { t, format, presenceDe }));
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
+  const entete = $derived(enteteDe({ detail, ligne, table }, { t, format, presenceDe, nomsTours }));
 
   // Le terme expliqué : {ancre, terme, cle, details}, null sans infobulle.
   // Ouvrir sur un terme remplace l'explication d'un autre ; quitter un terme

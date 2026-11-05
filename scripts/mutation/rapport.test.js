@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { VERSION } from '../../src/version.genere.js';
 import { describe, test } from '../../test/lanceur.js';
-import { delaisARejouerSeuls, equivalentsDe, issuesApresRejeu, rediger, relire } from './rapport.js';
+import { delaisARejouerSeuls, equivalentsDe, issuesApresRejeu, rediger, relire, tuesLongsARejouerSeuls } from './rapport.js';
 
 const RACINE = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -107,13 +107,14 @@ describe('rapport de mutation : les comptes', () => {
     assert.ok(lignes.includes('| frontiere | 3 | 1 | 0 | 2 | 0 | 0 | 0 |'), 'ligne de frontiere');
   });
 
-  test('le préambule dit qu’un délai déclaré équivalent se rejoue seul avant d’être compté', () => {
+  test('le préambule dit qu’un équivalent déclaré que le délai arrête, ou que les épreuves longues tuent, se rejoue seul avant d’être compté', () => {
     const lignes = rediger({ entete: ENTETE, resultats: RESULTATS }).markdown.split('\n');
     const rang = lignes.findIndex((ligne) => ligne.startsWith('Chaque mutant se joue'));
-    assert.deepEqual(lignes.slice(rang, rang + 4), [
+    assert.deepEqual(lignes.slice(rang, rang + 5), [
       'Chaque mutant se joue contre les épreuves de la série node qui atteignent son module, sous `node --test`.',
       'Un mutant déclaré équivalent que le délai arrête se rejoue seul, sans autre mutant à côté, avant d’être compté.',
       'Un survivant se rejoue contre les épreuves longues qui atteignent son module avant d’être compté : tué par elles, il se compte à part.',
+      'Un mutant déclaré équivalent que les épreuves longues tuent s’y rejoue seul, sans autre mutant à côté, avant d’être compté.',
       'Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affirmer.',
     ]);
   });
@@ -330,17 +331,17 @@ describe('rapport de mutation : la relecture du JSON écrit', () => {
   });
 
   test('relire refuse un survivant que la série longue tue, laissé parmi les survivants', () => {
-    // L'ancien compte : le mutant tué par la série longue rangé avec les
-    // survivants, bilan, fichier et opérateur ajustés pour que seuls les
-    // listes et la règle du compte le trahissent.
-    const ancien = modifie((lu) => {
+    // Un rapport range parmi les survivants le mutant que la série longue
+    // tue, bilan, fichier et opérateur ajustés : seules les listes et la
+    // règle du compte le trahissent.
+    const malRange = modifie((lu) => {
       lu.survivants.splice(1, 0, ...lu.tuesSerieLongue.splice(0));
       for (const compte of [lu.bilan, lu.parFichier[0], lu.parOperateur[0]]) {
         compte.survivants += 1;
         compte.tuesSerieLongue -= 1;
       }
     });
-    assert.throws(() => relire(ancien), /série longue/);
+    assert.throws(() => relire(malRange), /série longue/);
   });
 });
 
@@ -417,6 +418,31 @@ describe('rapport de mutation : les délais rejoués seuls', () => {
     assert.throws(() => issuesApresRejeu(ISSUES, [7], ['tue']), /^RangeError: rang 7 hors des 7 issues$/);
     assert.throws(() => issuesApresRejeu(ISSUES, [-1], ['tue']), /^RangeError: rang -1 hors des 7 issues$/);
     assert.throws(() => issuesApresRejeu(ISSUES, [1.5], ['tue']), /^RangeError: rang 1\.5 hors des 7 issues$/);
+  });
+});
+
+describe('rapport de mutation : les tués par la série longue rejoués seuls', () => {
+  const cle = (n) => `src/verger/pommes.js:frontiere:00000000000000c${n}:0`;
+  // null : un rang que la série longue n'a pas rejoué.
+  const LONGUES = Object.freeze(['tue', 'tue', 'survivant', null, 'delai', 'erreur', 'tue']);
+  const tache = (n) => ({ mutant: { cle: cle(n), fichier: 'src/verger/pommes.js' }, tests: [], longues: [] });
+  const TACHES = Object.freeze(LONGUES.map((_, rang) => tache(rang)));
+
+  test('seul un tué déclaré équivalent se rejoue : ni un tué non déclaré, ni un survivant, un non rejoué, un délai, une erreur déclarés', () => {
+    // Déclarés : rangs 0, 2, 3, 4, 5 et 6 ; tués : rangs 0, 1 et 6.
+    const equivalents = new Map([0, 2, 3, 4, 5, 6].map((rang) => [cle(rang), 'sans effet ici']));
+    assert.deepEqual(tuesLongsARejouerSeuls(LONGUES, TACHES, equivalents), [0, 6]);
+  });
+
+  test('la clé se lit dans le mutant de la tâche du même rang', () => {
+    const croisees = TACHES.map((t, rang) => (rang === 1 ? tache(2) : rang === 2 ? tache(1) : t));
+    assert.deepEqual(tuesLongsARejouerSeuls(LONGUES, croisees, new Map([[cle(2), 'sans effet ici']])), [1]);
+  });
+
+  test('aucun tué déclaré, aucun rejeu ; des issues et des tâches de longueurs différentes se refusent', () => {
+    assert.deepEqual(tuesLongsARejouerSeuls(LONGUES, TACHES, new Map()), []);
+    assert.deepEqual(tuesLongsARejouerSeuls([], [], new Map([[cle(0), 'x']])), []);
+    assert.throws(() => tuesLongsARejouerSeuls(['tue', null], [tache(0)], new Map()), /^RangeError: issues longues : 2, tâches : 1$/);
   });
 });
 

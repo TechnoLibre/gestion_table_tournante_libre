@@ -29,6 +29,7 @@ import {
   creerMachineCommande,
   exigerVariante,
   libelleRemede,
+  prendreRenommage,
 } from './commande.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -377,6 +378,39 @@ describe('commande : l’action d’un remède', () => {
     assert.deepEqual([action.nom, action.cle, action.details, action.confirmer], ['renommer', 'communs.remede.renommer', {}, null]);
     assert.notEqual(await action.executer(), null);
     assert.deepEqual(seance.appels, [['fermer']]);
+  });
+
+  test('renommer retient pour la liste la clé de l’événement fermé, que prendreRenommage rend une fois ; un refus de fermer n’en retient aucune', async () => {
+    const seance = seanceEnregistreuse();
+    assert.equal(prendreRenommage(seance), null);
+    // La clé se retient avant la fermeture, puisque la liste se monte
+    // pendant elle, et s'y prend une seule fois.
+    let pendant;
+    const fermer = seance.fermer;
+    seance.fermer = (...args) => {
+      pendant = prendreRenommage(seance);
+      return fermer(...args);
+    };
+    await actionRemede({ geste: 'renommer' }, { seance }).executer();
+    assert.equal(pendant, 'Merles - Copie/Soirée des Merles');
+    assert.equal(prendreRenommage(seance), null);
+    // Non prise, elle attend la liste.
+    seance.fermer = fermer;
+    await actionRemede({ geste: 'renommer' }, { seance }).executer();
+    assert.equal(prendreRenommage(seance), 'Merles - Copie/Soirée des Merles');
+    assert.equal(prendreRenommage(seance), null);
+    // Une autre séance ne voit pas la demande.
+    const autre = seanceEnregistreuse();
+    await actionRemede({ geste: 'renommer' }, { seance: autre }).executer();
+    assert.equal(prendreRenommage(seance), null);
+    assert.equal(prendreRenommage(autre), 'Merles - Copie/Soirée des Merles');
+    // Un support rompu refuse la fermeture : l'événement reste ouvert, et
+    // aucune liste montée plus tard ne reçoit le focus.
+    const rompue = seanceEnregistreuse();
+    const refus = Object.assign(new Error('fermeture refusée'), { code: 'ECRITURE' });
+    rompue.fermer = () => Promise.reject(refus);
+    await assert.rejects(actionRemede({ geste: 'renommer' }, { seance: rompue }).executer(), refus);
+    assert.equal(prendreRenommage(rompue), null);
   });
 
   test('enregistrerSous passe par les gestes de l’écran, qui sait la planche ; sans eux, aucune action', () => {

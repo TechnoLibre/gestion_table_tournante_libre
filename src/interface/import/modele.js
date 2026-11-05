@@ -16,10 +16,13 @@
 //
 // Le modèle à télécharger suit la nature cochée : celui des participants,
 // dont la présence suit le nombre de tours de l'événement ouvert, ou celui
-// des objectifs de l'événement ouvert.
+// des objectifs de l'événement ouvert. Le guide de l'import la suit aussi :
+// une ligne par colonne reconnue, lue dans la table d'en-têtes de la nature.
 import {
   CHAMPS,
   CHAMPS_OBJECTIFS,
+  ENTETES_DES_CHAMPS,
+  ENTETES_DES_OBJECTIFS,
   apercevoir,
   apercevoirObjectifs,
   modeleObjectifs,
@@ -80,6 +83,9 @@ const CLES_DES_CHAMPS = new Map([
   ['etiquettes', 'import.champ.etiquettes'],
   ['presence', 'import.champ.presence'],
   ['conflit_organisation', 'import.champ.conflits'],
+  ['animation_reservee', 'import.champ.animationReservee'],
+  ['inclusion_organisation', 'import.champ.inclusionsOrganisation'],
+  ['inclusion_participant', 'import.champ.inclusionsParticipant'],
   ['table', 'import.champ.table'],
   ['tour', 'import.champ.tour'],
   ['objectif', 'import.champ.objectif'],
@@ -94,8 +100,9 @@ const CLES_DE_REGLE = new Map([
   [null, 'import.regle.defaut'],
 ]);
 
-// La clé de la valeur lue d'« exclu » ; une cellule vide n'en a pas.
-const CLES_D_EXCLU = new Map([
+// La clé de la valeur lue d'« exclu » ou de l'animation réservée, la même
+// liste fermée ; une cellule vide n'en a pas.
+const CLES_OUI_NON = new Map([
   [true, 'import.exclu.oui'],
   [false, 'import.exclu.non'],
 ]);
@@ -104,11 +111,36 @@ const CLES_D_EXCLU = new Map([
 const CHAMPS_LUS = new Map([
   ['titre_pressenti', 'titrePressenti'],
   ['conflit_organisation', 'conflits'],
+  ['animation_reservee', 'animationReservee'],
+  ['inclusion_organisation', 'inclusionsOrganisation'],
+  ['inclusion_participant', 'inclusionsParticipant'],
 ]);
 
-// Les champs dont la cellule est une liste de noms, chacun sa pastille : les
-// étiquettes, et les organisations en conflit.
-const CHAMPS_EN_LISTE = new Set(['etiquettes', 'conflit_organisation']);
+// Les champs dont la valeur lue est oui ou non : chacun se montre par la
+// clé de sa valeur (CLES_OUI_NON).
+const CHAMPS_OUI_NON = new Set(['exclu', 'animation_reservee']);
+
+// Les champs dont la cellule est une liste de noms, chacun sa pastille, et
+// l'icône de la pastille : les étiquettes, les organisations en conflit, les
+// organisations et les personnes incluses.
+const CHAMPS_EN_LISTE = new Map([
+  ['etiquettes', 'etiquettes'],
+  ['conflit_organisation', 'interdit'],
+  ['inclusion_organisation', 'ajouter'],
+  ['inclusion_participant', 'ajouter'],
+]);
+
+/**
+ * L'icône des pastilles d'une cellule en liste de l'aperçu : celle des
+ * étiquettes, d'une personne ou de l'objectif d'une table ; « interdit »
+ * pour les conflits ; « ajouter » pour les inclusions, celle de la grille.
+ *
+ * @param {string} champ  un champ de CHAMPS ou de CHAMPS_OBJECTIFS
+ * @returns {string}
+ */
+export function iconeDeListe(champ) {
+  return CHAMPS_EN_LISTE.get(champ) ?? 'etiquettes';
+}
 
 // Des modes et la clé de leur nom, figés.
 const modes = (paires) => Object.freeze(paires.map(([mode, cle]) => Object.freeze({ mode, cle })));
@@ -226,7 +258,8 @@ const ICONES_DE_SORTE = new Map([
 // à jour —, ou une cellule sur plusieurs lignes qui porte le séparateur,
 // peut-être un guillemet mal fermé ; une information dit ce qui a été fait
 // ou lu sans rien écarter — les orthographes fondues d'organisations et
-// celles d'étiquettes, deux blocs distincts, et les noms rendus uniques.
+// celles d'étiquettes, deux blocs distincts, les noms rendus uniques, et
+// les personnes à désigner animatrices qu'un import laisse.
 const SORTES_DES_BLOCS = new Map([
   ['global', 'refus'],
   ['refusees', 'refus'],
@@ -237,14 +270,15 @@ const SORTES_DES_BLOCS = new Map([
   ['fusionsEtiquettes', 'information'],
   ['renommes', 'information'],
   ['rienEcrit', 'information'],
+  ['animations', 'information'],
 ]);
 
 /**
  * La classe d'un bloc de messages de l'aperçu ou du rapport.
  *
  * @param {string} bloc  'global', 'refusees', 'doublons', 'homonymes',
- *        'fusions', 'fusionsEtiquettes', 'renommes', 'multilignes' ou
- *        'rienEcrit'
+ *        'fusions', 'fusionsEtiquettes', 'renommes', 'multilignes',
+ *        'rienEcrit' ou 'animations'
  * @returns {{sorte: string, cle: string, icone: string}}  la sorte, la clé
  *   de son libellé et l'icône de sa pastille
  * @throws {RangeError} un bloc inconnu
@@ -262,9 +296,115 @@ const colonnes = (champs) => Object.freeze(champs.map((champ) => Object.freeze({
  *  l'ordre de CHAMPS, et la clé de son nom. */
 export const COLONNES_DES_LIGNES = colonnes(CHAMPS);
 
+// Les champs dont le tableau des lignes ne montre la colonne que lorsque le
+// texte l'associe : les inclusions. Montrées toujours, leurs deux colonnes
+// vides feraient défiler, dans une fenêtre de 1 366 px, le tableau d'un
+// fichier qui n'en porte pas.
+const MONTRES_SI_ASSOCIES = new Set(['inclusion_organisation', 'inclusion_participant']);
+
+/**
+ * Les colonnes du tableau des lignes des participants pour une association :
+ * celles de COLONNES_DES_LIGNES, dans leur ordre, hors des colonnes des
+ * inclusions que le texte n'associe pas.
+ *
+ * @param {{colonnes: Object<string, number>}} association
+ * @returns {Array<{champ: string, cle: string}>}
+ */
+export function colonnesMontrees({ colonnes: associees }) {
+  return COLONNES_DES_LIGNES.filter(({ champ }) => !MONTRES_SI_ASSOCIES.has(champ) || Object.hasOwn(associees, champ));
+}
+
 /** Les colonnes du tableau des lignes des objectifs : chaque champ, dans
  *  l'ordre de CHAMPS_OBJECTIFS, et la clé de son nom. */
 export const COLONNES_DES_OBJECTIFS = colonnes(CHAMPS_OBJECTIFS);
+
+// La clé du texte de guide de chaque champ, dans l'ordre de CHAMPS, puis de
+// CHAMPS_OBJECTIFS : ce que la colonne contient, et comment une cellule en
+// sépare plusieurs valeurs.
+const CLES_DU_GUIDE = new Map([
+  ['nom', 'import.guide.colonne.nom'],
+  ['prenom', 'import.guide.colonne.prenom'],
+  ['organisation', 'import.guide.colonne.organisation'],
+  ['courriel', 'import.guide.colonne.courriel'],
+  ['titre_pressenti', 'import.guide.colonne.titrePressenti'],
+  ['exclu', 'import.guide.colonne.exclu'],
+  ['notes', 'import.guide.colonne.notes'],
+  ['etiquettes', 'import.guide.colonne.etiquettes'],
+  ['presence', 'import.guide.colonne.presence'],
+  ['conflit_organisation', 'import.guide.colonne.conflits'],
+  ['animation_reservee', 'import.guide.colonne.animationReservee'],
+  ['inclusion_organisation', 'import.guide.colonne.inclusionsOrganisation'],
+  ['inclusion_participant', 'import.guide.colonne.inclusionsParticipant'],
+  ['table', 'import.guide.colonne.table'],
+  ['tour', 'import.guide.colonne.tour'],
+  ['objectif', 'import.guide.colonne.objectif'],
+  ['regle', 'import.guide.colonne.regle'],
+]);
+
+// La table d'en-têtes de chaque nature, la clé de la légende de son tableau
+// dans le guide, et ses champs obligatoires : ceux dont l'absence refuse le
+// fichier entier, NOM_NON_ASSOCIE pour des participants,
+// TABLE_NON_ASSOCIEE et OBJECTIF_NON_ASSOCIE pour des objectifs.
+const GUIDES_DES_NATURES = new Map([
+  ['participants', { entetes: ENTETES_DES_CHAMPS, legende: 'import.guide.legende.participants', obligatoires: ['nom'] }],
+  ['objectifs', { entetes: ENTETES_DES_OBJECTIFS, legende: 'import.guide.legende.objectifs', obligatoires: ['table', 'objectif'] }],
+]);
+
+/** Les clés des consignes générales du guide de l'import, dans l'ordre où
+ *  il les montre, sous l'une et l'autre nature. */
+export const CONSIGNES_DU_GUIDE = Object.freeze([
+  'import.guide.consigne.entetes',
+  'import.guide.consigne.fichier',
+  'import.guide.consigne.modele',
+  'import.guide.consigne.apercu',
+]);
+
+// Les en-têtes d'un champ, sans ceux qui ne diffèrent d'un précédent que
+// par l'apostrophe, droite ou typographique : la reconnaissance garde les
+// deux graphies, le guide n'écrit que la première, que l'œil distingue mal
+// de l'autre.
+function uneGraphieParApostrophe(ecritures) {
+  const vues = new Set();
+  return ecritures.filter((ecriture) => {
+    const graphie = ecriture.replaceAll('\u{2019}', "'");
+    if (vues.has(graphie)) return false;
+    vues.add(graphie);
+    return true;
+  });
+}
+
+/**
+ * Les lignes du guide d'une table d'en-têtes, de la forme
+ * d'ENTETES_DES_CHAMPS : une par champ, dans l'ordre de la table, son
+ * en-tête, ses synonymes tels que la table les écrit, une seule graphie par
+ * apostrophe, s'il est obligatoire, et la clé de son texte de guide. La
+ * table seule donne en-têtes et synonymes : le guide n'en recopie aucun.
+ *
+ * @param {ReadonlyArray<readonly [string, ReadonlyArray<string>]>} entetes
+ * @param {ReadonlyArray<string>} obligatoires  les champs obligatoires
+ * @returns {Array<{champ: string, entete: string, synonymes: string[], obligatoire: boolean, cle: string}>}
+ * @throws {RangeError} un champ sans texte de guide, qu'il nomme
+ */
+export function colonnesDuGuide(entetes, obligatoires) {
+  return entetes.map(([champ, ecritures]) => {
+    const [entete, ...synonymes] = uneGraphieParApostrophe(ecritures);
+    return { champ, entete, synonymes, obligatoire: obligatoires.includes(champ), cle: dans(CLES_DU_GUIDE, champ, 'texte de guide du champ') };
+  });
+}
+
+/**
+ * Le guide de l'import sous une nature (§ 10.1, § 10.4) : la clé de la
+ * légende de son tableau, et une ligne par colonne reconnue, dans l'ordre
+ * de la table d'en-têtes de la nature (colonnesDuGuide).
+ *
+ * @param {'participants'|'objectifs'} nature
+ * @returns {{legende: string, colonnes: ReturnType<typeof colonnesDuGuide>}}
+ * @throws {RangeError} une nature inconnue, ou un champ sans texte de guide
+ */
+export function guideDeLImport(nature) {
+  const { entetes, legende, obligatoires } = GUIDES_DES_NATURES.get(exigerNature(nature));
+  return { legende, colonnes: colonnesDuGuide(entetes, obligatoires) };
+}
 
 // Les comptes du rapport de chaque nature, dans l'ordre du résumé de son
 // import, et la clé de leur libellé, accordé au nombre.
@@ -303,14 +443,41 @@ export function comptesDuRapport(nature) {
   return COMPTES_DU_RAPPORT.get(exigerNature(nature)).map(([nom, cle]) => ({ nom, cle }));
 }
 
+/**
+ * Ce que la fenêtre de « Remplacer » des participants nomme détruit, en clés
+ * de libellé et leurs détails : les quatre comptes du bilan
+ * (bilanRemplacement) — personnes, réservations, titres pourvus,
+ * propositions —, toujours, puis les inclusions que portent les personnes
+ * retirées, seulement quand elles en portent, puis les logos que le
+ * remplacement retire, seulement quand il en retire : le CSV ne porte aucun
+ * logo (§ 8.9).
+ *
+ * @param {{participants: number, reservations: number, titresPourvus: number, propositions: number,
+ *   inclusions?: number}} bilan
+ * @param {number} logosRetires  le compte du résumé de l'essai de l'import
+ * @returns {Array<{cle: string, details: {n: number}}>}
+ */
+export function annonceRemplacementParticipants(bilan, logosRetires) {
+  const inclusions = bilan.inclusions ?? 0;
+  return [
+    { cle: 'import.remplacer.participants', details: { n: bilan.participants } },
+    { cle: 'import.remplacer.reservations', details: { n: bilan.reservations } },
+    { cle: 'import.remplacer.titres', details: { n: bilan.titresPourvus } },
+    { cle: 'import.remplacer.propositions', details: { n: bilan.propositions } },
+    ...(inclusions > 0 ? [{ cle: 'import.remplacer.inclusions', details: { n: inclusions } }] : []),
+    ...(logosRetires > 0 ? [{ cle: 'import.remplacer.logos', details: { n: logosRetires } }] : []),
+  ];
+}
+
 // Le remède d'un refus de decoder : le code que ses détails portent, que le
 // texte du refus compose déjà (contrat « Refus et avertissements »).
 const REFUS_DE_DECODER = new Set(['UTF16_SANS_MARQUE', 'UTF16_INVALIDE', 'UTF8_INVALIDE', 'CARACTERE_NUL']);
 
 // La clé du remède de chaque refus global de l'aperçu des participants. Un
 // caractère nul n'y arrive que d'un texte collé : celui d'un fichier,
-// decoder le refuse. Un conflit fautif refuse le fichier entier : son
-// remède invite à le corriger, puis à l'importer de nouveau.
+// decoder le refuse. Un conflit ou une inclusion fautifs refusent le
+// fichier entier : leur remède invite à le corriger, puis à l'importer de
+// nouveau.
 const REMEDES_DE_L_APERCU = new Map([
   ['CARACTERE_NUL', 'import.remede.caractereNulCollage'],
   ['AUCUN_ENTETE', 'import.remede.aucunEntete'],
@@ -320,6 +487,11 @@ const REMEDES_DE_L_APERCU = new Map([
   ['SEPARATEUR_INTROUVABLE', 'import.remede.separateurIntrouvable'],
   ['CONFLIT_ORGANISATION_INCONNUE', 'import.remede.conflitOrganisation'],
   ['CONFLIT_ORGANISATION_PROPRE', 'import.remede.conflitPropre'],
+  ['INCLUSION_ORGANISATION_INCONNUE', 'import.remede.inclusionOrganisation'],
+  ['INCLUSION_ORGANISATION_PROPRE', 'import.remede.inclusionPropre'],
+  ['INCLUSION_PARTICIPANT_INCONNU', 'import.remede.inclusionInconnue'],
+  ['INCLUSION_PARTICIPANT_AMBIGU', 'import.remede.inclusionAmbigue'],
+  ['INCLUSION_PARTICIPANT_SOI', 'import.remede.inclusionSoi'],
 ]);
 
 // La clé du remède de chaque refus global de l'aperçu des objectifs (§ 10.4) :
@@ -348,11 +520,17 @@ const REMEDES_DE_LA_GRILLE = new Map([
   ['SEPARATEUR_INTROUVABLE', 'import.remede.separateurIntrouvableCollage'],
 ]);
 
-// Le remède d'un conflit fautif dans un texte collé : le corriger, puis le
-// coller de nouveau, là où celui d'un fichier dit de le réimporter.
+// Le remède d'un conflit ou d'une inclusion fautifs dans un texte collé :
+// le corriger, puis le coller de nouveau, là où celui d'un fichier dit de
+// le réimporter.
 const REMEDES_DU_COLLAGE = new Map([
   ['CONFLIT_ORGANISATION_INCONNUE', 'import.remede.conflitOrganisationCollage'],
   ['CONFLIT_ORGANISATION_PROPRE', 'import.remede.conflitPropreCollage'],
+  ['INCLUSION_ORGANISATION_INCONNUE', 'import.remede.inclusionOrganisationCollage'],
+  ['INCLUSION_ORGANISATION_PROPRE', 'import.remede.inclusionPropreCollage'],
+  ['INCLUSION_PARTICIPANT_INCONNU', 'import.remede.inclusionInconnueCollage'],
+  ['INCLUSION_PARTICIPANT_AMBIGU', 'import.remede.inclusionAmbigueCollage'],
+  ['INCLUSION_PARTICIPANT_SOI', 'import.remede.inclusionSoiCollage'],
 ]);
 
 // La valeur d'une table de clés, ou RangeError qui nomme ce qui manque :
@@ -379,16 +557,23 @@ function globalDeDecoder({ code, details }) {
 }
 
 // Le refus global d'un aperçu, null sans refus. Un collage auquel l'aperçu
-// offre l'ordre de la grille prend le remède qui le nomme, un conflit
-// fautif collé celui qui dit de coller de nouveau. Un refus que son texte
-// remédie déjà porte le seul geste qui y mène. Les détails portent le rang
-// que l'aperçu nomme, et l'organisation d'un conflit fautif.
+// offre l'ordre de la grille prend le remède qui le nomme, un conflit ou
+// une inclusion fautifs collés celui qui dit de coller de nouveau. Un refus
+// que son texte remédie déjà porte le seul geste qui y mène. Les détails
+// portent le rang que l'aperçu nomme, l'organisation d'un conflit ou d'une
+// inclusion d'organisation fautifs, et le nom d'une inclusion de
+// participant fautive.
 function globalDeLApercu(apercu, collage, nature) {
   const code = apercu.refusGlobal;
   if (code === null) return null;
   const rang = apercu.refusGlobalLigne;
   const organisation = apercu.refusGlobalOrganisation ?? null;
-  const details = { ...(rang === null ? {} : { ligne: rang }), ...(organisation === null ? {} : { organisation }) };
+  const nom = apercu.refusGlobalNom ?? null;
+  const details = {
+    ...(rang === null ? {} : { ligne: rang }),
+    ...(organisation === null ? {} : { organisation }),
+    ...(nom === null ? {} : { nom }),
+  };
   if (nature === 'objectifs') {
     const remede = dans(REMEDES_DES_OBJECTIFS, code, 'refus global des objectifs');
     const geste = GESTES_DES_OBJECTIFS.get(code) ?? null;
@@ -429,8 +614,9 @@ function colonnesDe({ entetes, association }, champs) {
 }
 
 // Une cellule de l'aperçu : un texte lu, une clé de libellé et ses détails,
-// ou une liste de noms — des étiquettes, des organisations en conflit —,
-// chacun une pastille, sous etiquettes ; les autres null.
+// ou une liste de noms — des étiquettes, des organisations en conflit ou
+// incluses, des personnes incluses —, chacun une pastille, sous etiquettes ;
+// les autres null.
 const cellule = (champ, { texte = null, cle = null, etiquettes = null, details = null }) => ({
   champ, texte, cle, etiquettes, details,
 });
@@ -446,21 +632,25 @@ function celluleDePresence(presence, { tours, inchangee }) {
   return cellule('presence', { cle: 'import.presence.tours', details: { tours: [...presence] } });
 }
 
-// Chaque ligne valide des participants : son rang, puis une cellule par
-// champ, dans l'ordre de CHAMPS : le texte lu, ou la clé de la valeur
-// d'« exclu » ; les étiquettes une à une, et de même les organisations en
-// conflit, aucune pour une cellule vide ; la présence par celluleDePresence,
-// sous le nombre de tours : « inchangée » seulement quand la colonne existe
-// et que la ligne désigne une personne existante (designees, que l'aperçu ne
-// remplit qu'en mise à jour).
+// Chaque ligne valide des participants : son rang, puis une cellule par champ
+// que montre le tableau (colonnesMontrees), dans l'ordre de CHAMPS : le texte
+// lu, ou la clé de la valeur d'« exclu » ou de l'animation réservée ; les
+// étiquettes une à une, et de même les organisations en conflit, les
+// organisations incluses et le nom affiché de chaque personne incluse, aucune
+// pour une cellule vide ; la présence par celluleDePresence, sous le nombre
+// de tours : « inchangée » seulement quand la colonne existe et que la ligne
+// désigne une personne existante (designees, que l'aperçu ne remplit qu'en
+// mise à jour).
 function lignesDesParticipants({ lignes, tours, association, designees }) {
   const colonne = association.colonnes.presence !== undefined;
   const designee = new Set(designees);
+  const montres = colonnesMontrees(association).map(({ champ }) => champ);
   return lignes.map(({ ligne, champs }) => ({
     ligne,
-    cellules: CHAMPS.map((champ) => {
+    cellules: montres.map((champ) => {
       const valeur = champs[CHAMPS_LUS.get(champ) ?? champ];
-      if (champ === 'exclu') return cellule(champ, { cle: valeur === null ? null : CLES_D_EXCLU.get(valeur) });
+      if (CHAMPS_OUI_NON.has(champ)) return cellule(champ, { cle: valeur === null ? null : CLES_OUI_NON.get(valeur) });
+      if (champ === 'inclusion_participant') return cellule(champ, { etiquettes: (valeur ?? []).map(({ nom }) => nom) });
       if (CHAMPS_EN_LISTE.has(champ)) return cellule(champ, { etiquettes: valeur ?? [] });
       if (champ === 'presence') return celluleDePresence(valeur, { tours, inchangee: colonne && designee.has(ligne) });
       return cellule(champ, { texte: valeur });
@@ -568,8 +758,9 @@ const RIEN = Object.freeze({
  * organisations, ni doublons, ni homonymes : ces listes y sont vides.
  *
  * La cause est le code du refus, sa propre clé ; ses détails sont ceux de
- * decoder, ou { ligne } quand l'aperçu nomme un rang, et { organisation }
- * sous un conflit fautif. Le remède d'un refus
+ * decoder, ou { ligne } quand l'aperçu nomme un rang, { organisation } sous
+ * un conflit ou une inclusion d'organisation fautifs, et { nom } sous une
+ * inclusion de participant fautive. Le remède d'un refus
  * de decoder est le code de details.remede, que le texte de la cause compose
  * déjà : remede.dansLaCause le dit, et l'écran ne le répète pas. remede.geste
  * est le remède du contrat (commande.js) qui y mène, null sans geste.
@@ -596,8 +787,9 @@ const RIEN = Object.freeze({
  *   global: null|{cle: string, details: Object,
  *     remede: {cle: string|null, details: Object, dansLaCause: boolean, geste: Object|null}},
  * }}
- *   champs : les colonnes du tableau des lignes de la nature ; encodage,
- *   separateur, colonnes[].cle et ambigus[].cle sont des clés de
+ *   champs : les colonnes du tableau des lignes de la nature, celles des
+ *   inclusions seulement quand le texte les associe (colonnesMontrees) ;
+ *   encodage, separateur, colonnes[].cle et ambigus[].cle sont des clés de
  *   traduction, comme lignes[].cellules[].cle — la valeur d'« exclu », la
  *   soirée, la règle d'un objectif, la présence —, que composent les
  *   détails de la cellule quand elle en porte ; refusees[].details, ceux
@@ -613,7 +805,7 @@ const RIEN = Object.freeze({
  */
 export function modeleApercu({ nature = 'participants', encodage = null, apercu = null, refusDecodage = null }) {
   const objectifs = exigerNature(nature) === 'objectifs';
-  const champs = objectifs ? COLONNES_DES_OBJECTIFS : COLONNES_DES_LIGNES;
+  const champs = objectifs ? COLONNES_DES_OBJECTIFS : colonnesMontrees(apercu?.association ?? { colonnes: {} });
   if (refusDecodage !== null) return { ...RIEN, champs, global: globalDeDecoder(refusDecodage) };
   if (apercu === null) return { ...RIEN, champs };
   const { entetes, association } = apercu;
@@ -650,7 +842,7 @@ export function modeleApercu({ nature = 'participants', encodage = null, apercu 
 /**
  * Le texte relu dans l'ordre de la grille, sous la nature des participants
  * seule : précédé d'une ligne d'en-têtes —
- * les largeur premiers de CHAMPS, puis des en-têtes vides au-delà de dix —,
+ * les largeur premiers de CHAMPS, puis des en-têtes vides au-delà de treize —,
  * joints par le séparateur de l'aperçu. Sous AUCUN_ENTETE d'un texte non
  * blanc, largeur vaut apercu.entetes.length ; sous SEPARATEUR_INTROUVABLE
  * sans candidat (refusGlobalLigne null : une seule colonne), largeur vaut 1

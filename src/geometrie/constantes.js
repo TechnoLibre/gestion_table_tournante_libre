@@ -168,6 +168,25 @@ export const CONSTANTES = Object.freeze(
         "n'a pas écrit le logiciel ; la plus petite lue sans erreur, écrite dans ce registre",
     },
     {
+      nom: 'HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM',
+      valeur: 3,
+      unite: 'mm',
+      mesure:
+        "hauteur de capitale sous laquelle le nom d'un badge, A6 ou carte Avery 5392, ne descend pas, même " +
+        'pour éviter le refus de la planche',
+      raison:
+        "un badge dont les tours ne tiennent pas même dépouillé réduit son nom sous le plancher plutôt que de " +
+        'refuser la planche (§ 11.5) ; à cette capitale, le nom reste le plus grand texte du badge, au-dessus du ' +
+        'plancher des tours',
+      configuration: 'badge A6 et carte Avery 5392 imprimés, police embarquée, lecture à un mètre',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche de chaque modèle à hauteurs décroissantes sous le plancher ; lecture " +
+        "à un mètre par une personne qui n'a pas écrit le logiciel ; la plus petite lue sans erreur, écrite " +
+        'dans ce registre',
+    },
+    {
       nom: 'CORPS_TOURS_PT',
       valeur: 14,
       unite: 'pt',
@@ -207,6 +226,21 @@ export const CONSTANTES = Object.freeze(
         'le corps retenu, écrit dans ce registre',
     },
     {
+      nom: 'CORPS_ORGANISATION_PLANCHER_PT',
+      valeur: 8,
+      unite: 'pt',
+      mesure: "corps sous lequel l'organisation d'un badge, A6 ou carte Avery 5392, ne descend pas",
+      raison:
+        "une organisation longue se replie sans s'abréger, puis rapetisse pour laisser la place aux tours ; " +
+        "en deçà, elle se retire du badge dans l'ordre de sacrifice plutôt que de devenir illisible (§ 11.5)",
+      configuration: 'badge A6 et carte Avery 5392 imprimés, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche de chaque modèle à corps décroissants ; lecture en main par une " +
+        "personne qui n'a pas écrit le logiciel ; le plus petit corps lu sans erreur, écrit dans ce registre",
+    },
+    {
       nom: 'CORPS_PIED_PT',
       valeur: 8,
       unite: 'pt',
@@ -218,6 +252,22 @@ export const CONSTANTES = Object.freeze(
       protocole:
         "impression réelle d'une planche ; lecture en main par une personne qui n'a pas écrit le logiciel ; " +
         'le corps retenu, écrit dans ce registre',
+    },
+    {
+      nom: 'CORPS_PIED_PLANCHER_PT',
+      valeur: 5,
+      unite: 'pt',
+      mesure: "corps sous lequel le pied d'un badge, A6 ou carte Avery 5392, ne descend pas",
+      raison:
+        "un badge dont les tours ne tiennent pas, le nom au plancher, réduit son pied avant de perdre un texte " +
+        "et avant de passer son nom sous son plancher (§ 11.5) ; en deçà, la date et l'horodatage ne se lisent " +
+        'plus en main',
+      configuration: 'badge A6 et carte Avery 5392 imprimés, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche de chaque modèle à corps décroissants ; lecture en main par une " +
+        "personne qui n'a pas écrit le logiciel ; le plus petit corps lu sans erreur, écrit dans ce registre",
     },
     {
       nom: 'ZONE_SILENCE_CARTE_MM',
@@ -353,6 +403,38 @@ export const CONSTANTES = Object.freeze(
       protocole:
         "impression réelle d'une planche de chaque modèle ; lecture en main par une personne qui n'a pas écrit " +
         'le logiciel ; le plus petit dégagement qui sépare le logo du texte, écrit dans ce registre',
+    },
+    {
+      nom: 'IMAGE_BADGES_HAUTEUR_MAX_MM',
+      valeur: 30,
+      unite: 'mm',
+      mesure: "hauteur de l'image des badges sur un badge A6, à la plus grande taille que la mise en page lui donne",
+      raison:
+        "l'image se pose sur tous les badges et se reconnaît d'un coup d'œil ; plafonnée, elle garde la même " +
+        "taille d'un badge à l'autre et laisse au logo du participant la place qu'elle ne prend pas (§ 11.4)",
+      configuration: 'badge A6 imprimé, images de proportions variées, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche, l'image à hauteurs décroissantes, sous un nom d'une ligne et trois " +
+        "tours ; lecture en main par une personne qui n'a pas écrit le logiciel ; la hauteur retenue, écrite " +
+        'dans ce registre',
+    },
+    {
+      nom: 'IMAGE_BADGES_HAUTEUR_MAX_CARTE_MM',
+      valeur: 15,
+      unite: 'mm',
+      mesure: "hauteur de l'image des badges sur une carte Avery 5392, à la plus grande taille que la mise en page lui donne",
+      raison:
+        "sur 66,2 mm de hauteur utile, l'image à cette hauteur tient sous un nom d'une ligne, son organisation " +
+        'et deux tours, avec le pied TechnoLibre à son corps de départ (§ 11.4)',
+      configuration: 'carte Avery 5392 imprimée, images de proportions variées, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une feuille de cartes, l'image à hauteurs décroissantes, sous un nom d'une ligne et " +
+        "trois tours ; lecture en main par une personne qui n'a pas écrit le logiciel ; la hauteur retenue, " +
+        'écrite dans ce registre',
     },
     {
       nom: 'CORPS_MIN_IMPRESSION_MM',

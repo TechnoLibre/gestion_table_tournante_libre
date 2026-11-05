@@ -200,6 +200,10 @@ export const TABLE = new Map([
   ['coquille.apropos.fonctionnalite.pre12', 'Télécharger les modèles CSV et les fichiers d\u{2019}exemple'],
   ['coquille.apropos.fonctionnalite.pre13', 'Donner un libellé aux tables'],
   ['coquille.apropos.fonctionnalite.pre14', 'Donner un logo aux personnes'],
+  [
+    'coquille.apropos.fonctionnalite.pre15',
+    "Nommer les inclusions d'une personne : organisations et participants à rencontrer au moins une fois",
+  ],
   ['coquille.apropos.fonctionnalite.pla01', 'Disposer les tables sur un plan de salle à l\u{2019}échelle'],
   ['coquille.apropos.fonctionnalite.pla02', 'Déplacer et échanger les personnes sur le plan, au pointeur, au doigt ou par menu'],
   ['coquille.apropos.fonctionnalite.pla03', 'Désigner les animateurs, table par table'],
@@ -217,6 +221,7 @@ export const TABLE = new Map([
   ['coquille.apropos.fonctionnalite.pla15', 'Ajuster le placement retenu, qui suit les présences'],
   ['coquille.apropos.fonctionnalite.pla16', 'Signaler les tables en conflit sur le plan'],
   ['coquille.apropos.fonctionnalite.pla17', 'Inscrire le numéro de chaque table sur son plateau'],
+  ['coquille.apropos.fonctionnalite.pla18', "Voir chaque inclusion non satisfaite d'une proposition"],
   ['coquille.apropos.fonctionnalite.pro01', 'Produire la planche de badges en PDF, sur A4 ou Lettre'],
   ['coquille.apropos.fonctionnalite.pro02', 'Vérifier le découpage par la feuille de contrôle'],
   ['coquille.apropos.fonctionnalite.pro03', 'Ordonner les badges pour l\u{2019}accueil'],
@@ -225,6 +230,7 @@ export const TABLE = new Map([
   ['coquille.apropos.fonctionnalite.pro06', 'Imprimer une feuille par table'],
   ['coquille.apropos.fonctionnalite.pro07', 'Imprimer le plan de salle, tour par tour'],
   ['coquille.apropos.fonctionnalite.pro08', 'Marquer BROUILLON ce qui n\u{2019}est pas retenu'],
+  ['coquille.apropos.fonctionnalite.pro09', 'Produire la liste des badges en CSV, pour un tableur'],
   ['coquille.apropos.fonctionnalite.fic01', 'Garder chaque événement dans des fichiers ordinaires, listés au premier écran'],
   ['coquille.apropos.fonctionnalite.fic02', 'Enregistrer chaque geste avec son entrée d\u{2019}historique'],
   ['coquille.apropos.fonctionnalite.fic03', 'Revenir à un instant de l\u{2019}historique'],
@@ -253,5 +259,5 @@ export const TABLE = new Map([
   ['coquille.section.generation', 'Génération'],
   ['coquille.section.propositions', 'Propositions'],
   ['coquille.section.qualite', 'Qualité'],
-  ['coquille.section.badges', 'Badges'],
+  ['coquille.section.badges', 'Impression'],
 ]);

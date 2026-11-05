@@ -21,7 +21,8 @@
 // (« 24 sur 27 ») ; la seconde table, la répartition des rencontres. Dès
 // qu'une personne mesurée manque un tour, la ligne écrit ses absences,
 // « absente à 2 tours », vide pour qui vient à chaque tour : un tour
-// d'absence n'est pas un tour non assis.
+// d'absence n'est pas un tour non assis. La marque d'un rang à plafond
+// réalisé nul y renvoie à son écart d'itinéraire.
 
 /** Les graduations de l'axe du second graphique : une valeur, écrite par
  *  format.nombre, suivie du signe sous la clé de l'axe (contrainte 44). */
@@ -53,6 +54,17 @@ const DES_ORGANISATIONS = new Set(['organisations', 'borneDiversite']);
 // Les colonnes de la répartition des rencontres : la valeur, l'effectif,
 // l'effectif cumulé, les personnes à leur plafond réalisé.
 const COLONNES_REPARTITION = ['valeur', 'effectif', 'cumul', 'auPlafond'];
+
+// La marque d'un rang dans sa ligne, null sans marque : le libellé de son
+// signe, celui de la légende. À plafond réalisé nul, la ligne renvoie à
+// l'écart d'itinéraire (§ 12.6) — le plafond a priori moins un plafond
+// réalisé nul, soit le plafond a priori lui-même —, « inconnu » quand le
+// plafond a priori l'est : un manque nul n'y enseigne rien.
+function marqueDeLigne({ marque, plafondAPriori }, t) {
+  if (marque === null) return null;
+  if (marque === 'plafondNul') return t('qualite.profil.marqueLigne.plafondNul', { ecart: plafondAPriori });
+  return t(`qualite.profil.marque.${marque}`);
+}
 
 /**
  * Le profil d'une source mesurée : null sans détail comparable ou sans
@@ -111,7 +123,7 @@ export function profilDe(detail, { t }) {
       },
       plafondAPriori: rang.plafondAPriori,
       toursNonAssis: rang.toursNonAssis,
-      marque: rang.marque === null ? null : t(`qualite.profil.marque.${rang.marque}`),
+      marque: marqueDeLigne(rang, t),
     };
     if (colonnesOrganisations) {
       ligne.organisations = rang.organisations;

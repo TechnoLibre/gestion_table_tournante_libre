@@ -3,14 +3,19 @@
 
 // Épreuves de l'import appliqué (§ 10.1, § 14.10) : ajouter, mettre à jour,
 // remplacer, et ce que remplacer annonce avant d'agir ; l'import selon l'état
-// du plan ; les refus globaux ; les identifiants jamais réutilisés ; le CSV
-// des lignes refusées, sa forme, et la boucle qui le corrige et le réimporte
-// tel quel ; la colonne des étiquettes, qu'une personne créée porte rangée
-// et qu'une mise à jour remplace sans jamais l'effacer ; la colonne de la
-// présence, écrite canonique, gardée par une cellule vide en mise à jour,
-// et refusée sous un aperçu calculé pour un autre nombre de tours ; les
-// titres que pourvoient les seules personnes présentes. Les marques
-// combinantes s'écrivent par leur point de code.
+// du plan ; les refus globaux, et celui d'un compteur qui ne suffit pas aux
+// personnes créées ; les identifiants jamais réutilisés ; le CSV des lignes
+// refusées, sa forme, et la boucle qui le corrige et le réimporte tel quel ;
+// la colonne des étiquettes, qu'une personne créée porte rangée et qu'une
+// mise à jour remplace sans jamais l'effacer ; la colonne de la présence,
+// écrite canonique, gardée par une cellule vide en mise à jour, et refusée
+// sous un aperçu calculé pour un autre nombre de tours ; les titres que
+// pourvoient les seules personnes présentes ; la marque du nom numéroté, que
+// porte la seule personne créée d'une ligne renommée par « Rendre les noms
+// uniques » ; les colonnes des inclusions, dont chaque personne nommée
+// devient un identifiant, celui d'une ligne du fichier compris, et ce que
+// remplacer en retire. Les marques combinantes s'écrivent par leur point de
+// code.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { serialiser } from '../stockage/canonique.js';
@@ -23,6 +28,7 @@ import { ErreurCsv } from './erreurs.js';
 import { exporterParticipants } from './export.js';
 import { appliquerImport, bilanRemplacement, exporterRefus, pourvoyeursDesTitres } from './import.js';
 import { decouper } from './lecture.js';
+import { rendreNomsUniques } from './noms_uniques.js';
 
 const MARQUE = '\u{FEFF}';
 
@@ -645,7 +651,7 @@ describe('appliquerImport : remplacer, et ce que remplacer annonce (§ 10.1)', (
       propositions: [proposition(1, [1, 2, 3])],
       attribuerSieges: true,
     });
-    assert.deepEqual(bilanRemplacement(charge), { participants: 3, reservations: 2, titresPourvus: 1, propositions: 1 });
+    assert.deepEqual(bilanRemplacement(charge), { participants: 3, reservations: 2, titresPourvus: 1, propositions: 1, inclusions: 0 });
   });
 
   test("le bilan annonce ce que remplacer retire : participants et réservations du résumé, titres et propositions gardés", () => {
@@ -668,7 +674,7 @@ describe('appliquerImport : remplacer, et ce que remplacer annonce (§ 10.1)', (
     // personne exclue. Titre (2, 1) : réservé au tour 2 seulement. Titre
     // (2, 2) : la réservation de la table 2 ne désigne aucun siège.
     assert.deepEqual(bilanRemplacement(chargeGarnie({ attribuerSieges: true })), {
-      participants: 4, reservations: 4, titresPourvus: 2, propositions: 2,
+      participants: 4, reservations: 4, titresPourvus: 2, propositions: 2, inclusions: 0,
     });
   });
 
@@ -689,7 +695,7 @@ describe('appliquerImport : remplacer, et ce que remplacer annonce (§ 10.1)', (
       ],
       titres: [titre(1, 1), titre(1, 2), titre(1, 3), titre(2, 1), titre(3, 1), titre(3, 2), titre(4, 1)],
     });
-    assert.deepEqual(bilanRemplacement(charge), { participants: 8, reservations: 8, titresPourvus: 5, propositions: 0 });
+    assert.deepEqual(bilanRemplacement(charge), { participants: 8, reservations: 8, titresPourvus: 5, propositions: 0, inclusions: 0 });
     assert.equal(bilanRemplacement(chargeGarnie()).titresPourvus, 3);
   });
 
@@ -909,6 +915,229 @@ describe("appliquerImport : la colonne des conflits d'organisation (§ 10.1)", (
   });
 });
 
+describe('appliquerImport : les colonnes des inclusions (§ 10.1)', () => {
+  test('une personne créée porte ses inclusions rangées après ses conflits, les personnes en identifiants croissants, celles du fichier comprises, même plus bas', () => {
+    const charge = chargeDe({
+      participants: [personne(1, 'Houle', 'Basile', 'Club des Merles'), personne(4, 'Ombrelle', 'Iris')],
+      prochain: 9,
+    });
+    const { charge: apres, resume } = importer(
+      charge,
+      csv(
+        'nom;prenom;organisation;conflits;inclusion_organisation;inclusion_participant',
+        'Pervenche;Théo;;Société Alpha;Société Alpha | club des merles;Ondine Lacasse | Iris Ombrelle | basile houle',
+        'Lacasse;Ondine;Société Alpha;;;',
+        'Sarcelle;;;;;Théo Pervenche',
+      ),
+      'ajouter',
+    );
+    assert.deepEqual(apres.participants.slice(2), [
+      personne(9, 'Pervenche', 'Théo', null, {
+        conflits: ['Société Alpha'], inclusionsOrganisation: ['Club des Merles', 'Société Alpha'], inclusionsParticipant: [1, 4, 10],
+      }),
+      personne(10, 'Lacasse', 'Ondine', 'Société Alpha'),
+      personne(11, 'Sarcelle', null, null, { inclusionsParticipant: [9] }),
+    ]);
+    assert.deepEqual(Object.keys(apres.participants[2]).slice(-3), ['conflits', 'inclusionsOrganisation', 'inclusionsParticipant']);
+    assert.equal(resume.ajoutes, 3);
+    assert.deepEqual(analyser(serialiser(apres, { revision: 1, produitVersion: VERSION.affichee })).charge, apres);
+  });
+
+  test('remplacer : les personnes du fichier seules, numérotées à la suite du compteur', () => {
+    const charge = chargeGarnie();
+    const { charge: apres } = importer(charge, csv('nom;prenom;inclusion_participant', 'Bruyère;Anouk;Ondine Sarcelle', 'Sarcelle;Ondine;'), 'remplacer');
+    assert.deepEqual(apres.participants, [personne(9, 'Bruyère', 'Anouk', null, { inclusionsParticipant: [10] }), personne(10, 'Sarcelle', 'Ondine')]);
+  });
+
+  test('en mise à jour, une cellule non vide remplace sa liste, une cellule vide la garde ; une personne mise à jour ou ajoutée se vise par son identifiant ; la même liste ne compte pas la personne modifiée', () => {
+    const charge = chargeDe({
+      participants: [
+        personne(1, 'Ombrelle', 'Iris', 'Club des Merles', { inclusionsParticipant: [2] }),
+        personne(2, 'Pervenche', 'Théo', null, { inclusionsOrganisation: ['Club des Merles'] }),
+        personne(3, 'Lacasse', 'Ondine', 'Société Alpha', { inclusionsParticipant: [1, 2] }),
+      ],
+      prochain: 7,
+    });
+    const { charge: apres, resume } = importer(
+      charge,
+      csv(
+        'nom;prenom;inclusion_organisation;inclusion_participant',
+        'Ombrelle;Iris;société alpha;Théo Pervenche | Basile Houle',
+        'Pervenche;Théo;;',
+        'Lacasse;Ondine;;"Théo Pervenche; Iris Ombrelle"',
+        'Houle;Basile;;Iris Ombrelle',
+      ),
+      'mettreAJour',
+    );
+    assert.deepEqual(
+      apres.participants.map(({ id, inclusionsOrganisation, inclusionsParticipant }) => [id, inclusionsOrganisation, inclusionsParticipant]),
+      [
+        [1, ['Société Alpha'], [2, 7]],
+        [2, ['Club des Merles'], undefined],
+        [3, undefined, [1, 2]],
+        [7, undefined, [1]],
+      ],
+    );
+    assert.deepEqual([resume.ajoutes, resume.misAJour, resume.inchanges], [1, 1, 2]);
+  });
+
+  test("un aperçu refusé pour une inclusion refuse l'import : son code, son rang et l'organisation ou le nom dans les détails ; la charge reste", () => {
+    for (const mode of MODES) {
+      const charge = chargeDe({ participants: [personne(1, 'Houle', 'Basile', 'Club des Merles')] });
+      const avant = structuredClone(charge);
+      assert.throws(
+        () => importer(charge, csv('nom;inclusion_organisation', 'Ombrelle;Société Gamma'), mode),
+        refus('INCLUSION_ORGANISATION_INCONNUE', { ligne: 2, organisation: 'Société Gamma' }),
+        mode,
+      );
+      assert.throws(
+        () => importer(charge, csv('nom;prenom;inclusion_participant', 'Ombrelle;Iris;Basile Houl'), mode),
+        refus('INCLUSION_PARTICIPANT_INCONNU', { ligne: 2, nom: 'Basile Houl' }),
+        mode,
+      );
+      assert.throws(
+        () => importer(charge, csv('nom;prenom;inclusion_participant', 'Ombrelle;Iris;Iris Ombrelle'), mode),
+        refus('INCLUSION_PARTICIPANT_SOI', { ligne: 2, nom: 'Iris Ombrelle' }),
+        mode,
+      );
+      assert.deepEqual(charge, avant, mode);
+    }
+  });
+
+  test('bilanRemplacement compte les inclusions des personnes retirées, d’organisation et de participant', () => {
+    const charge = chargeDe({
+      participants: [
+        personne(1, 'Ombrelle', 'Iris', 'Club des Merles', { inclusionsParticipant: [2, 3] }),
+        personne(2, 'Pervenche', 'Théo', null, { inclusionsOrganisation: ['Club des Merles'], inclusionsParticipant: [1] }),
+        personne(3, 'Lacasse'),
+      ],
+    });
+    assert.equal(bilanRemplacement(charge).inclusions, 4);
+  });
+});
+
+describe('appliquerImport : la marque du nom numéroté (§ 8.9, § 10.1)', () => {
+  // Aperçu du texte dans le mode, ses doublons rendus uniques comme le fait
+  // « Rendre les noms uniques », puis import dans ce même mode.
+  function importerRendu(charge, texte, mode) {
+    const options = { participants: charge.participants, tables: charge.tables, mode, tours: charge.evenement.tours };
+    const apercu = apercevoir(texte, options);
+    return appliquerImport(charge, apercevoir(texte, { ...options, noms: rendreNomsUniques(apercu, charge.participants) }), mode);
+  }
+  const relue = (charge) => analyser(serialiser(charge, { revision: 1, produitVersion: VERSION.affichee })).charge;
+  const DOUBLONS = csv('nom;prenom', 'Galet;Roger', 'Galet;Roger');
+
+  test('ajouter : chaque personne créée d’une ligne renommée porte la marque, en dernière clé ; les autres non', () => {
+    const charge = chargeDe({ participants: [personne(1, 'Galet', 'Roger')] });
+    const { charge: apres, resume } = importerRendu(charge, csv('nom;prenom', 'Galet;Roger', 'Houle;Iris', 'Galet;Roger'), 'ajouter');
+    assert.deepEqual(apres.participants, [
+      personne(1, 'Galet', 'Roger'),
+      personne(2, 'Galet 01', 'Roger', null, { nomNumerote: true }),
+      personne(3, 'Houle', 'Iris'),
+      personne(4, 'Galet 02', 'Roger', null, { nomNumerote: true }),
+    ]);
+    assert.equal(Object.keys(apres.participants[1]).at(-1), 'nomNumerote');
+    assert.deepEqual(resume, resumeDe({ ajoutes: 3 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('mettre à jour : la ligne ajoutée sous un nom rendu porte la marque ; la personne mise à jour ne la reçoit ni ne la perd', () => {
+    const charge = chargeDe({
+      participants: [personne(1, 'Galet', 'Roger'), personne(2, 'Houle 01', 'Iris', null, { nomNumerote: true })],
+    });
+    const texte = csv('nom;prenom;courriel', 'Galet;Roger;roger@exemple.test', 'Galet;Roger;', 'HOULE 01;Iris;iris@exemple.test');
+    const { charge: apres, resume } = importerRendu(charge, texte, 'mettreAJour');
+    assert.deepEqual(apres.participants, [
+      personne(1, 'Galet', 'Roger', null, { courriel: 'roger@exemple.test' }),
+      personne(2, 'HOULE 01', 'Iris', null, { courriel: 'iris@exemple.test', nomNumerote: true }),
+      personne(3, 'Galet 01', 'Roger', null, { nomNumerote: true }),
+    ]);
+    assert.deepEqual(resume, resumeDe({ ajoutes: 1, misAJour: 2 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('mettre à jour : un nom posé qui ne finit plus par une espace et un numéro fait tomber la marque, et le fichier reste lisible', () => {
+    const charge = chargeDe({
+      participants: [
+        personne(1, 'Houle 01', 'Iris', null, { nomNumerote: true }),
+        personne(2, 'Galet 02', 'Roger', null, { nomNumerote: true }),
+      ],
+    });
+    const texte = csv('nom;prenom', 'Houle\u{A0}01;Iris', 'Galet 0\u{301}2;Roger');
+    const { charge: apres, resume } = importer(charge, texte, 'mettreAJour');
+    assert.deepEqual(apres.participants, [personne(1, 'Houle\u{A0}01', 'Iris'), personne(2, 'Galet 0\u{301}2', 'Roger')]);
+    assert.deepEqual(resume, resumeDe({ misAJour: 2 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('remplacer : la marque d’une personne retirée part avec elle ; la ligne renommée la porte', () => {
+    const charge = chargeDe({ participants: [personne(1, 'Galet 01', 'Roger', null, { nomNumerote: true })] });
+    const { charge: apres, resume } = importerRendu(charge, DOUBLONS, 'remplacer');
+    assert.deepEqual(apres.participants, [
+      personne(2, 'Galet', 'Roger'),
+      personne(3, 'Galet 01', 'Roger', null, { nomNumerote: true }),
+    ]);
+    assert.deepEqual(resume, resumeDe({ ajoutes: 2, retires: 1 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('dans chaque mode, un nom qui finit par un numéro dans sa cellule ne porte pas la marque', () => {
+    for (const mode of MODES) {
+      const { charge: apres } = importer(chargeDe(), csv('nom;prenom', 'Galet 01;Roger', 'Galet 02;Lise'), mode);
+      assert.deepEqual(apres.participants.map((participant) => Object.hasOwn(participant, 'nomNumerote')), [false, false], mode);
+    }
+  });
+});
+
+describe('appliquerImport : l’animation réservée (§ 4, § 10.1)', () => {
+  const relue = (charge) => analyser(serialiser(charge, { revision: 1, produitVersion: VERSION.affichee })).charge;
+
+  test('ajouter : « oui » pose la marque, « non » et vide la laissent absente ; la charge se relit', () => {
+    const texte = csv('nom;prenom;titre_pressenti;animation_reservee', 'Galet;Roger;Animation table d’honneur;oui', 'Houle;Iris;;non', 'Ombrelle;;;');
+    const { charge: apres, resume } = importer(chargeDe(), texte, 'ajouter');
+    assert.deepEqual(apres.participants, [
+      personne(1, 'Galet', 'Roger', null, { titrePressenti: 'Animation table d’honneur', animationReservee: true }),
+      personne(2, 'Houle', 'Iris'),
+      personne(3, 'Ombrelle', null),
+    ]);
+    assert.deepEqual(resume, resumeDe({ ajoutes: 3 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('l’import ne désigne personne : ni réservation ni titre ne s’ajoutent', () => {
+    const { charge: apres } = importer(chargeDe(), csv('nom;animation réservée', 'Galet;x'), 'ajouter');
+    assert.deepEqual([apres.reservations, apres.titres], [[], []]);
+  });
+
+  test('mettre à jour : une cellule non vide pose ou retire la marque, une cellule vide la garde ; la même valeur ne modifie personne', () => {
+    const charge = chargeDe({
+      participants: [
+        personne(1, 'Galet', 'Roger', null, { animationReservee: true }),
+        personne(2, 'Houle', 'Iris', null, { animationReservee: true }),
+        personne(3, 'Ombrelle', 'Iris'),
+        personne(4, 'Pervenche', 'Théo'),
+      ],
+    });
+    const texte = csv('nom;prenom;animation_reservee', 'Galet;Roger;non', 'Houle;Iris;', 'Ombrelle;Iris;oui', 'Pervenche;Théo;non');
+    const { charge: apres, resume } = importer(charge, texte, 'mettreAJour');
+    assert.deepEqual(apres.participants, [
+      personne(1, 'Galet', 'Roger'),
+      personne(2, 'Houle', 'Iris', null, { animationReservee: true }),
+      personne(3, 'Ombrelle', 'Iris', null, { animationReservee: true }),
+      personne(4, 'Pervenche', 'Théo'),
+    ]);
+    assert.deepEqual(resume, resumeDe({ misAJour: 2, inchanges: 2 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('une valeur inconnue refuse la ligne, ANIMATION_INCONNUE, et le CSV des refus la reprend avec son motif', () => {
+    const texte = csv('nom;animation_reservee', 'Galet;oui', 'Houle;Table d’honneur');
+    const { charge: apres, resume } = importer(chargeDe(), texte, 'ajouter');
+    assert.deepEqual(apres.participants, [personne(1, 'Galet', null, null, { animationReservee: true })]);
+    assert.deepEqual(resume.refusees.map(({ ligne, code, valeur }) => [ligne, code, valeur]), [[3, 'ANIMATION_INCONNUE', 'Table d’honneur']]);
+  });
+});
+
 describe('appliquerImport : les refus globaux (§ 10.1)', () => {
   test("le refus global de l'aperçu, son rang dans les détails", () => {
     const charge = chargeDe();
@@ -965,6 +1194,34 @@ describe('appliquerImport : les refus globaux (§ 10.1)', () => {
     assert.deepEqual(apercu.doublons, []);
     const { charge: apres } = appliquerImport(charge, apercu, 'remplacer');
     assert.deepEqual(apres.participants, [personne(2, 'Ombrelle', 'Iris', 'club des merles')]);
+  });
+
+  test("un compteur qui ne suffit pas aux personnes créées refuse l'import entier, COMPTEUR_SATURE, après l'ambiguïté ; 2^31 − 2, le dernier identifiant, s'attribue, et la charge rendue se relit", () => {
+    const DERNIER = 2 ** 31 - 2;
+    const SATURE = refus('COMPTEUR_SATURE', { compteur: 'participant' });
+    for (const mode of MODES) {
+      const charge = chargeDe({ participants: [personne(1, 'Ombrelle', 'Iris')], prochain: DERNIER });
+      const { charge: apres, resume } = importer(charge, csv('nom', 'Bruyère'), mode);
+      assert.equal(resume.ajoutes, 1, mode);
+      assert.equal(apres.participants.at(-1).id, DERNIER, mode);
+      assert.equal(apres.prochainsIds.participant, DERNIER + 1, mode);
+      const relue = analyser(serialiser(apres, { revision: 2, produitVersion: VERSION.affichee })).charge;
+      assert.deepEqual(relue.participants, apres.participants, mode);
+      const avant = structuredClone(charge);
+      assert.throws(() => importer(charge, csv('nom', 'Bruyère', 'Lacasse'), mode), SATURE, mode);
+      assert.deepEqual(charge, avant, mode);
+      const saturee = chargeDe({ participants: [personne(1, 'Ombrelle', 'Iris')], prochain: DERNIER + 1 });
+      assert.throws(() => importer(saturee, csv('nom', 'Bruyère'), mode), SATURE, mode);
+      const ambigu = csv('nom;organisation;entreprise', 'Bruyère;Club des Merles;Société Alpha');
+      assert.throws(() => importer(saturee, ambigu, mode), refus('AMBIGUITE', { champs: ['organisation'] }), mode);
+    }
+    // En mise à jour, seule une ligne qui ne désigne personne demande un
+    // identifiant : sous un compteur saturé, la personne désignée change.
+    const saturee = chargeDe({ participants: [personne(1, 'Ombrelle', 'Iris')], prochain: DERNIER + 1 });
+    const { charge: apres, resume } = importer(saturee, csv('nom;prenom;notes', 'Ombrelle;Iris;au fond'), 'mettreAJour');
+    assert.deepEqual(resume, resumeDe({ misAJour: 1 }));
+    assert.equal(apres.participants[0].notes, 'au fond');
+    assert.throws(() => importer(saturee, csv('nom;prenom', 'Ombrelle;Iris', 'Bruyère;Anouk'), 'mettreAJour'), SATURE);
   });
 
   test('un mode inconnu lève TypeError', () => {

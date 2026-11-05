@@ -27,7 +27,7 @@ export const EXEMPLES = [
   ['COMPTEUR_SATURE', { compteur: 'proposition' }],
   ['NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' }],
   ['TROP_VOLUMINEUX', { chemin: 'affiche-lucioles.png', dossier: 'E:\\images', taille: 31_457_281, max: 26_214_400 }],
-  ['LOGOS_NON_COPIES', { evenement: 'Soirée des Lucioles', logos: 2, personnes: 3 }],
+  ['LOGOS_NON_COPIES', { evenement: 'Soirée des Lucioles', logos: 2, personnes: 3, imageBadges: false }],
   // Raisons d'un état illisible
   ['VIDE', {}],
   ['JSON', {}],
@@ -88,23 +88,39 @@ export const TEXTES = [
   // en portent un, ou, sans personne, l'historique qui seul y renvoie.
   [
     'LOGOS_NON_COPIES',
-    { evenement: 'Soirée des Lucioles', logos: 2, personnes: 3 },
+    { evenement: 'Soirée des Lucioles', logos: 2, personnes: 3, imageBadges: false },
     "« Soirée des Lucioles » : 2 logos ne se sont pas recopiés, et 3 personnes y ont un logo introuvable. " +
       "Les originaux restent dans le dossier logo de l'événement d'origine : les recopier à la main dans " +
       'celui-ci les rend.',
   ],
   [
     'LOGOS_NON_COPIES',
-    { evenement: 'Soirée des Lucioles', logos: 1, personnes: 1 },
+    { evenement: 'Soirée des Lucioles', logos: 1, personnes: 1, imageBadges: false },
     "« Soirée des Lucioles » : 1 logo ne s'est pas recopié, et 1 personne y a un logo introuvable. " +
       "L'original reste dans le dossier logo de l'événement d'origine : le recopier à la main dans " +
       'celui-ci le rend.',
   ],
   [
     'LOGOS_NON_COPIES',
-    { evenement: 'Soirée des Lucioles', logos: 1, personnes: 0 },
+    { evenement: 'Soirée des Lucioles', logos: 1, personnes: 0, imageBadges: false },
     "« Soirée des Lucioles » : 1 logo ne s'est pas recopié ; aucune personne ne le porte. L'original reste " +
       "dans le dossier logo de l'événement d'origine : le recopier à la main dans celui-ci le rend.",
+  ],
+  // L'image des badges restée en arrière : une phrase le dit, accordée au
+  // compte des fichiers.
+  [
+    'LOGOS_NON_COPIES',
+    { evenement: 'Soirée des Lucioles', logos: 1, personnes: 0, imageBadges: true },
+    "« Soirée des Lucioles » : 1 logo ne s'est pas recopié ; aucune personne ne le porte. C'est l'image " +
+      "des badges : les badges s'impriment sans elle tant qu'elle manque. L'original reste dans le " +
+      "dossier logo de l'événement d'origine : le recopier à la main dans celui-ci le rend.",
+  ],
+  [
+    'LOGOS_NON_COPIES',
+    { evenement: 'Soirée des Lucioles', logos: 2, personnes: 3, imageBadges: true },
+    "« Soirée des Lucioles » : 2 logos ne se sont pas recopiés, et 3 personnes y ont un logo introuvable. " +
+      "L'image des badges en est un : les badges s'impriment sans elle tant qu'elle manque. Les originaux " +
+      "restent dans le dossier logo de l'événement d'origine : les recopier à la main dans celui-ci les rend.",
   ],
   // La taille se dit en mégaoctets d'une décimale, arrondie au-dessus : un
   // fichier d'un octet de trop ne se dit jamais du poids du plafond.
@@ -170,5 +186,40 @@ export const TEXTES = [
     "L'historique à côté de ce fichier ne se lit pas. Son format est trop ancien (format 2) : " +
       "il n'est plus pris en charge. Il est laissé tel quel, et le prochain geste commence l'historique " +
       'dans un nouveau fichier.',
+  ],
+  // L'ouvreur du système en échec dit que l'ouverture a échoué, sa cause
+  // citée ; une commande que la plateforme n'offre pas se dit absente.
+  ['NON_DISPONIBLE', { cause: 'xdg-open : statut 3' }, "L'ouverture a échoué (xdg-open : statut 3)."],
+  ['NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' }, "Cette commande n'est pas offerte ici."],
+  // Des réglages locaux qui ne se lisent pas disent la raison en clair :
+  // LECTURE ne se cite jamais, la cause du système se cite ; des octets hors
+  // UTF-8 et un lien qui sort du dossier ont leur phrase.
+  [
+    'REGLAGES_ILLISIBLES',
+    { chemin: 'reglages_locaux.json', raison: 'LECTURE' },
+    'Les réglages locaux « reglages_locaux.json » ne se lisent pas. Le système en refuse la lecture. ' +
+      'Le fichier reste tel quel : le papier choisi vaut pour cette séance, sans être retenu sur cette ' +
+      "machine, et le cadrage n'est pas retenu.",
+  ],
+  [
+    'REGLAGES_ILLISIBLES',
+    { chemin: 'reglages_locaux.json', raison: 'LECTURE', cause: 'EACCES' },
+    'Les réglages locaux « reglages_locaux.json » ne se lisent pas. Le système en refuse la lecture (EACCES). ' +
+      'Le fichier reste tel quel : le papier choisi vaut pour cette séance, sans être retenu sur cette ' +
+      "machine, et le cadrage n'est pas retenu.",
+  ],
+  [
+    'REGLAGES_ILLISIBLES',
+    { chemin: 'reglages_locaux.json', raison: 'LECTURE', cause: 'UTF8_INVALIDE' },
+    "Les réglages locaux « reglages_locaux.json » ne se lisent pas. Le fichier n'est pas encodé en UTF-8 : " +
+      'réenregistré en UTF-8, il se relit. Le fichier reste tel quel : le papier choisi vaut pour cette ' +
+      "séance, sans être retenu sur cette machine, et le cadrage n'est pas retenu.",
+  ],
+  [
+    'REGLAGES_ILLISIBLES',
+    { chemin: 'reglages_locaux.json', raison: 'CHEMIN_REFUSE' },
+    'Les réglages locaux « reglages_locaux.json » ne se lisent pas. Le fichier mène hors du dossier de ' +
+      "travail, par un lien : l'application ne le suit pas. Le fichier reste tel quel : le papier choisi " +
+      "vaut pour cette séance, sans être retenu sur cette machine, et le cadrage n'est pas retenu.",
   ],
 ];

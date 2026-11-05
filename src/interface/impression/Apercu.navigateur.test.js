@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'aperçu avant impression dans un vrai moteur de rendu (§ 11.7, § 8.4,
-// § 8.5, § 14.5, § 18.6) : l'écran data-ecran="apercu", que la commande
-// « Imprimer… » de la tête de l'événement ouvre, et son document imprimé
+// § 8.5, § 14.5, § 18.6) : [data-apercu-impression], que la section de
+// l'impression porte sous son titre « Plan », et son document imprimé
 // [data-impression], une feuille [data-feuille] par page. Chaque mesure se
 // lit sur le style calculé et la boîte rendue, jamais sur une classe : les
 // dimensions d'une feuille, son pied de cinq éléments, le filigrane d'un
 // brouillon, le masquage sous les médias d'impression émulés, le papier
 // clair en thème sombre, la question du papier, l'impression en lecture et
-// sur un plan bloqué — aucune écriture de l'événement —, le retour à la
-// section d'origine, et la bande mesurée sur la feuille gabarit.
+// sur un plan bloqué — aucune écriture de l'événement —, l'aperçu qui tombe
+// hors de la section, et la bande mesurée sur la feuille gabarit.
 //
 // App est montée par test/navigateur/ecrans.js sur le système de fichiers
 // simulé, au cadre de 1 366 × 700 ; le texte attendu vient de la même
@@ -79,9 +79,23 @@ const mm = (px) => px * MM_PAR_PX;
 const plat = (chaine) => chaine.replace(/\s+/g, ' ').trim();
 const texte = (element) => plat(element.textContent);
 
+// Ouvre la section de l'impression par la navigation, et attend l'aperçu.
+async function ouvrirImpression(m) {
+  await cliquer(m, '[data-commande="section"][data-cible="badges"]');
+  await attendre("l'aperçu", () => dans(m, '[data-apercu-impression]'), IMAGES);
+}
+
+// Quitte la section de l'impression pour le plan, puis y revient : l'aperçu
+// repart de son départ, et la vue remesure sa bande.
+async function rouvrirImpression(m) {
+  await cliquer(m, '[data-commande="section"][data-cible="plan"]');
+  await attendre('le plan', () => dans(m, '[data-section="plan"]'), IMAGES);
+  await ouvrirImpression(m);
+}
+
 // Choisit une vue de l'aperçu par sa commande, et attend son document.
 async function choisirVue(m, vue) {
-  await cliquer(m, `[data-ecran="apercu"] [data-commande="vue"][data-cible="${vue}"]`);
+  await cliquer(m, `[data-apercu-impression] [data-commande="vue"][data-cible="${vue}"]`);
   await attendre(`la vue ${vue}`, () => dans(m, `[data-impression][data-vue-impression="${vue}"] [data-feuille]`), IMAGES);
 }
 
@@ -108,11 +122,22 @@ function chargeRetenuCourt() {
 const ecrituresEvenement = (m, depuis) =>
   m.trace.slice(depuis).filter(([, , chemin]) => [SUFFIXES.etat, SUFFIXES.journal, SUFFIXES.precedent].some((suffixe) => chemin.endsWith(suffixe)));
 
-describe('l’écran d’aperçu (§ 11.7)', () => {
-  test('« Imprimer… » de la tête ouvre l’écran d’aperçu, qui remplace l’événement ; son document est [data-impression], une feuille par page', async () => {
+describe('l’aperçu de la section de l’impression (§ 11.7)', () => {
+  test('la section « Impression » porte « Badges » puis « Plan », l’aperçu sous le second ; l’événement ne porte plus « Imprimer… » ; son document est [data-impression], une feuille par page', async () => {
     const m = await ouvrirApercu(contexte, chargePrincipale());
-    expect(dans(m, '[data-ecran="evenement"]')).toBeNull();
-    expect(tous(m, '[data-ecran="apercu"] [data-impression]')).toHaveLength(1);
+    expect(texte(dans(m, '[data-commande="section"][data-cible="badges"]'))).toBe(t('coquille.section.badges'));
+    expect(t('coquille.section.badges')).toBe('Impression');
+    const section = dans(m, '[data-ecran="evenement"] [data-section="badges"]');
+    expect(texte(section.querySelector('h2'))).toBe(t('coquille.section.badges'));
+    const parties = [...section.querySelectorAll('[data-partie-impression]')];
+    expect(parties.map((partie) => partie.dataset.partieImpression)).toEqual(['badges', 'plan']);
+    expect(parties.map((partie) => texte(partie.querySelector('h3')))).toEqual([t('badges.partie.badges'), t('badges.partie.plan')]);
+    expect(parties[0].querySelector('[data-commande="reediter"], [data-champ="reedition"]'), 'la réédition sous « Badges »').not.toBeNull();
+    expect(parties[1].getBoundingClientRect().top).toBeGreaterThanOrEqual(parties[0].getBoundingClientRect().bottom);
+    expect(tous(m, '[data-apercu-impression]')).toHaveLength(1);
+    expect(parties[1].contains(dans(m, '[data-apercu-impression]'))).toBe(true);
+    expect(dans(m, '[data-commande="apercu"]'), 'plus de « Imprimer… »').toBeNull();
+    expect(tous(m, '[data-apercu-impression] [data-impression]')).toHaveLength(1);
     expect(feuilles(m).length).toBeGreaterThan(0);
     expect(feuilles(m).map((f) => f.dataset.feuille)).toEqual(feuilles(m).map((_, rang) => String(rang)));
     // Aucun identifiant en double dans la page.
@@ -136,7 +161,7 @@ describe('l’écran d’aperçu (§ 11.7)', () => {
 
   test('le plan s’imprime dans l’orientation de sa découpe : chaque feuille du plan a les dimensions du papier, couché ou non', async () => {
     const m = await ouvrirApercu(contexte, chargePrincipale());
-    const choix = dans(m, '[data-ecran="apercu"] [data-champ="decoupe"]');
+    const choix = dans(m, '[data-apercu-impression] [data-champ="decoupe"]');
     choix.value = 'decoupe';
     choix.dispatchEvent(new Event('change', { bubbles: true }));
     await attendre('la découpe demandée', () => m.ui.etat().apercu.decoupe === 'decoupe', IMAGES);
@@ -257,7 +282,7 @@ describe('le filigrane BROUILLON (§ 11.7, § 14.5)', () => {
     const m = await ouvrirEvenement(contexte, charge, { section: 'propositions', options: { fichiers: [fichierReglages('A4')] } });
     await cliquerAction(m, '[data-classement] tr[data-proposition]', 'voir');
     await attendre('la proposition montrée', () => m.ui.etat().proposition !== null, IMAGES);
-    await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+    await ouvrirImpression(m);
     await attendre('le document', () => feuilles(m).length > 0, IMAGES);
     for (const vue of ['plan', 'accueil', 'tables']) {
       if (vue !== 'plan') await choisirVue(m, vue);
@@ -278,7 +303,7 @@ describe('le filigrane BROUILLON (§ 11.7, § 14.5)', () => {
     expect(feuilles(m).length).toBeGreaterThan(0);
     expect(tous(m, '[data-impression] [data-filigrane]'), 'tour 1').toHaveLength(0);
 
-    const choix = dans(m, '[data-ecran="apercu"] [data-champ="tour"]');
+    const choix = dans(m, '[data-apercu-impression] [data-champ="tour"]');
     choix.value = String(R);
     choix.dispatchEvent(new Event('change', { bubbles: true }));
     await attendre(`le tour ${R}`, () => m.ui.etat().apercu.tour === R, IMAGES);
@@ -302,14 +327,24 @@ describe('les médias d’impression (§ 11.7)', () => {
   }
   const affiche = (element) => getComputedStyle(element).display !== 'none';
 
-  test('sous l’aperçu, le bandeau, la barre et la feuille gabarit disparaissent ; chaque feuille reste', async () => {
+  test('sous l’aperçu, le bandeau, la navigation, la partie « Badges », les titres, la barre et la feuille gabarit disparaissent ; chaque feuille reste', async () => {
     const m = await ouvrirApercu(contexte, chargePrincipale());
     const bandeau = dans(m, '[data-bandeau]');
-    const barre = dans(m, '[data-ecran="apercu"] [data-commande="imprimer"]');
+    const barre = dans(m, '[data-apercu-impression] [data-commande="imprimer"]');
+    const masques = {
+      navigation: dans(m, '[data-ecran="evenement"] nav'),
+      badges: dans(m, '[data-partie-impression="badges"]'),
+      titre: dans(m, '[data-partie-impression="plan"] h3'),
+      section: dans(m, '[data-section="badges"] > h2'),
+    };
     expect(affiche(bandeau) && affiche(barre)).toBe(true);
+    for (const [nom, element] of Object.entries(masques)) expect(element.checkVisibility(), nom).toBe(true);
     await sousImpression(() => {
       expect(affiche(bandeau), 'bandeau').toBe(false);
       expect(barre.checkVisibility(), 'barre').toBe(false);
+      for (const [nom, element] of Object.entries(masques)) expect(element.checkVisibility(), nom).toBe(false);
+      // La première feuille commence au haut de la page.
+      expect(feuilles(m)[0].getBoundingClientRect().top).toBeLessThanOrEqual(1);
       for (const feuille of feuilles(m)) expect(feuille.checkVisibility(), 'feuille').toBe(true);
       const horsDocument = tous(m, '[data-feuille], [data-pied], [data-contenu]').filter((e) => e.closest('[data-impression]') === null);
       for (const element of horsDocument) expect(element.checkVisibility(), 'gabarit').toBe(false);
@@ -362,20 +397,19 @@ describe('la question du papier (§ 8.5, § 11.2)', () => {
   test('sans papier, l’aperçu pose la question ; choisir l’écrit, l’aperçu le prend ; un second aperçu, puis un App remonté sur le même système, ne redemandent pas ; « Changer » le modifie', async () => {
     const charge = chargeBloqueeDatee();
     const m = await ouvrirApercu(contexte, charge, { papier: null });
-    expect(dans(m, '[data-ecran="apercu"] [data-papier="question"]')).not.toBeNull();
+    expect(dans(m, '[data-apercu-impression] [data-papier="question"]')).not.toBeNull();
     expect(dans(m, '[data-impression]')).toBeNull();
-    expect(dans(m, '[data-ecran="apercu"] [data-commande="imprimer"]')).toBeNull();
+    expect(dans(m, '[data-apercu-impression] [data-commande="imprimer"]')).toBeNull();
     const avant = m.trace.length;
     await cliquer(m, '[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]');
     await attendre('le document sur A4', () => feuilles(m).length > 0, IMAGES);
     expect(m.seance.etat().papier).toBe('A4');
     expect(m.trace.slice(avant).map(([, , chemin]) => chemin)).toContain(FICHIER_REGLAGES);
     expect(ecrituresEvenement(m, avant)).toEqual([]);
-    expect(texte(dans(m, '[data-ecran="apercu"] [data-papier="choisi"]'))).toContain(t('impression.papier.nom.a4'));
+    expect(texte(dans(m, '[data-apercu-impression] [data-papier="choisi"]'))).toContain(t('impression.papier.nom.a4'));
 
     // Un second aperçu ne redemande pas.
-    await cliquer(m, '[data-ecran="apercu"] [data-commande="fermerApercu"]');
-    await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+    await rouvrirImpression(m);
     await attendre('le document, sans question', () => feuilles(m).length > 0, IMAGES);
     expect(dans(m, '[data-papier="question"]')).toBeNull();
 
@@ -384,7 +418,7 @@ describe('la question du papier (§ 8.5, § 11.2)', () => {
     const second = await contexte.monter({ systeme: { disque: m.disque } });
     await cliquer(second, '[data-evenement="soiree/soiree"] [data-commande="ouvrir"]');
     await attendre("l'événement", () => second.racine.querySelector('[data-ecran="evenement"]'), IMAGES);
-    await cliquer(second, '[data-ecran="evenement"] [data-commande="apercu"]');
+    await cliquer(second, '[data-commande="section"][data-cible="badges"]');
     await attendre('le document, sans question', () => second.racine.querySelector('[data-impression] [data-feuille]'), IMAGES);
     expect(second.racine.querySelector('[data-papier="question"]')).toBeNull();
 
@@ -411,11 +445,11 @@ describe('imprimer en lecture et sur un plan bloqué (§ 8.4, § 2.1 garantie 3)
       expect(m.seance.etat().mode).toBe('lecture');
       const avant = m.trace.length;
       await choisirVue(m, 'accueil');
-      await cliquer(m, '[data-ecran="apercu"] [data-commande="imprimer"]');
+      await cliquer(m, '[data-apercu-impression] [data-commande="imprimer"]');
       await attendre("l'impression demandée", () => imprimante.appels().length === 1, IMAGES);
       expect(imprimante.appels()).toEqual([{ papier: 'Lettre', orientation: 'portrait' }]);
       await choisirVue(m, 'plan');
-      await cliquer(m, '[data-ecran="apercu"] [data-commande="imprimer"]');
+      await cliquer(m, '[data-apercu-impression] [data-commande="imprimer"]');
       await attendre("la seconde impression demandée", () => imprimante.appels().length === 2, IMAGES);
       const boite = feuilles(m)[0].getBoundingClientRect();
       expect(imprimante.appels()[1]).toEqual({ papier: 'Lettre', orientation: boite.width > boite.height ? 'paysage' : 'portrait' });
@@ -428,7 +462,7 @@ describe('imprimer en lecture et sur un plan bloqué (§ 8.4, § 2.1 garantie 3)
   test('une impression annulée ne dit rien ; un échec pose IMPRESSION_ECHEC sur la commande « Imprimer », sa cause nommée', async () => {
     const annulee = creerImprimanteSimulee({ issue: 'annule' });
     const m = await ouvrirApercu(contexte, chargePrincipale(), { options: { imprimante: annulee } });
-    await cliquer(m, '[data-ecran="apercu"] [data-commande="imprimer"]');
+    await cliquer(m, '[data-apercu-impression] [data-commande="imprimer"]');
     await attendre("l'impression demandée", () => annulee.appels().length === 1, IMAGES);
     await attendre('la commande rendue', () => dans(m, '[data-commande="imprimer"]').getAttribute('aria-busy') === null, IMAGES);
     expect(dans(m, '[data-refus]')).toBeNull();
@@ -437,7 +471,7 @@ describe('imprimer en lecture et sur un plan bloqué (§ 8.4, § 2.1 garantie 3)
     const cause = 'Imprimante hors ligne';
     const enEchec = creerImprimanteSimulee({ issue: 'echec', cause });
     const n = await ouvrirApercu(contexte, chargePrincipale(), { options: { imprimante: enEchec } });
-    await cliquer(n, '[data-ecran="apercu"] [data-commande="imprimer"]');
+    await cliquer(n, '[data-apercu-impression] [data-commande="imprimer"]');
     const refus = await attendre('le refus sur la commande', () => dans(n, '[data-commande="imprimer"]')?.parentElement.querySelector('[data-refus="IMPRESSION_ECHEC"]'), IMAGES);
     expect(texte(refus.querySelector('p'))).toBe(plat(t('IMPRESSION_ECHEC', { cause })));
     expect(enEchec.appels()).toHaveLength(1);
@@ -451,45 +485,69 @@ describe('un nom d’événement au-delà de la borne de la saisie (§ 8.1, § 1
     expect(charge.evenement.nom).toHaveLength(8000);
     const imprimante = creerImprimanteSimulee();
     const m = await ouvrirEvenement(contexte, charge, { options: { imprimante, fichiers: [fichierReglages('A4')] } });
-    await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+    await ouvrirImpression(m);
     const refus = await attendre(
       'le refus sur « Imprimer »',
-      () => dans(m, '[data-ecran="apercu"] [data-commande="imprimer"]')?.parentElement.querySelector('[data-refus="NOM_EVENEMENT_TROP_LONG"]'),
+      () => dans(m, '[data-apercu-impression] [data-commande="imprimer"]')?.parentElement.querySelector('[data-refus="NOM_EVENEMENT_TROP_LONG"]'),
       IMAGES,
     );
     expect(texte(refus.querySelector('p'))).toBe(plat(t('NOM_EVENEMENT_TROP_LONG', { longueur: 7999, maximum: 68 })));
     const remede = refus.querySelector('[data-commande="renommer"]');
     expect(remede, 'le remède « Renommer »').not.toBeNull();
     expect(texte(remede)).toBe(t('communs.remede.renommer'));
-    expect(dans(m, '[data-ecran="apercu"] [data-commande="imprimer"]').getAttribute('aria-describedby')).toBe(refus.id);
+    expect(dans(m, '[data-apercu-impression] [data-commande="imprimer"]').getAttribute('aria-describedby')).toBe(refus.id);
     // Ni gabarit ni document : aucune page n'est mise en forme.
-    expect(dans(m, '[data-ecran="apercu"] [data-feuille]')).toBeNull();
+    expect(dans(m, '[data-apercu-impression] [data-feuille]')).toBeNull();
     expect(dans(m, '[data-impression]')).toBeNull();
     // « Imprimer » n'imprime pas : le refus reste, l'imprimante n'est pas appelée.
-    await cliquer(m, '[data-ecran="apercu"] [data-commande="imprimer"]');
+    await cliquer(m, '[data-apercu-impression] [data-commande="imprimer"]');
     await attendre('la commande rendue', () => dans(m, '[data-commande="imprimer"]').getAttribute('aria-busy') === null, IMAGES);
     expect(imprimante.appels()).toEqual([]);
     expect(dans(m, '[data-commande="imprimer"]').parentElement.querySelector('[data-refus="NOM_EVENEMENT_TROP_LONG"]')).not.toBeNull();
     // La vue des listes et celle des feuilles de tables se refusent de même.
     for (const vue of ['accueil', 'tables']) {
-      await cliquer(m, `[data-ecran="apercu"] [data-commande="vue"][data-cible="${vue}"]`);
-      expect(dans(m, '[data-ecran="apercu"] [data-feuille]'), vue).toBeNull();
+      await cliquer(m, `[data-apercu-impression] [data-commande="vue"][data-cible="${vue}"]`);
+      expect(dans(m, '[data-apercu-impression] [data-feuille]'), vue).toBeNull();
       expect(dans(m, '[data-commande="imprimer"]').parentElement.querySelector('[data-refus="NOM_EVENEMENT_TROP_LONG"]'), vue).not.toBeNull();
     }
     // Le remède ferme l'événement : la liste, où chacun porte « Renommer ».
-    await cliquer(m, '[data-ecran="apercu"] [data-refus="NOM_EVENEMENT_TROP_LONG"] [data-commande="renommer"]');
+    await cliquer(m, '[data-apercu-impression] [data-refus="NOM_EVENEMENT_TROP_LONG"] [data-commande="renommer"]');
     await attendre('la liste des événements', () => dans(m, '[data-ecran="accueil"]'), IMAGES);
-    expect(dans(m, '[data-ecran="apercu"]')).toBeNull();
+    expect(dans(m, '[data-apercu-impression]')).toBeNull();
   });
 });
 
-describe('fermer l’aperçu (§ 11.7)', () => {
-  test('« Fermer l’aperçu » revient à la section d’origine, le focus sur « Imprimer… »', async () => {
-    const m = await ouvrirApercu(contexte, chargePrincipale(), { section: 'participants' });
-    await cliquer(m, '[data-ecran="apercu"] [data-commande="fermerApercu"]');
-    await attendre("l'événement", () => dans(m, '[data-section="participants"]'), IMAGES);
-    expect(dans(m, '[data-ecran="apercu"]')).toBeNull();
-    await attendre('le focus sur « Imprimer… »', () => document.activeElement === dans(m, '[data-ecran="evenement"] [data-commande="apercu"]'), IMAGES);
+describe('quitter la section de l’impression (§ 11.7)', () => {
+  test('une autre section retire l’aperçu ; revenir le rend sur le plan, au tour que le plan montre', async () => {
+    const m = await ouvrirApercu(contexte, chargePrincipale());
+    await choisirVue(m, 'accueil');
+    await cliquer(m, '[data-commande="section"][data-cible="participants"]');
+    await attendre('les participants', () => dans(m, '[data-section="participants"]'), IMAGES);
+    expect(dans(m, '[data-apercu-impression]')).toBeNull();
+    expect(m.ui.etat().apercu).toBeNull();
+    m.ui.montrerTour(2);
+    await ouvrirImpression(m);
+    await attendre('le plan', () => dans(m, '[data-impression][data-vue-impression="plan"] [data-feuille]'), IMAGES);
+    expect(m.ui.etat().apercu.tour).toBe(2);
+    expect(dans(m, '[data-apercu-impression] [data-champ="tour"]').value).toBe('2');
+  });
+});
+
+describe('un retour pendant l’aperçu (§ 8.3, § 11.7)', () => {
+  test('défaire l’ajout d’un tour quand l’aperçu montre ce tour : le choix et le pied passent au dernier tour qui reste, parmi les options offertes', async () => {
+    const m = await ouvrirApercu(contexte, chargePrincipale(), { ecriture: true });
+    const R = m.seance.etat().charge.evenement.tours;
+    await m.seance.executer('changerTours', { tours: R + 1 });
+    const choix = () => dans(m, '[data-apercu-impression] [data-champ="tour"]');
+    await attendre(`l’option du tour ${R + 1}`, () => choix().options.length === R + 1, IMAGES);
+    choix().value = String(R + 1);
+    choix().dispatchEvent(new Event('change', { bubbles: true }));
+    await attendre(`le tour ${R + 1}`, () => m.ui.etat().apercu.tour === R + 1, IMAGES);
+    await m.seance.defaire();
+    await attendre(`les ${R} tours`, () => choix().options.length === R, IMAGES);
+    expect(choix().value).toBe(String(R));
+    expect([...choix().options].map((option) => option.value)).toContain(choix().value);
+    await attendre(`le pied du tour ${R}`, () => feuilles(m).length > 0 && texte(feuilles(m)[0].querySelector('[data-pied]')).includes(t('impression.pied.tour', { tour: R })), IMAGES);
   });
 });
 
@@ -507,8 +565,7 @@ describe('la bande mesurée (HAUTEUR_BANDE_IMPRESSION, § 14.1)', () => {
     feuille.textContent = '[data-pied] { padding-bottom: 20mm !important; }';
     document.head.append(feuille);
     try {
-      await cliquer(m, '[data-ecran="apercu"] [data-commande="fermerApercu"]');
-      await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+      await rouvrirImpression(m);
       await attendre('le document', () => feuilles(m).length > 0, IMAGES);
       await choisirVue(m, 'accueil');
       const apres = contenuMm(m);
@@ -551,8 +608,7 @@ describe('la bande mesurée (HAUTEUR_BANDE_IMPRESSION, § 14.1)', () => {
     feuille.textContent = '[data-pied] { padding-bottom: 20mm !important; }';
     document.head.append(feuille);
     try {
-      await cliquer(m, '[data-ecran="apercu"] [data-commande="fermerApercu"]');
-      await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+      await rouvrirImpression(m);
       await attendre('le plan', () => dans(m, '[data-impression][data-vue-impression="plan"] [data-feuille]'), IMAGES);
       const apres = tuiles(m);
       // La même orientation : la différence ne tient qu'à la bande.
@@ -570,7 +626,7 @@ describe('la bande mesurée (HAUTEUR_BANDE_IMPRESSION, § 14.1)', () => {
 // --- L'habillage de l'écran : la barre d'outils groupée ---------------------------
 
 describe('la barre d’outils de l’aperçu', () => {
-  const barre = (m) => dans(m, `[data-ecran="apercu"] [role="group"][aria-label="${t('impression.barre')}"]`);
+  const barre = (m) => dans(m, `[data-apercu-impression] [role="group"][aria-label="${t('impression.barre')}"]`);
 
   // La carte qui porte un élément : le plus proche ancêtre peint du fond de
   // la carte, au rayon de 12 px ; null sans elle.
@@ -583,9 +639,9 @@ describe('la barre d’outils de l’aperçu', () => {
     return null;
   }
 
-  test('sans papier, la question se pose dans une carte sous la barre, dans les deux thèmes ; « Fermer l’aperçu » se range au bord droit de la barre', async () => {
+  test('sans papier, la question se pose dans une carte sous la barre, dans les deux thèmes', async () => {
     const m = await ouvrirApercu(contexte, chargePrincipale(), { papier: null });
-    const question = dans(m, '[data-ecran="apercu"] [data-papier="question"]');
+    const question = dans(m, '[data-apercu-impression] [data-papier="question"]');
     expect(question, 'la question du papier').not.toBeNull();
     for (const theme of ['clair', 'sombre']) {
       await sousTheme(theme, async () => {
@@ -596,17 +652,10 @@ describe('la barre d’outils de l’aperçu', () => {
         expect(carte.getBoundingClientRect().top, theme).toBeGreaterThanOrEqual(barre(m).getBoundingClientRect().bottom);
       });
     }
-    // Le bord droit de la barre, moins son filet et sa marge intérieure :
-    // la fermeture s'y range, à un pixel près, quelle que soit la place que
-    // les groupes laissent libre.
-    const style = getComputedStyle(barre(m));
-    const bord = barre(m).getBoundingClientRect().right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
-    const fermer = dans(m, '[data-ecran="apercu"] [data-commande="fermerApercu"]').getBoundingClientRect();
-    expect(fermer.right).toBeGreaterThanOrEqual(bord - 1);
-    expect(fermer.right).toBeLessThanOrEqual(bord + 1);
+    expect(dans(m, '[data-commande="fermerApercu"]'), 'aucune fermeture').toBeNull();
   });
 
-  test('une carte, ses commandes en groupes nommés côte à côte : vue, réglages de la vue, papier et impression, fermeture', async () => {
+  test('une carte, ses commandes en groupes nommés côte à côte : vue, réglages de la vue, papier et impression', async () => {
     const m = await ouvrirApercu(contexte, chargePrincipale());
     const style = getComputedStyle(barre(m));
     expect(composantes(style.backgroundColor).join()).toBe(couleurDeJeton('--couleur-carte-fond').join());
@@ -629,14 +678,13 @@ describe('la barre d’outils de l’aperçu', () => {
     expect(reglages.querySelector('[data-champ="tour"]')).not.toBeNull();
     expect(sortie.querySelector('[data-papier="choisi"]')).not.toBeNull();
     expect(sortie.querySelector('[data-commande="imprimer"]')).not.toBeNull();
-    expect(groupes.some((groupe) => groupe.contains(dans(m, '[data-commande="fermerApercu"]')))).toBe(false);
   });
 
   test('la vue retenue se lit enfoncée — teinte de l’action, gras, texte à 4,5:1 — et « Imprimer » est l’action principale, dans les deux thèmes', async () => {
     const m = await ouvrirApercu(contexte, chargePrincipale());
     for (const theme of ['clair', 'sombre']) {
       await sousTheme(theme, async () => {
-        const vues = tous(m, '[data-ecran="apercu"] [data-commande="vue"]');
+        const vues = tous(m, '[data-apercu-impression] [data-commande="vue"]');
         const enfoncee = vues.find((vue) => vue.getAttribute('aria-pressed') === 'true');
         const style = getComputedStyle(enfoncee);
         const fond = composantes(style.backgroundColor);
@@ -646,7 +694,7 @@ describe('la barre d’outils de l’aperçu', () => {
         for (const vue of vues.filter((autre) => autre !== enfoncee)) {
           expect(composantes(getComputedStyle(vue).backgroundColor).join(), theme).not.toBe(fond.join());
         }
-        const imprimer = getComputedStyle(dans(m, '[data-ecran="apercu"] [data-commande="imprimer"]'));
+        const imprimer = getComputedStyle(dans(m, '[data-apercu-impression] [data-commande="imprimer"]'));
         expect(composantes(imprimer.backgroundColor).join(), theme).toBe(couleurDeJeton('--couleur-action-fond').join());
       });
     }

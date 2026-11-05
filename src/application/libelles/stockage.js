@@ -88,6 +88,24 @@ function megaoctets(octets) {
   return `${texte} Mo`;
 }
 
+// La lecture refusée des réglages locaux, en une phrase : raison est le code
+// du refus (reglages_locaux.js), cause celle de ses détails, quand ils en
+// portent une. Des octets qui ne sont pas de l'UTF-8 (cause UTF8_INVALIDE)
+// et un lien qui mène hors du dossier de travail (CHEMIN_REFUSE) ont leur
+// phrase : le système a lu le fichier, ou l'application ne l'a pas suivi.
+// Un autre code de l'application, que les tables connaissent — LECTURE —,
+// ne se cite jamais : la phrase dit le refus du système, et cite sa cause
+// entre parenthèses ; un code que les tables ne connaissent pas se cite à
+// la place de la cause.
+function lectureRefusee(raison, cause, texte) {
+  if (cause === 'UTF8_INVALIDE') return "Le fichier n'est pas encodé en UTF-8 : réenregistré en UTF-8, il se relit.";
+  if (raison === 'CHEMIN_REFUSE') {
+    return "Le fichier mène hors du dossier de travail, par un lien : l'application ne le suit pas.";
+  }
+  const citee = texte.existe(raison) ? cause : raison;
+  return `Le système en refuse la lecture${causeEntreParentheses(citee, texte)}.`;
+}
+
 // Les noms des filtres du dialogue d'import, par genre de
 // GENRES_A_IMPORTER, puis celui du filtre qui montre tous les fichiers. La
 // coquille (electron/fichiers.js) n'importe rien de src/ et en garde une
@@ -188,7 +206,17 @@ export const TABLE = new Map([
       `Les numéros ${compteur === 'proposition' ? 'de proposition' : `du compteur ${cite(compteur)}`} sont épuisés : ` +
       'rien de neuf ne se numérote plus dans cet événement.',
   ],
-  ['NON_DISPONIBLE', ({ cause }, texte) => `Cette commande n'est pas offerte ici${causeEntreParentheses(cause, texte)}.`],
+  // Une commande que la plateforme n'offre pas porte la primitive ; un
+  // ouvreur du système qui échoue — explorateur ou navigateur — porte la
+  // raison de son échec en cause : la commande existe, et c'est l'ouverture
+  // qui a échoué.
+  [
+    'NON_DISPONIBLE',
+    ({ cause }, texte) =>
+      typeof cause === 'string' && cause !== ''
+        ? `L'ouverture a échoué${causeEntreParentheses(cause, texte)}.`
+        : "Cette commande n'est pas offerte ici.",
+  ],
 
   // --- Les raisons d'un fichier illisible ------------------------------------
   ['VIDE', () => 'Le fichier est vide.'],
@@ -248,9 +276,10 @@ export const TABLE = new Map([
   ['PARTICIPANT_SUPPRIME', (details) => `${laPersonne(details)} a été supprimée depuis.`],
   ['PARTICIPANT_NON_PLACE', (details) => `${laPersonne(details)}, ajoutée ou réintégrée depuis, n'y est pas placée.`],
   // La présence changée depuis le placement : tours, croissants, nomme les
-  // tours où il la place alors que la charge la dit absente, ou l'inverse.
-  ['PRESENCE_RETIREE', (details) => `${laPersonne(details)} est absente ${auxToursNommes(details.tours)} depuis.`],
-  ['PRESENCE_AJOUTEE', (details) => `${laPersonne(details)} est présente ${auxToursNommes(details.tours)} depuis.`],
+  // tours où il la place alors que la charge la dit absente, ou l'inverse ;
+  // nomsTours, quand les détails le portent, leurs noms (aides.js).
+  ['PRESENCE_RETIREE', (details) => `${laPersonne(details)} est absente ${auxToursNommes(details.tours, details.nomsTours)} depuis.`],
+  ['PRESENCE_AJOUTEE', (details) => `${laPersonne(details)} est présente ${auxToursNommes(details.tours, details.nomsTours)} depuis.`],
   ['TABLE_SUPPRIMEE', (details) => `${laTable(details)} a été supprimée depuis.`],
   ['TABLE_AJOUTEE', (details) => `${laTable(details)} a été ajoutée depuis.`],
   [
@@ -333,23 +362,29 @@ export const TABLE = new Map([
   // --- Ce que la copie, l'import et l'écriture ailleurs annoncent (§ 8.7) ----
   // evenement, le nom de l'événement écrit ; logos, les fichiers de son
   // dossier logo que la recopie n'a pas écrits ; personnes, celles dont le
-  // logo en est un. Un logo qu'aucune personne ne porte se compte aussi : la
-  // phrase le dit, sans plus.
+  // logo en est un ; imageBadges, vrai quand l'image des badges en est un, ce
+  // qu'une phrase ajoute. Un logo qu'aucune personne ne porte se compte
+  // aussi : la phrase le dit, sans plus.
   [
     'LOGOS_NON_COPIES',
-    ({ evenement, logos, personnes }) => {
+    ({ evenement, logos, personnes, imageBadges }) => {
       const un = logos <= 1;
       const recopies = compte(logos, "logo ne s'est pas recopié", 'logos ne se sont pas recopiés');
       const suite =
         personnes === 0
           ? ` ; aucune personne ne ${un ? 'le' : 'les'} porte.`
           : `, et ${compte(personnes, 'personne y a', 'personnes y ont')} un logo introuvable.`;
+      const image =
+        imageBadges === true
+          ? ` ${un ? "C'est l'image des badges" : "L'image des badges en est un"} : ` +
+            "les badges s'impriment sans elle tant qu'elle manque."
+          : '';
       const remede = un
         ? "L'original reste dans le dossier logo de l'événement d'origine : " +
           'le recopier à la main dans celui-ci le rend.'
         : "Les originaux restent dans le dossier logo de l'événement d'origine : " +
           'les recopier à la main dans celui-ci les rend.';
-      return `${cite(evenement)} : ${recopies}${suite} ${remede}`;
+      return `${cite(evenement)} : ${recopies}${suite}${image} ${remede}`;
     },
   ],
 
@@ -406,9 +441,8 @@ export const TABLE = new Map([
   ],
   [
     'REGLAGES_ILLISIBLES',
-    ({ chemin, raison }, texte) => {
-      const pourquoi =
-        raison === 'JSON' || raison === 'FORME' ? texte(raison) : `La lecture est refusée (${raison}).`;
+    ({ chemin, raison, cause = null }, texte) => {
+      const pourquoi = raison === 'JSON' || raison === 'FORME' ? texte(raison) : lectureRefusee(raison, cause, texte);
       return (
         `Les réglages locaux ${cite(chemin)} ne se lisent pas. ${pourquoi} Le fichier reste tel quel : ` +
         'le papier choisi vaut pour cette séance, sans être retenu sur cette machine, ' +

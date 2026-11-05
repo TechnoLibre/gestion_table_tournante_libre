@@ -19,6 +19,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { lireLogo } from '../../test/logo.js';
 import { lirePolices } from '../../test/polices.js';
 import { apercevoir } from '../csv/apercu.js';
+import { rendreNomsUniques } from '../csv/noms_uniques.js';
 import { nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
 import { CRITERES } from '../moteur/criteres.js';
 import { rechercher } from '../moteur/recherche.js';
@@ -319,7 +320,7 @@ describe('séance : créer et ouvrir (§ 2.1, § 8.1, § 8.4)', () => {
     const fs = creerFichiersSimules();
     await deposerEssai(fs);
     const { seance } = monter({ fs });
-    const annonce = { code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 2, personnes: 3 } };
+    const annonce = { code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 2, personnes: 3, imageBadges: false } };
     const avant = fs.compteurs.ecritures;
     const rendu = await seance.ouvrir(EVT, undefined, { avertissements: [annonce] });
     assert.deepEqual(rendu.avertissements, [annonce]);
@@ -1478,6 +1479,28 @@ describe('séance : revenir, défaire, refaire (§ 8.3)', () => {
     assert.equal(montage.fs.compteurs.ecritures, avant);
   });
 
+  test('la marque du nom numéroté : l’import la pose, renommer la retire, défaire la rend, et chaque état écrit la porte ou non (§ 8.9, § 10.1)', async () => {
+    const montage = monter();
+    const { fs, seance } = montage;
+    await enEcriture(montage);
+    const texte = 'nom;prenom\nGalet;Roger\nGalet;Roger\n';
+    const apercu = apercevoir(texte, { participants: seance.charge.participants });
+    const rendus = rendreNomsUniques(apercu, seance.charge.participants);
+    const renomme = apercevoir(texte, { participants: seance.charge.participants, noms: rendus });
+    await seance.executer('importerParticipants', { apercu: renomme, mode: 'ajouter' });
+    const marques = (charge) => charge.participants.map(({ nom, nomNumerote }) => [nom, nomNumerote]);
+    assert.deepEqual(marques(seance.charge), [['Galet', undefined], ['Galet 01', true]]);
+    assert.deepEqual(marques(etatDe(fs).charge), marques(seance.charge));
+    await seance.executer('modifierParticipant', { id: 2, champs: { nom: 'Galet-Houle' } });
+    assert.deepEqual(marques(seance.charge), [['Galet', undefined], ['Galet-Houle', undefined]]);
+    assert.deepEqual(marques(etatDe(fs).charge), marques(seance.charge));
+    await seance.defaire();
+    assert.deepEqual(marques(seance.charge), [['Galet', undefined], ['Galet 01', true]]);
+    assert.deepEqual(marques(etatDe(fs).charge), marques(seance.charge));
+    await seance.refaire();
+    assert.deepEqual(marques(etatDe(fs).charge), [['Galet', undefined], ['Galet-Houle', undefined]]);
+  });
+
   test('après un retour de la révision 6 à la 3, défaire vise le prédécesseur de 3 sur le fil, non la ligne précédente', async () => {
     const montage = monter();
     const { fs, seance } = montage;
@@ -2116,7 +2139,7 @@ describe('séance : le logo d’une personne, écrit avant son entrée (§ 8.3, 
     assert.equal(fs.octets('documents', surLaRacine(cheminDuLogo(octets))), null);
     assert.deepEqual(
       seance.etat().avertissements.filter(({ code }) => code === 'LOGOS_NON_COPIES'),
-      [{ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1 } }],
+      [{ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1, imageBadges: false } }],
     );
   });
 
@@ -2133,8 +2156,75 @@ describe('séance : le logo d’une personne, écrit avant son entrée (§ 8.3, 
     assert.equal(etatDe(fs).charge.participants[0].logo, cheminDuLogo(octets));
     assert.deepEqual(
       seance.etat().avertissements.filter(({ code }) => code === 'LOGOS_NON_COPIES'),
-      [{ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1 } }],
+      [{ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1, imageBadges: false } }],
     );
+  });
+});
+
+describe('séance : l’image des badges, écrite avant son entrée (§ 8.9, § 11.4)', () => {
+  test('poser écrit l’image dans logo/ sous le SHA-256 de ses octets, puis une entrée ; la case et la position ne changent pas', async () => {
+    const { fs, seance } = await essaiEnEcriture();
+    const octets = pngEssai(3, 2, 4);
+    const chemin = cheminDuLogo(octets);
+    const journal = journalDe(fs).entrees.length;
+    const rendu = await seance.poserImageBadges({ octets });
+    assert.deepEqual(rendu, { libelle: 'Image des badges : image posée', chemin, avertissements: [] });
+    assert.deepEqual(fs.octets('documents', surLaRacine(chemin)), octets);
+    assert.deepEqual(seance.charge.evenement.imageBadges, { active: false, chemin, position: 'haut' });
+    assert.deepEqual(etatDe(fs).charge.evenement.imageBadges, { active: false, chemin, position: 'haut' });
+    assert.deepEqual(libellesDe(journalDe(fs)).slice(journal), ['Image des badges : image posée']);
+    assert.deepEqual(await seance.lireLogoParticipant(chemin), octets);
+    // La case, la position et le retrait passent par executer ; défaire rend
+    // l'image, dont le fichier reste.
+    await seance.executer('changerImageBadges', { active: true, position: 'bas' });
+    await seance.executer('changerImageBadges', { chemin: null });
+    assert.deepEqual(seance.charge.evenement.imageBadges, { active: true, chemin: null, position: 'bas' });
+    await seance.defaire();
+    assert.equal(seance.charge.evenement.imageBadges.chemin, chemin);
+    assert.deepEqual(fs.octets('documents', surLaRacine(chemin)), octets);
+  });
+
+  test('en lecture, ou sur un plan bloqué, rien ne s’écrit ; la même image se refuse SANS_EFFET, réécrite quand elle manque', async () => {
+    const montage = monter();
+    await deposerEssai(montage.fs);
+    await montage.seance.ouvrir(EVT);
+    const { fs, seance } = montage;
+    const octets = pngEssai();
+    const ecritures = fs.compteurs.ecritures;
+    await refus(seance.poserImageBadges({ octets }), 'MODE_LECTURE', { remede: { geste: 'modifier' } });
+    await refus(seance.executer('changerImageBadges', { active: true }), 'MODE_LECTURE', { remede: { geste: 'modifier' } });
+    assert.equal(fs.compteurs.ecritures, ecritures);
+    assert.equal(fs.octets('documents', `${BASE}/logo`), null);
+    await seance.passerEnEcriture();
+    await seance.poserImageBadges({ octets });
+    const chemin = surLaRacine(cheminDuLogo(octets));
+    await fs.supprimer(DOC, chemin);
+    const journal = journalDe(fs).entrees.length;
+    await refus(seance.poserImageBadges({ octets }), 'SANS_EFFET', { commande: 'changerImageBadges', remede: null });
+    assert.deepEqual(fs.octets('documents', chemin), octets);
+    assert.equal(journalDe(fs).entrees.length, journal);
+    await seance.executer('changerEtat', { etat: 'bloque' });
+    const apres = fs.compteurs.ecritures;
+    await refus(seance.poserImageBadges({ octets: pngEssai(2, 2, 1) }), 'LECTURE_SEULE', BLOQUE_SEUL);
+    assert.equal(fs.compteurs.ecritures, apres);
+  });
+
+  test('une image que le disque refuse lève IMAGE_BADGES_NON_ECRITE, sans entrée ni rupture du support ; un PNG fautif est une faute du code', async () => {
+    const { fs, seance } = await essaiEnEcriture();
+    fs.deposer('documents', `${BASE}/logo`, 'pas un dossier');
+    const journal = journalDe(fs).entrees.length;
+    const erreur = await refus(seance.poserImageBadges({ octets: pngEssai() }), 'IMAGE_BADGES_NON_ECRITE');
+    assert.deepEqual(Object.keys(erreur.details), ['chemin', 'dossier', 'cause', 'remede']);
+    assert.equal(erreur.details.remede, null);
+    assert.equal(libelle('IMAGE_BADGES_NON_ECRITE', erreur.details).startsWith("L'image des badges n'a pas pu s'écrire : "), true);
+    assert.equal(journalDe(fs).entrees.length, journal);
+    assert.equal(Object.hasOwn(seance.charge.evenement, 'imageBadges'), false);
+    assert.equal(seance.etat().refus, null);
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16]);
+    await assert.rejects(seance.poserImageBadges({ octets: jpeg }), TypeError);
+    await assert.rejects(seance.poserImageBadges({ octets: pngEssai(1201, 1) }), RangeError);
+    await assert.rejects(seance.poserImageBadges(), TypeError);
+    assert.equal(journalDe(fs).entrees.length, journal);
   });
 });
 
@@ -3762,6 +3852,12 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
   const papierLu = (fs) => JSON.parse(fs.contenu('documents', FICHIER_REGLAGES)).papier;
   // Le texte de l'état et du journal sur le disque, null pour un absent.
   const evenementSurDisque = (fs) => [fs.contenu('documents', ETAT), fs.contenu('documents', JOURNAL)];
+  // Des réglages lisibles qui portent déjà un papier, A4 ou Lettre, à
+  // déposer sur une racine.
+  const REGLAGES_A4 = '{"cadrages":[],"format":1,"papier":"A4"}\n';
+  const REGLAGES_LETTRE = '{"cadrages":[],"format":1,"papier":"Lettre"}\n';
+  const sansReglages = (seance) =>
+    seance.etat().avertissements.filter(({ code }) => code === 'REGLAGES_NON_ECRITS' || code === 'REGLAGES_ILLISIBLES');
 
   test("null au départ ; choisirPapier écrit les seuls réglages, et une séance neuve sur la même racine le lit, jamais redemandé", async () => {
     const { fs, seance } = await ouvertSur();
@@ -3897,7 +3993,7 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     fs.deposerDossier(PORTABLE.id);
     await seance.changerRacine(PORTABLE);
     assert.equal(seance.etat().papier, 'A4', 'une racine sans réglages : le choix de la séance');
-    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"Lettre"}\n');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, REGLAGES_LETTRE);
     await seance.changerRacine(DOC);
     await seance.changerRacine(PORTABLE);
     assert.equal(seance.etat().papier, 'Lettre', 'un papier écrit sur la racine l’emporte');
@@ -3925,7 +4021,7 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     fs.deposer('documents', FICHIER_REGLAGES, texte);
     const { seance, planificateur } = await ouvertSur(chargeEssai(), { fs });
     await seance.choisirPapier('A4');
-    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"Lettre"}\n');
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_LETTRE);
     seance.demanderCadrage({ k: 2, tx: 0, ty: 0 });
     await planificateur.avancer(DELAI_REGLAGES_MS);
     await laisser();
@@ -4009,12 +4105,6 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     assert.equal(seance.etat().papier, 'Lettre');
   });
 
-  // Des réglages lisibles qui portent déjà un papier, sur la racine des
-  // documents.
-  const REGLAGES_A4 = '{"cadrages":[],"format":1,"papier":"A4"}\n';
-  const sansReglages = (seance) =>
-    seance.etat().avertissements.filter(({ code }) => code === 'REGLAGES_NON_ECRITS' || code === 'REGLAGES_ILLISIBLES');
-
   test("une écriture refusée une fois : le papier de la séance l'emporte sur celui du fichier, le cadrage écrit ensuite l'écrit avec lui, et l'avis se retire", async () => {
     const fs = creerFichiersSimules();
     fs.deposerDossier('documents');
@@ -4087,9 +4177,13 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
   test("un papier écrit pour l'ancienne racine, dans la file pendant un changement de racine, ne se publie jamais sur la nouvelle", async () => {
     const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
     await seance.attendre();
-    // Un fichier présent : sa lecture se retient, celle d'un absent non.
-    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null}\n');
+    // Un fichier présent : sa lecture se retient, celle d'un absent non. Le
+    // papier de départ, A4, est celui que la nouvelle racine ne doit pas
+    // montrer.
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_A4);
     fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().papier, 'A4', 'papier de départ');
     const publies = [];
     seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
     const lecture = retenirLectureReglages(fs);
@@ -4142,6 +4236,167 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     assert.equal(seance.etat().papier, null);
   });
 
+  // La fenêtre d'un changement de racine vers les Documents, ouverte depuis
+  // une séance sur le portable au papier A4 : la racine a changé, la
+  // relecture de son papier attend derrière le choix retenu par lecture.
+  // Retient la relecture du papier des Documents, libère le choix, qui
+  // publie en finissant, puis lit etat() avant et après ce choix : tant que
+  // la relecture attend, etat() rend le portable avec l'A4, jamais les
+  // Documents avec l'ancien papier. Libère enfin la relecture.
+  async function papierDansLaFenetre(fs, seance, lecture, choix) {
+    const relecture = retenirLectureReglages(fs, DOC.id);
+    const paire = () => [seance.etat().racine.id, seance.etat().papier];
+    assert.deepEqual(paire(), [PORTABLE.id, 'A4'], 'etat() avant le choix');
+    lecture.liberer();
+    await choix;
+    for (let pas = 0; pas < 50 && !relecture.prise(); pas += 1) await laisser();
+    assert.equal(relecture.prise(), true, 'la relecture du papier attend');
+    assert.deepEqual(paire(), [PORTABLE.id, 'A4'], 'etat() après le choix');
+    relecture.liberer();
+  }
+
+  // Un abonné refait l'instantané à chaque publication ; sans abonné, il
+  // reste à refaire depuis la dernière, et seul celui que changerDeRacine
+  // fige protège etat() pendant la fenêtre.
+  const ABONNES = [
+    [true, 'un abonné'],
+    [false, 'sans abonné'],
+  ];
+
+  for (const [abonne, quiEcoute] of ABONNES) {
+    test(`écrire ailleurs réussi, ${quiEcoute}, un papier de l'ancienne racine dans la file : ni une publication ni etat() ne montrent la racine nouvelle avec l'ancien papier`, async () => {
+      const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+      fs.deposerDossier(PORTABLE.id);
+      fs.deposer(PORTABLE.id, FICHIER_REGLAGES, REGLAGES_A4);
+      fs.deposerDossier('documents');
+      fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_LETTRE);
+      const montage = monter({ fs, racine: PORTABLE });
+      const { seance } = montage;
+      await enEcriture(montage);
+      assert.equal(seance.etat().papier, 'A4', 'papier de départ');
+      // L'état d'un geste refusé rompt le support.
+      fs.pannes.renommage(PORTABLE.id, 11);
+      await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Achillée' } }), 'ETAT_NON_ECRIT');
+      assert.equal(seance.supportRompu, true);
+      // Le même papier choisi de nouveau pour l'ancienne racine : sa lecture
+      // des réglages attend, et le choix reste dans la file.
+      const lecture = retenirLectureReglages(fs);
+      const choix = seance.choisirPapier('A4');
+      await laisser();
+      assert.equal(lecture.prise(), true, 'la lecture du choix est partie');
+      const publies = [];
+      if (abonne) seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
+      const ailleurs = seance.ecrireAilleurs(DOC);
+      for (let pas = 0; pas < 50 && seance.racine.id !== DOC.id; pas += 1) await laisser();
+      assert.equal(seance.racine.id, DOC.id, 'la racine a changé, le choix attend');
+      await papierDansLaFenetre(fs, seance, lecture, choix);
+      await ailleurs;
+      await seance.attendre();
+      assert.equal(seance.supportRompu, false);
+      assert.deepEqual(publies.filter(([racine, papier]) => racine === DOC.id && papier !== 'Lettre'), []);
+      assert.deepEqual([seance.etat().racine.id, seance.etat().papier], [DOC.id, 'Lettre']);
+    });
+  }
+
+  // Une séance en écriture sur le portable, papier A4, dont le support s'est
+  // rompu ; les Documents portent le papier Lettre, et y écrire ailleurs
+  // pose le journal mais voit l'état refusé, ETAT_NON_ECRIT.
+  async function rompuSurPortable() {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, REGLAGES_A4);
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_LETTRE);
+    const montage = monter({ fs, racine: PORTABLE });
+    await enEcriture(montage);
+    const { seance } = montage;
+    await seance.executer('ajouterParticipant', { champs: { nom: 'Achillée' } });
+    assert.equal(seance.etat().papier, 'A4', 'papier de départ');
+    fs.pannes.ecriture('portable');
+    await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Camomille' } }), 'ECRITURE');
+    // La deuxième écriture atomique dans les Documents, l'état qui suit le
+    // journal, voit refusés tous ses renommages.
+    const ecrireAtomique = fs.ecrireAtomique;
+    let ecritures = 0;
+    fs.ecrireAtomique = async (racine, chemin, texte) => {
+      if (racine.id === 'documents') {
+        ecritures += 1;
+        if (ecritures === 2) fs.pannes.renommage('documents', 11);
+      }
+      return ecrireAtomique(racine, chemin, texte);
+    };
+    return montage;
+  }
+
+  test("écrire ailleurs en échec ETAT_NON_ECRIT : la séance relit le papier de la racine nouvelle avant de la publier", async () => {
+    const { seance } = await rompuSurPortable();
+    const publies = [];
+    seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
+    await refus(seance.ecrireAilleurs(DOC), 'ETAT_NON_ECRIT');
+    assert.deepEqual([seance.racine.id, seance.supportRompu], [DOC.id, true]);
+    assert.deepEqual(publies.filter(([racine, papier]) => racine === DOC.id && papier !== 'Lettre'), []);
+    assert.deepEqual([seance.etat().racine.id, seance.etat().papier], [DOC.id, 'Lettre']);
+  });
+
+  for (const [abonne, quiEcoute] of ABONNES) {
+    test(`écrire ailleurs en échec ETAT_NON_ECRIT, ${quiEcoute}, un papier de l'ancienne racine dans la file : ni une publication ni etat() ne montrent la racine nouvelle avec l'ancien papier`, async () => {
+      const { fs, seance } = await rompuSurPortable();
+      // Le papier A4 choisi de nouveau pour l'ancienne racine : sa lecture
+      // des réglages attend, et le choix reste dans la file.
+      const lecture = retenirLectureReglages(fs);
+      const choix = seance.choisirPapier('A4');
+      await laisser();
+      assert.equal(lecture.prise(), true, 'la lecture du choix est partie');
+      const publies = [];
+      if (abonne) seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
+      const ailleurs = refus(seance.ecrireAilleurs(DOC), 'ETAT_NON_ECRIT');
+      for (let pas = 0; pas < 50 && seance.racine.id !== DOC.id; pas += 1) await laisser();
+      assert.equal(seance.racine.id, DOC.id, 'la racine a changé, le choix attend');
+      await papierDansLaFenetre(fs, seance, lecture, choix);
+      await ailleurs;
+      await seance.attendre();
+      assert.equal(seance.supportRompu, true);
+      assert.deepEqual(publies.filter(([racine, papier]) => racine === DOC.id && papier !== 'Lettre'), []);
+      assert.deepEqual([seance.etat().racine.id, seance.etat().papier], [DOC.id, 'Lettre']);
+    });
+  }
+
+  test("écrire ailleurs refusé ETAT_NON_ECRIT puis par une faute du code au rendu du verrou : le papier de la racine nouvelle se relit quand même, et l'état se publie", async () => {
+    const { fs, seance } = await rompuSurPortable();
+    fs.deverrouiller = async () => {
+      throw new PanneSimulee();
+    };
+    const publies = [];
+    seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
+    await assert.rejects(seance.ecrireAilleurs(DOC), PanneSimulee);
+    assert.equal(seance.racine.id, DOC.id);
+    assert.deepEqual(publies.filter(([racine, papier]) => racine === DOC.id && papier !== 'Lettre'), []);
+    assert.deepEqual(publies.at(-1), [DOC.id, 'Lettre']);
+    assert.deepEqual([seance.etat().racine.id, seance.etat().papier], [DOC.id, 'Lettre']);
+  });
+
+  test("pendant la relecture du papier d'un changement de racine, etat() rend l'état d'avant, racine et papier ensemble", async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_A4);
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, REGLAGES_LETTRE);
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().papier, 'A4', 'papier de départ');
+    // Un appel de la file publie : sans abonné, l'instantané est à refaire.
+    await seance.passerEnLecture();
+    const lecture = retenirLectureReglages(fs);
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(lecture.prise(), true, 'la relecture du changement de racine est partie');
+    assert.equal(seance.racine.id, PORTABLE.id);
+    const pendant = seance.etat();
+    assert.deepEqual([pendant.racine.id, pendant.papier], [DOC.id, 'A4']);
+    lecture.liberer();
+    await changement;
+    assert.deepEqual([seance.etat().racine.id, seance.etat().papier], [PORTABLE.id, 'Lettre']);
+  });
+
   test("un cadrage différé et le choix du papier écrits ensemble : les deux restent, l'un après l'autre", async () => {
     const { fs, seance, planificateur } = await ouvertSur();
     seance.demanderCadrage({ k: 1.5, tx: 3, ty: 4 });
@@ -4169,8 +4424,9 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
   });
 
   // Retient la réponse de la première lecture de reglages_locaux.json qui
-  // suit : la lecture se fait aussitôt, sa réponse attend liberer().
-  function retenirLectureReglages(fs) {
+  // suit, sur la racine idRacine quand elle est donnée, sur toute racine
+  // sinon : la lecture se fait aussitôt, sa réponse attend liberer().
+  function retenirLectureReglages(fs, idRacine) {
     const lireTexte = fs.lireTexte;
     let liberer = null;
     const retenue = new Promise((resolve) => {
@@ -4178,7 +4434,8 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     });
     let prise = false;
     fs.lireTexte = async (racine, chemin) => {
-      if (prise || chemin !== FICHIER_REGLAGES) return lireTexte(racine, chemin);
+      const autre = idRacine !== undefined && racine.id !== idRacine;
+      if (prise || chemin !== FICHIER_REGLAGES || autre) return lireTexte(racine, chemin);
       prise = true;
       const reponse = await lireTexte(racine, chemin);
       await retenue;
@@ -4190,7 +4447,7 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
   test("une relecture du papier partie avant un choix ne l'écrase pas : à la création, l'état suit le fichier", async () => {
     const fs = creerFichiersSimules();
     fs.deposerDossier('documents');
-    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4"}\n');
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_A4);
     const lecture = retenirLectureReglages(fs);
     const { seance } = monter({ fs });
     await laisser();
@@ -4207,7 +4464,7 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
     await seance.attendre();
     fs.deposerDossier(PORTABLE.id);
-    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4"}\n');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, REGLAGES_A4);
     const lecture = retenirLectureReglages(fs);
     const changement = seance.changerRacine(PORTABLE);
     await laisser();
@@ -4975,6 +5232,335 @@ describe('séance : le pied TechnoLibre des badges (§ 8.5, § 11.4)', () => {
     await seance.preparerPlanche();
     await seance.preparerPlanche();
     assert.equal(chargements, 2);
+  });
+});
+
+describe('séance : la case qui laisse en blanc le nom des doublons (§ 8.5, § 11.4)', () => {
+  const caseLue = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).cacher_numero_doublon;
+  const PLAN_RETENU = [{ sieges: [[1, 2]] }];
+  const chargeRetenue = () =>
+    soiree({
+      personnes: [personneBadge(1, 'Roger', 'Galet 01', { nomNumerote: true }), personneBadge(2, 'Roger', 'Galet 02', { nomNumerote: true })],
+      tables: [tableBadge(1, 1, 2)],
+      plan: PLAN_RETENU,
+      propositions: [[1, PLAN_RETENU]],
+    });
+  const avecPlanche = { polices: async () => lirePolices(), provenance: 'production' };
+
+  test('cochée au départ ; choisirCacherNumero écrit les seuls réglages, dans tout mode, et l’état la porte ; une séance neuve la relit', async () => {
+    const { fs, seance } = await ouvertSur(chargeBloquee());
+    assert.equal(seance.etat().cacherNumero, true);
+    const avant = fs.compteurs.ecritures;
+    assert.deepEqual(await seance.choisirCacherNumero(false), { retenu: true, avertissements: [] });
+    assert.equal(fs.compteurs.ecritures, avant + 1);
+    assert.deepEqual([caseLue(fs), seance.etat().cacherNumero], [false, false]);
+    const neuve = monter({ fs, prefixe: 'neuve' });
+    await neuve.seance.attendre();
+    assert.equal(neuve.seance.etat().cacherNumero, false);
+    assert.deepEqual(await neuve.seance.choisirCacherNumero(true), { retenu: true, avertissements: [] });
+    assert.deepEqual([caseLue(fs), neuve.seance.etat().cacherNumero], [true, true]);
+  });
+
+  test('une valeur qui n’est pas un booléen est une faute du code : TypeError, rien ne s’écrit et l’état ne change pas', async () => {
+    const { fs, seance } = await ouvertSur();
+    const avant = fs.compteurs.ecritures;
+    for (const faute of ['false', 0, 1, null, undefined]) {
+      await assert.rejects(seance.choisirCacherNumero(faute), TypeError, String(faute));
+    }
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.equal(seance.etat().cacherNumero, true);
+  });
+
+  test('des réglages illisibles : la case vaut pour la séance, non retenue, l’avis rendu, le fichier intact', async () => {
+    const texte = '{"format":1,"papier":"A4","cadr';
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison: 'JSON' } };
+    assert.deepEqual(await seance.choisirCacherNumero(false), { retenu: false, avertissements: [avis] });
+    assert.equal(seance.etat().cacherNumero, false);
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+  });
+
+  test('l’écriture garde les autres réglages et les clés inconnues ; choisir la case du pied TechnoLibre garde celle-ci', async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4","taille_texte":115,"zeta":true}\n');
+    const { seance } = monter({ fs });
+    await seance.attendre();
+    await seance.choisirCacherNumero(false);
+    await seance.choisirPiedTechnolibre(false);
+    assert.equal(
+      fs.contenu('documents', FICHIER_REGLAGES),
+      '{"cacher_numero_doublon":false,"cadrages":[],"format":1,"papier":"A4","pied_technolibre":false,"taille_texte":115,"zeta":true}\n',
+    );
+  });
+
+  test('au changement de racine : la case que les réglages portent, à défaut celle de la séance', async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cacher_numero_doublon":false,"cadrages":[],"format":1,"papier":null}\n');
+    const { seance } = monter({ fs, racine: null });
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().cacherNumero, false);
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().cacherNumero, false, 'une racine sans réglages');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"format":1,"papier":"A4","cadr');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().cacherNumero, false, 'des réglages illisibles');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cacher_numero_doublon":true,"cadrages":[],"format":1,"papier":null}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().cacherNumero, true, 'une case écrite sur la racine l’emporte');
+  });
+
+  test('une relecture des réglages partie avant un choix de la case ne l’écrase pas, ni dans l’état ni dans le fichier', async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cacher_numero_doublon":true,"cadrages":[],"format":1,"papier":null}\n');
+    const lireTexte = fs.lireTexte;
+    let liberer = null;
+    const retenue = new Promise((resolve) => {
+      liberer = resolve;
+    });
+    let prise = false;
+    fs.lireTexte = async (racine, chemin) => {
+      if (prise || chemin !== FICHIER_REGLAGES) return lireTexte(racine, chemin);
+      prise = true;
+      const reponse = await lireTexte(racine, chemin);
+      await retenue;
+      return reponse;
+    };
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(prise, true, 'la relecture du changement de racine est partie');
+    const choix = seance.choisirCacherNumero(false);
+    await laisser();
+    liberer();
+    await changement;
+    assert.equal(seance.etat().cacherNumero, false);
+    assert.deepEqual(await choix, { retenu: true, avertissements: [] });
+    await seance.attendre();
+    assert.deepEqual([caseLue(fs, PORTABLE.id), seance.etat().cacherNumero], [false, false]);
+  });
+
+  test('la planche lit la case de la séance : l’annonce la porte, cochée puis décochée, les homonymes inchangés', async () => {
+    const { seance } = await ouvertSur(chargeRetenue(), avecPlanche);
+    await seance.choisirPiedTechnolibre(false);
+    const cochee = await seance.preparerPlanche();
+    assert.deepEqual([cochee.refus, cochee.cacherNumero, cochee.homonymes], [null, true, []]);
+    await seance.choisirCacherNumero(false);
+    const decochee = await seance.preparerPlanche();
+    assert.deepEqual([decochee.refus, decochee.cacherNumero, decochee.homonymes], [null, false, []]);
+  });
+});
+
+describe('séance : la case qui met l’organisation en gros sur les badges (§ 8.5, § 11.4)', () => {
+  const caseLue = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).organisation_en_gros;
+  const PLAN_RETENU = [{ sieges: [[1, 2]] }];
+  const chargeRetenue = () =>
+    soiree({
+      personnes: [personneBadge(1, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' }), personneBadge(2, 'Théo', 'Pervenche')],
+      tables: [tableBadge(1, 1, 2)],
+      plan: PLAN_RETENU,
+      propositions: [[1, PLAN_RETENU]],
+    });
+  const avecPlanche = { polices: async () => lirePolices(), provenance: 'production' };
+
+  test('cochée au départ ; choisirOrganisationEnGros écrit les seuls réglages, dans tout mode, et l’état la porte ; une séance neuve la relit', async () => {
+    const { fs, seance } = await ouvertSur(chargeBloquee());
+    assert.equal(seance.etat().organisationEnGros, true);
+    const avant = fs.compteurs.ecritures;
+    assert.deepEqual(await seance.choisirOrganisationEnGros(false), { retenu: true, avertissements: [] });
+    assert.equal(fs.compteurs.ecritures, avant + 1);
+    assert.deepEqual([caseLue(fs), seance.etat().organisationEnGros], [false, false]);
+    const neuve = monter({ fs, prefixe: 'neuve' });
+    await neuve.seance.attendre();
+    assert.equal(neuve.seance.etat().organisationEnGros, false);
+    assert.deepEqual(await neuve.seance.choisirOrganisationEnGros(true), { retenu: true, avertissements: [] });
+    assert.deepEqual([caseLue(fs), neuve.seance.etat().organisationEnGros], [true, true]);
+  });
+
+  test('une valeur qui n’est pas un booléen est une faute du code : TypeError, rien ne s’écrit et l’état ne change pas', async () => {
+    const { fs, seance } = await ouvertSur();
+    const avant = fs.compteurs.ecritures;
+    for (const faute of ['false', 0, 1, null, undefined]) {
+      await assert.rejects(seance.choisirOrganisationEnGros(faute), TypeError, String(faute));
+    }
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.equal(seance.etat().organisationEnGros, true);
+  });
+
+  test('des réglages illisibles : la case vaut pour la séance, non retenue, l’avis rendu, le fichier intact', async () => {
+    const texte = '{"format":1,"papier":"A4","cadr';
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison: 'JSON' } };
+    assert.deepEqual(await seance.choisirOrganisationEnGros(false), { retenu: false, avertissements: [avis] });
+    assert.equal(seance.etat().organisationEnGros, false);
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+  });
+
+  test('l’écriture garde les autres réglages et les clés inconnues ; choisir la case du pied TechnoLibre garde celle-ci', async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4","taille_texte":115,"zeta":true}\n');
+    const { seance } = monter({ fs });
+    await seance.attendre();
+    await seance.choisirOrganisationEnGros(false);
+    await seance.choisirPiedTechnolibre(false);
+    assert.equal(
+      fs.contenu('documents', FICHIER_REGLAGES),
+      '{"cadrages":[],"format":1,"organisation_en_gros":false,"papier":"A4","pied_technolibre":false,"taille_texte":115,"zeta":true}\n',
+    );
+  });
+
+  test('au changement de racine : la case que les réglages portent, à défaut celle de la séance', async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"organisation_en_gros":false,"papier":null}\n');
+    const { seance } = monter({ fs, racine: null });
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().organisationEnGros, false);
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().organisationEnGros, false, 'une racine sans réglages');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"format":1,"papier":"A4","cadr');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().organisationEnGros, false, 'des réglages illisibles');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"organisation_en_gros":true,"papier":null}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().organisationEnGros, true, 'une case écrite sur la racine l’emporte');
+  });
+
+  test('une relecture des réglages partie avant un choix de la case ne l’écrase pas, ni dans l’état ni dans le fichier', async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"organisation_en_gros":true,"papier":null}\n');
+    const lireTexte = fs.lireTexte;
+    let liberer = null;
+    const retenue = new Promise((resolve) => {
+      liberer = resolve;
+    });
+    let prise = false;
+    fs.lireTexte = async (racine, chemin) => {
+      if (prise || chemin !== FICHIER_REGLAGES) return lireTexte(racine, chemin);
+      prise = true;
+      const reponse = await lireTexte(racine, chemin);
+      await retenue;
+      return reponse;
+    };
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(prise, true, 'la relecture du changement de racine est partie');
+    const choix = seance.choisirOrganisationEnGros(false);
+    await laisser();
+    liberer();
+    await changement;
+    assert.equal(seance.etat().organisationEnGros, false);
+    assert.deepEqual(await choix, { retenu: true, avertissements: [] });
+    await seance.attendre();
+    assert.deepEqual([caseLue(fs, PORTABLE.id), seance.etat().organisationEnGros], [false, false]);
+  });
+
+  test('la planche lit la case de la séance : l’annonce la porte, cochée puis décochée', async () => {
+    const { seance } = await ouvertSur(chargeRetenue(), avecPlanche);
+    await seance.choisirPiedTechnolibre(false);
+    const cochee = await seance.preparerPlanche();
+    assert.deepEqual([cochee.refus, cochee.organisationEnGros], [null, true]);
+    await seance.choisirOrganisationEnGros(false);
+    const decochee = await seance.preparerPlanche();
+    assert.deepEqual([decochee.refus, decochee.organisationEnGros], [null, false]);
+  });
+});
+
+describe('séance : les colonnes de la liste des badges en CSV (§ 8.5, § 11.6)', () => {
+  const choixLu = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).colonnes_liste_badges;
+  const PLAN_RETENU = [{ sieges: [[1, 2]] }, { sieges: [[1, 2]] }];
+  const chargeRetenue = () =>
+    soiree({
+      personnes: [personneBadge(1, 'Iris', 'Ombrelle'), personneBadge(2, 'Théo', 'Pervenche')],
+      tables: [tableBadge(1, 1, 2)],
+      plan: PLAN_RETENU,
+      propositions: [[1, PLAN_RETENU]],
+    });
+
+  test('une colonne par tour au départ ; choisirColonnesListe écrit les seuls réglages, dans tout mode, et l’état les porte ; une séance neuve les relit', async () => {
+    const { fs, seance } = await ouvertSur(chargeBloquee());
+    assert.equal(seance.etat().colonnesListe, 'parTour');
+    const avant = fs.compteurs.ecritures;
+    assert.deepEqual(await seance.choisirColonnesListe('unique'), { retenu: true, avertissements: [] });
+    assert.equal(fs.compteurs.ecritures, avant + 1);
+    assert.deepEqual([choixLu(fs), seance.etat().colonnesListe], ['unique', 'unique']);
+    const neuve = monter({ fs, prefixe: 'neuve' });
+    await neuve.seance.attendre();
+    assert.equal(neuve.seance.etat().colonnesListe, 'unique');
+    assert.deepEqual(await neuve.seance.choisirColonnesListe('parTour'), { retenu: true, avertissements: [] });
+    assert.deepEqual([choixLu(fs), neuve.seance.etat().colonnesListe], ['parTour', 'parTour']);
+  });
+
+  test('une valeur hors des deux formes est une faute du code : TypeError, rien ne s’écrit et l’état ne change pas', async () => {
+    const { fs, seance } = await ouvertSur();
+    const avant = fs.compteurs.ecritures;
+    for (const faute of ['par_tour', 'toString', true, null, undefined]) {
+      await assert.rejects(seance.choisirColonnesListe(faute), TypeError, String(faute));
+    }
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.equal(seance.etat().colonnesListe, 'parTour');
+  });
+
+  test('des réglages illisibles : le choix vaut pour la séance, non retenu, l’avis rendu, le fichier intact', async () => {
+    const texte = '{"format":1,"papier":"A4","cadr';
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison: 'JSON' } };
+    assert.deepEqual(await seance.choisirColonnesListe('unique'), { retenu: false, avertissements: [avis] });
+    assert.equal(seance.etat().colonnesListe, 'unique');
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+  });
+
+  test('au changement de racine : le choix que les réglages portent, à défaut celui de la séance ; l’écriture garde les autres clés', async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"colonnes_liste_badges":"unique","format":1,"papier":null,"zeta":true}\n');
+    const { seance } = monter({ fs, racine: null });
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().colonnesListe, 'unique');
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().colonnesListe, 'unique', 'une racine sans réglages');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"colonnes_liste_badges":"parTour","format":1,"papier":null}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().colonnesListe, 'parTour', 'un choix écrit sur la racine l’emporte');
+    await seance.changerRacine(DOC);
+    await seance.choisirCacherNumero(false);
+    assert.equal(
+      fs.contenu('documents', FICHIER_REGLAGES),
+      '{"cacher_numero_doublon":false,"cadrages":[],"colonnes_liste_badges":"unique","format":1,"papier":null,"zeta":true}\n',
+    );
+  });
+
+  test('la liste lit le choix de la séance : une colonne par tour, puis une seule ; la planche ne le lit pas', async () => {
+    const { fs, seance } = await ouvertSur(chargeRetenue(), { polices: async () => lirePolices(), provenance: 'production' });
+    const recues = [];
+    fs.enregistrerSous = async (nom, octets) => {
+      recues.push(new TextDecoder('utf-8', { ignoreBOM: true }).decode(octets));
+      return nom;
+    };
+    await seance.enregistrerListeBadgesSous();
+    await seance.choisirColonnesListe('unique');
+    await seance.enregistrerListeBadgesSous();
+    assert.deepEqual(recues, [
+      '\u{FEFF}Nom;Prénom;Organisation;Tour 1;Tour 2\r\nOmbrelle;Iris;;table 1;table 1\r\nPervenche;Théo;;table 1;table 1\r\n',
+      '\u{FEFF}Nom;Prénom;Organisation;Tours\r\nOmbrelle;Iris;;Toute la soirée — table 1\r\nPervenche;Théo;;Toute la soirée — table 1\r\n',
+    ]);
   });
 });
 

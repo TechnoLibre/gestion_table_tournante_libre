@@ -72,7 +72,7 @@ function dimensionsFeuille(feuille) {
 
 // Change la découpe du plan par son sélecteur, et attend le document.
 async function decouper(m, decoupe) {
-  const choix = dans(m, '[data-ecran="apercu"] [data-champ="decoupe"]');
+  const choix = dans(m, '[data-apercu-impression] [data-champ="decoupe"]');
   choix.value = decoupe;
   choix.dispatchEvent(new Event('change', { bubbles: true }));
   await attendre(`la découpe ${decoupe}`, () => m.ui.etat().apercu.decoupe === decoupe && feuilles(m).length > 0, IMAGES);
@@ -80,7 +80,7 @@ async function decouper(m, decoupe) {
 
 // Choisit une vue de l'aperçu par sa commande, et attend son document.
 async function choisirVue(m, vue) {
-  await cliquer(m, `[data-ecran="apercu"] [data-commande="vue"][data-cible="${vue}"]`);
+  await cliquer(m, `[data-apercu-impression] [data-commande="vue"][data-cible="${vue}"]`);
   await attendre(`la vue ${vue}`, () => dans(m, `[data-impression][data-vue-impression="${vue}"] [data-feuille]`), IMAGES);
 }
 

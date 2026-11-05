@@ -37,9 +37,10 @@ import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import { gelerPropositions } from '../stockage/gel.js';
 import { derive, examiner, fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
+import { aDesigner, tablesAnimees } from './animateurs.js';
 import { invariantViole } from './avertissements.js';
 import { COMMANDES, appliquerCommande } from './commandes.js';
-import { COMMANDES_MOBILIER, PLACES_TABLE, bilanTablesManquantes } from './commandes_mobilier.js';
+import { COMMANDES_MOBILIER, PLACES_TABLE, bilanTablesManquantes, formeParDefaut } from './commandes_mobilier.js';
 import { ErreurCommande } from './erreurs.js';
 import { libelle } from './libelles.js';
 import { etatPlaces } from './places.js';
@@ -233,7 +234,7 @@ async function seanceSur(charge) {
 // --- Les épreuves -----------------------------------------------------------
 
 describe('mobilier : le registre (§ 8.2)', () => {
-  test('COMMANDES_MOBILIER porte les quatorze commandes du mobilier, réunies dans COMMANDES', () => {
+  test('COMMANDES_MOBILIER porte les quinze commandes du mobilier, réunies dans COMMANDES', () => {
     const noms = [
       'creerTable',
       'supprimerTable',
@@ -243,6 +244,7 @@ describe('mobilier : le registre (§ 8.2)', () => {
       'realignerTable',
       'changerDefaut',
       'changerTours',
+      'changerNomTour',
       'modifierReglage',
       'poserObjectif',
       'retirerObjectif',
@@ -266,6 +268,7 @@ describe('mobilier : le registre (§ 8.2)', () => {
       ['realignerTable', { id: 1 }],
       ['changerDefaut', { sieges: 6, realigner: false }],
       ['changerTours', { tours: 3 }],
+      ['changerNomTour', { tour: 1, nom: 'Apéritif' }],
       ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
       ['poserObjectif', { table: 1, tour: null, etiquettes: 'finance', regle: null }],
       ['retirerObjectif', { table: 1, tour: null }],
@@ -296,6 +299,7 @@ describe('mobilier : le registre (§ 8.2)', () => {
       ['realignerTable', { id: 1 }],
       ['changerDefaut', { sieges: 6, realigner: false }],
       ['changerTours', { tours: 4 }],
+      ['changerNomTour', { tour: 2, nom: 'Apéritif' }],
       ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
       ['poserObjectif', { table: 1, tour: null, etiquettes: 'finance', regle: null }],
       ['retirerObjectif', { table: 2, tour: null }],
@@ -685,6 +689,23 @@ describe('mobilier : créer les tables qui manquent (§ 6.1)', () => {
     assert.deepEqual(une.charge.tables.map(({ numero }) => numero), [1, 2]);
   });
 
+  test('la forme proposée est celle de la table de plus grand identifiant, la plus récemment créée, quels que soient son numéro et son rang ; ronde sans table', () => {
+    assert.equal(formeParDefaut(chargeDe({ n: 9 })), 'ronde');
+    // L'identifiant 9 n'est ni le premier ni le dernier de la liste, ni le
+    // plus grand numéro : seul l'identifiant le désigne.
+    const charge = chargeDe({ tables: [{ id: 4, numero: 1 }, { id: 9, numero: 2 }, { id: 6, numero: 7 }], n: 9 });
+    charge.tables[1].forme = 'carree';
+    assert.equal(formeParDefaut(charge), 'carree');
+    for (const table of charge.tables) table.forme = table.id === 9 ? 'ronde' : 'carree';
+    assert.equal(formeParDefaut(charge), 'ronde');
+    // Des tables carrées créées d'un geste deviennent les plus récentes ; la
+    // dernière supprimée, la précédente décide.
+    const { charge: apres } = accepter('creerTable', chargeDe({ tables: [{ id: 1 }], n: 12 }), { forme: 'carree', combler: 8 });
+    assert.equal(formeParDefaut(apres), 'carree');
+    const { charge: sans } = accepter('supprimerTable', apres, { id: 2 });
+    assert.equal(formeParDefaut(sans), 'ronde');
+  });
+
   test('sous une présence partielle, le manque est celui de l’avis : le plus grand manque d’un même tour, présents non exclus seuls', () => {
     // Une table de 8, 3 tours, 14 personnes : 3 absentes au tour 1, 6 au
     // tour 2, une exclue présente à tous. Présents : 10, 7 et 13 ; le manque
@@ -703,7 +724,7 @@ describe('mobilier : créer les tables qui manquent (§ 6.1)', () => {
     for (const autre of autres) assert.equal(bilanTablesManquantes(autre, 2).manque, manqueDuMoteur(autre));
   });
 
-  test('sous un retenu lisible, chaque table créée y entre, à sa capacité, vide à chaque tour', () => {
+  test('sous un retenu lisible, chaque table créée y entre, à sa capacité, vide à chaque tour ; une désignation y reste non honorée', () => {
     const charge = chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 20 });
     const listes = [[suite(1, 8), suite(9, 16)], [suite(9, 16), suite(1, 8)]];
     placer(charge, listes, { id: 1, retenu: true });
@@ -713,6 +734,21 @@ describe('mobilier : créer les tables qui manquent (§ 6.1)', () => {
     for (const { sieges } of apres.retenu.placement) assert.deepEqual(sieges.slice(2), [[], []]);
     assert.deepEqual(fautes(apres.retenu), []);
     assert.deepEqual(derive(apres.retenu, apres), []);
+    // Une personne assise au retenu et marquée est désignée à une table
+    // créée : le retenu ne bouge pas, sans dérive, et sa réservation n'y est
+    // pas honorée, comme toute réservation posée sous un retenu.
+    charge.participants[0].animationReservee = true;
+    const { charge: designee } = accepter('creerTable', charge, { forme: 'ronde', combler: 3 });
+    assert.deepEqual(designee.reservations, [resa(1, 3, 1)]);
+    assert.deepEqual(designee.retenu, apres.retenu);
+    assert.deepEqual(derive(designee.retenu, designee), []);
+    assert.deepEqual(
+      invariantViole(designee).details.violations.map(({ code, participant, table, tour }) => [code, participant, table, tour]),
+      [
+        ['RESERVATION', 1, 3, 1],
+        ['RESERVATION', 1, 3, 2],
+      ],
+    );
   });
 
   test('au-delà du seuil lisible, la création avertit AU_DELA_LISIBLE, comme une saisie de places', () => {
@@ -720,6 +756,59 @@ describe('mobilier : créer les tables qui manquent (§ 6.1)', () => {
     const { avertissements } = accepter('creerTable', chargeDe({ n: 40 }), { forme: 'ronde', combler: seuil + 1 });
     assert.deepEqual(avertissements, [{ code: 'AU_DELA_LISIBLE', details: { seuil } }]);
     assert.deepEqual(accepter('creerTable', chargeDe({ n: 40 }), { forme: 'ronde', combler: seuil }).avertissements, []);
+  });
+
+  test('les personnes à désigner sont désignées sur les tables créées, en la même entrée : titre pressenti sans ses blancs, sinon le titre par défaut, au siège 1', () => {
+    // Une table de 8 pour 20 personnes : 3 tables de 4. Iris porte un titre
+    // pressenti, Théo aucun ; Ondine, non marquée, n'est pas désignée.
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 20 });
+    charge.participants[0] = { ...charge.participants[0], titrePressenti: '  animation du coin lecture ', animationReservee: true };
+    charge.participants[1].animationReservee = true;
+    const { charge: apres, libelle: texte, avertissements } = accepter('creerTable', charge, { forme: 'ronde', combler: 4 });
+    assert.equal(texte, 'Ajouté les tables 2 à 4, de 4 places ; 2 animateurs désignés');
+    assert.deepEqual(avertissements, []);
+    assert.deepEqual(apres.reservations, [resa(1, 2, 1), resa(2, 3, 1)]);
+    assert.deepEqual(apres.titres, [
+      { table: 2, siege: 1, libelle: 'animation du coin lecture' },
+      { table: 3, siege: 1, libelle: libelle('places.titreParDefaut') },
+    ]);
+    assert.deepEqual([...tablesAnimees(apres)], [[1, [2]], [2, [3]]]);
+    assert.deepEqual(aDesigner(apres), []);
+    assert.equal(manqueDuMoteur(apres), 0);
+    // Sans personne à désigner, le libellé ne parle pas d'animateur.
+    assert.equal(accepter('creerTable', chargeDe({ tables: [{ id: 1 }], n: 20 }), { forme: 'ronde', combler: 4 }).libelle, 'Ajouté les tables 2 à 4, de 4 places');
+  });
+
+  test('une table créée garde une chaise qui tourne ; ANIMATEURS_A_DESIGNER nomme chaque personne laissée, avec sa cause ; une exclue est passée sans mot', () => {
+    // Une table de 2 réservée par Théo, 12 personnes dont Pivoine exclue :
+    // 9 places manquent, 5 tables de 2, un animateur chacune.
+    const charge = chargeDe({ tables: [{ id: 1, sieges: 2 }], n: 12, exclus: [10], reservations: [resa(2, 1, null)] });
+    for (const id of [1, 2, 3, 4, 5, 6, 7, 8, 10]) charge.participants[id - 1].animationReservee = true;
+    charge.participants[2].presence = [1];
+    const { charge: apres, libelle: texte, avertissements } = accepter('creerTable', charge, { forme: 'ronde', combler: 2 });
+    assert.equal(texte, 'Ajouté les tables 2 à 6, de 2 places ; 5 animateurs désignés');
+    assert.deepEqual([...tablesAnimees(apres)], [[1, [2]], [4, [3]], [5, [4]], [6, [5]], [7, [6]]]);
+    assert.deepEqual(avertissements, [
+      {
+        code: 'ANIMATEURS_A_DESIGNER',
+        details: {
+          personnes: [
+            { participant: 2, personne: 'Théo Pervenche', cause: 'reservee' },
+            { participant: 3, personne: 'Ondine Lacasse', cause: 'absente', tours: [2] },
+            { participant: 8, personne: 'Basile Mélèze', cause: 'tablesPleines' },
+          ],
+        },
+      },
+    ]);
+    assert.deepEqual(aDesigner(apres), [2, 3, 8]);
+  });
+
+  test('« Ajouter une table », sans combler, ne désigne personne', () => {
+    const charge = chargeDe({ n: 4 });
+    charge.participants[0].animationReservee = true;
+    const { charge: apres, libelle: texte, avertissements } = accepter('creerTable', charge, { forme: 'ronde' });
+    assert.equal(texte, 'Ajouté la table 1');
+    assert.deepEqual([apres.reservations, apres.titres, avertissements], [[], [], []]);
   });
 
   test('refus : aucune place ne manque, PLACES_SUFFISANTES ; une taille hors des bornes ou non entière ; un plan bloqué ; un compteur saturé', () => {
@@ -746,6 +835,19 @@ describe('mobilier : créer les tables qui manquent (§ 6.1)', () => {
     refuse(() => COMMANDES.get('creerTable')(saturee, { forme: 'ronde', combler: 5 }), 'COMPTEUR_SATURE', { compteur: 'table', remede: null });
     assert.equal(accepter('creerTable', saturee, { forme: 'ronde', combler: 9 }).charge.tables.length, 1);
     assert.throws(() => bilanTablesManquantes(manque, '8'), TypeError);
+  });
+
+  test('par la séance : tables et désignations en une entrée, que défaire reprend ensemble', async () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 12 });
+    charge.participants[3].animationReservee = true;
+    const { seance, entrees } = await seanceSur(charge);
+    const avant = entrees();
+    const rendu = await seance.executer('creerTable', { forme: 'ronde', combler: 4 });
+    assert.equal(rendu.libelle, 'Ajouté la table 2, de 4 places ; 1 animateur désigné');
+    assert.equal(entrees() - avant, 1);
+    assert.deepEqual(seance.charge.reservations, [resa(4, 2, 1)]);
+    await seance.defaire();
+    assert.deepEqual([seance.charge.tables.length, seance.charge.reservations, seance.charge.titres], [1, [], []]);
   });
 
   test('par la séance : une entrée du journal, l’avis tombe, défaire rend les tables d’avant ; en lecture, MODE_LECTURE sans écriture', async () => {
@@ -843,6 +945,87 @@ describe('mobilier : le libellé d’une table (§ 4, § 8.9)', () => {
     await seance.executer('changerLibelleTable', { id: 1, libelle: 'Coin' });
     assert.equal(entrees(), avant + 1);
     assert.equal(seance.charge.tables[0].libelle, 'Coin');
+  });
+});
+
+describe('mobilier : le nom d’un tour (§ 4, § 8.9)', () => {
+  // Soixante points de code, dont des lettres hors du plan de base.
+  const SOIXANTE = `Mets ${'\u{1D49C}'.repeat(30)} ${'é'.repeat(24)}`;
+
+  test('le nom saisi entre en NFC, ses blancs de bord retirés, au seul tour nommé ; une entrée au libellé figé', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 });
+    const pose = accepter('changerNomTour', charge, { tour: 2, nom: '  Plat principal\u{0009} ' });
+    assert.equal(pose.libelle, 'Tour 2 : nom « Plat principal »');
+    assert.deepEqual(pose.avertissements, []);
+    assert.deepEqual(pose.charge.evenement.nomsTours, [null, 'Plat principal', null]);
+    const nfc = accepter('changerNomTour', pose.charge, { tour: 1, nom: 'Entre\u{0301}e' });
+    assert.deepEqual(nfc.charge.evenement.nomsTours, ['Entr\u{00E9}e', 'Plat principal', null]);
+    const change = accepter('changerNomTour', nfc.charge, { tour: 2, nom: 'Fromages' });
+    assert.deepEqual(change.charge.evenement.nomsTours, ['Entr\u{00E9}e', 'Fromages', null]);
+  });
+
+  test('un nom vide, fait de blancs ou égal au nom par défaut retire le nom, et le champ avec le dernier ; retirer un nom absent, ou reposer le même, est sans effet', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 });
+    const deux = accepter('changerNomTour', accepter('changerNomTour', charge, { tour: 1, nom: 'Apéritif' }).charge, { tour: 3, nom: 'Dessert' }).charge;
+    const parDefaut = accepter('changerNomTour', deux, { tour: 3, nom: ' Tour 3 ' });
+    assert.equal(parDefaut.libelle, 'Tour 3 : nom retiré');
+    assert.deepEqual(parDefaut.charge.evenement.nomsTours, ['Apéritif', null, null]);
+    const vide = accepter('changerNomTour', parDefaut.charge, { tour: 1, nom: ' \u{0009} ' });
+    assert.equal(Object.hasOwn(vide.charge.evenement, 'nomsTours'), false);
+    assert.equal(serialiser(vide.charge, { revision: 1, produitVersion: 'essai' }), serialiser(charge, { revision: 1, produitVersion: 'essai' }));
+    refuse(() => appliquerCommande('changerNomTour', charge, { tour: 2, nom: '' }), 'SANS_EFFET');
+    refuse(() => appliquerCommande('changerNomTour', charge, { tour: 2, nom: 'Tour 2' }), 'SANS_EFFET');
+    refuse(() => appliquerCommande('changerNomTour', deux, { tour: 1, nom: ' Apéritif ' }), 'SANS_EFFET');
+    // « Tour 2 » n'est le nom par défaut que du tour 2.
+    assert.deepEqual(accepter('changerNomTour', charge, { tour: 1, nom: 'Tour 2' }).charge.evenement.nomsTours, ['Tour 2', null, null]);
+  });
+
+  test('au-delà de LIBELLE_TABLE_MAX points de code : NOM_TOUR_TROP_LONG, remède nul', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2 });
+    assert.equal([...SOIXANTE].length, 60);
+    assert.deepEqual(accepter('changerNomTour', charge, { tour: 1, nom: ` ${SOIXANTE} ` }).charge.evenement.nomsTours, [SOIXANTE, null]);
+    const leve = refuse(() => COMMANDES.get('changerNomTour')(charge, { tour: 1, nom: `${SOIXANTE}x` }), 'NOM_TOUR_TROP_LONG', {
+      longueur: 61,
+      maximum: 60,
+    });
+    assert.equal(leve.details.remede, null);
+    assert.equal(libelle('NOM_TOUR_TROP_LONG', leve.details), "Le nom compte 61 caractères : celui d'un tour en compte au plus 60.");
+  });
+
+  test('un tour hors de la soirée, ou un nom qui n’est pas un texte, sont des fautes du code', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], tours: 2 });
+    for (const tour of [0, 3, 1.5, '1', null]) {
+      assert.throws(() => COMMANDES.get('changerNomTour')(charge, { tour, nom: 'Apéritif' }), { name: 'TypeError', message: /^tour : / }, JSON.stringify(tour));
+    }
+    assert.throws(() => COMMANDES.get('changerNomTour')(charge, { tour: 1, nom: null }), { name: 'TypeError', message: /^nom : / });
+  });
+
+  test('ni dérive ni changement de la configuration du moteur ; une entrée au journal, que Défaire reprend', async () => {
+    const charge = chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 4, tours: 2 });
+    placer(charge, [[[1, 2], [3, 4]], [[1, 3], [2, 4]]], { id: 1, retenu: true });
+    const rendu = accepter('changerNomTour', charge, { tour: 2, nom: 'Dessert' });
+    assert.deepEqual(configurationDepuisCharge(rendu.charge), configurationDepuisCharge(charge));
+    for (const placement of [...rendu.charge.propositions, rendu.charge.retenu]) assert.deepEqual(derive(placement, rendu.charge), [], String(placement.id ?? 'retenu'));
+    const { seance, entrees } = await seanceSur(charge);
+    const avant = entrees();
+    await seance.executer('changerNomTour', { tour: 1, nom: 'Apéritif' });
+    assert.equal(entrees(), avant + 1);
+    assert.deepEqual(seance.charge.evenement.nomsTours, ['Apéritif', null]);
+    await seance.defaire();
+    assert.equal(Object.hasOwn(seance.charge.evenement, 'nomsTours'), false);
+  });
+
+  test('changer les tours : les noms des tours retirés partent, comptés au libellé ; un tour ajouté vient sans nom', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 });
+    charge.evenement.nomsTours = ['Apéritif', null, 'Dessert'];
+    const deux = accepter('changerTours', charge, { tours: 2 });
+    assert.deepEqual(deux.charge.evenement.nomsTours, ['Apéritif', null]);
+    assert.equal(deux.libelle, 'Nombre de tours : 2 ; 1 nom de tour retiré');
+    const quatre = accepter('changerTours', charge, { tours: 4 });
+    assert.deepEqual(quatre.charge.evenement.nomsTours, ['Apéritif', null, 'Dessert', null]);
+    assert.equal(quatre.libelle, 'Nombre de tours : 4');
+    charge.evenement.nomsTours = [null, null, 'Dessert'];
+    assert.equal(Object.hasOwn(accepter('changerTours', charge, { tours: 2 }).charge.evenement, 'nomsTours'), false);
   });
 });
 
@@ -1777,12 +1960,13 @@ const REPETEES = 'rencontresRepetees';
 const ANIMATEURS = 'animateursNonRencontres';
 const REDONDANCE = 'redondance';
 const CONFLITS = 'conflitsOrganisation';
+const INCLUSIONS = 'inclusionsNonSatisfaites';
 
-// Une liste de priorités : le conflit d'organisation seul au premier palier,
-// comme dans l'ordre par défaut, puis chaque palier donné, un nom seul au
-// poids 1, ou une liste de [nom, poids].
+// Une liste de priorités : le conflit d'organisation seul au premier palier
+// et les inclusions seules au deuxième, comme dans l'ordre par défaut, puis
+// chaque palier donné, un nom seul au poids 1, ou une liste de [nom, poids].
 const ordre = (...paliers) =>
-  [CONFLITS, ...paliers].map((palier) =>
+  [CONFLITS, INCLUSIONS, ...paliers].map((palier) =>
     typeof palier === 'string' ? [{ critere: palier, poids: 1 }] : palier.map(([critere, poids]) => ({ critere, poids })),
   );
 // L'ordre par défaut, écrit en clair.
@@ -1800,14 +1984,14 @@ describe("mobilier : l'ordre des priorités (§ 5.7, § 5.9, A11, A12, D19)", ()
     const melange = ordre([[CUMULEES, 3], [EXCEDENT, 2]], REPETEES, ECART, HORS, ANIMATEURS, REDONDANCE);
     const regle = accepter('changerPriorites', charge, { paliers: melange });
     assert.deepEqual(regle.charge.reglages.priorites, COLLISIONS_JOINTES);
-    assert.equal(regle.libelle, 'Ordre des priorités : « collisions cumulées » au palier 2 sur 7, avec « excédent de collisions »');
+    assert.equal(regle.libelle, 'Ordre des priorités : « collisions cumulées » au palier 3 sur 8, avec « excédent de collisions »');
     assert.deepEqual(regle.avertissements, []);
     assert.equal(texteDe(accepter('changerPriorites', charge, { paliers: COLLISIONS_JOINTES }).charge), texteDe(regle.charge));
 
     const defaut = accepter('changerPriorites', regle.charge, { paliers: DEFAUT });
     assert.equal(Object.hasOwn(defaut.charge.reglages, 'priorites'), false);
     assert.equal(texteDe(defaut.charge), texteDe(charge));
-    assert.equal(defaut.libelle, 'Ordre des priorités : « collisions cumulées » au palier 4 sur 8');
+    assert.equal(defaut.libelle, 'Ordre des priorités : « collisions cumulées » au palier 5 sur 9');
 
     refuse(() => COMMANDES.get('changerPriorites')(charge, { paliers: DEFAUT }), 'SANS_EFFET', { commande: 'changerPriorites', remede: null });
     refuse(() => COMMANDES.get('changerPriorites')(regle.charge, { paliers: melange }), 'SANS_EFFET');
@@ -1820,33 +2004,33 @@ describe("mobilier : l'ordre des priorités (§ 5.7, § 5.9, A11, A12, D19)", ()
     // passe ne l'est pas.
     assert.equal(
       libelleDe(charge, ordre(EXCEDENT, REPETEES, CUMULEES, HORS, ECART, ANIMATEURS, REDONDANCE)),
-      'Ordre des priorités : « tours hors objectif » au palier 5 sur 8',
+      'Ordre des priorités : « tours hors objectif » au palier 6 sur 9',
     );
     // Un palier porté d'un bout à l'autre.
     assert.equal(
       libelleDe(charge, ordre(REDONDANCE, EXCEDENT, REPETEES, CUMULEES, ECART, HORS, ANIMATEURS)),
-      "Ordre des priorités : « redondance d'organisation » au palier 2 sur 8",
+      "Ordre des priorités : « redondance d'organisation » au palier 3 sur 9",
     );
     assert.equal(
       libelleDe(charge, ordre(EXCEDENT, REPETEES, CUMULEES, ECART, HORS, REDONDANCE, ANIMATEURS)),
-      "Ordre des priorités : « redondance d'organisation » au palier 7 sur 8",
+      "Ordre des priorités : « redondance d'organisation » au palier 8 sur 9",
     );
     const jointe = accepter('changerPriorites', charge, { paliers: COLLISIONS_JOINTES }).charge;
     // Le poids d'un critère d'un palier partagé.
     assert.equal(
       libelleDe(jointe, ordre([[EXCEDENT, 2], [CUMULEES, 5]], REPETEES, ECART, HORS, ANIMATEURS, REDONDANCE)),
-      'Ordre des priorités : « collisions cumulées » au poids 5, palier 2 sur 7',
+      'Ordre des priorités : « collisions cumulées » au poids 5, palier 3 sur 8',
     );
     // Un palier partagé, déplacé entier : ses critères sont nommés ensemble.
     assert.equal(
       libelleDe(jointe, ordre(REPETEES, ECART, HORS, [[EXCEDENT, 2], [CUMULEES, 3]], ANIMATEURS, REDONDANCE)),
-      'Ordre des priorités : « excédent de collisions » et « collisions cumulées » au palier 5 sur 7',
+      'Ordre des priorités : « excédent de collisions » et « collisions cumulées » au palier 6 sur 8',
     );
     // Joindre un palier partagé : le critère seul qui le rejoint est nommé,
     // avec ceux qu'il rejoint.
     assert.equal(
       libelleDe(jointe, ordre([[EXCEDENT, 2], [CUMULEES, 3], [HORS, 1]], REPETEES, ECART, ANIMATEURS, REDONDANCE)),
-      'Ordre des priorités : « tours hors objectif » au palier 2 sur 6, avec « excédent de collisions » et « collisions cumulées »',
+      'Ordre des priorités : « tours hors objectif » au palier 3 sur 7, avec « excédent de collisions » et « collisions cumulées »',
     );
   });
 
@@ -1866,12 +2050,14 @@ describe("mobilier : l'ordre des priorités (§ 5.7, § 5.9, A11, A12, D19)", ()
   test('une liste invalide est PRIORITES_INVALIDES {faute, critere, palier}, remède null : écart joint, rencontres répétées jointes, critère absent, répété, inconnu, palier vide', () => {
     const charge = figer(chargeEtiquetee());
     const cas = [
-      [ordre([[ECART, 1], [EXCEDENT, 1]], CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE), { faute: 'seulASonPalier', critere: ECART, palier: 1 }],
-      [ordre(ECART, EXCEDENT, CUMULEES, HORS, [[REPETEES, 1], [REDONDANCE, 4]], ANIMATEURS), { faute: 'seulASonPalier', critere: REPETEES, palier: 5 }],
+      [ordre([[ECART, 1], [EXCEDENT, 1]], CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE), { faute: 'seulASonPalier', critere: ECART, palier: 2 }],
+      [ordre(ECART, EXCEDENT, CUMULEES, HORS, [[REPETEES, 1], [REDONDANCE, 4]], ANIMATEURS), { faute: 'seulASonPalier', critere: REPETEES, palier: 6 }],
       [ordre(ECART, EXCEDENT, CUMULEES, HORS, REPETEES, ANIMATEURS), { faute: 'critereAbsent', critere: REDONDANCE }],
-      [ordre(ECART, EXCEDENT, CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE, EXCEDENT), { faute: 'critereRepete', critere: EXCEDENT, palier: 8 }],
-      [ordre(ECART, EXCEDENT, CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE, 'constructor'), { faute: 'critereInconnu', critere: 'constructor', palier: 8 }],
+      [ordre(ECART, EXCEDENT, CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE, EXCEDENT), { faute: 'critereRepete', critere: EXCEDENT, palier: 9 }],
+      [ordre(ECART, EXCEDENT, CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE, 'constructor'), { faute: 'critereInconnu', critere: 'constructor', palier: 9 }],
       [[...DEFAUT.slice(0, 3), [], ...DEFAUT.slice(3)], { faute: 'palierVide', palier: 3 }],
+      // Une liste d'avant les inclusions : seul le fichier lu la complète.
+      [DEFAUT.filter(([{ critere }]) => critere !== INCLUSIONS), { faute: 'critereAbsent', critere: INCLUSIONS }],
     ];
     for (const [paliers, details] of cas) {
       const erreur = refuse(() => COMMANDES.get('changerPriorites')(charge, { paliers }), 'PRIORITES_INVALIDES');
@@ -1887,10 +2073,10 @@ describe("mobilier : l'ordre des priorités (§ 5.7, § 5.9, A11, A12, D19)", ()
       const charge = chargeEtiquetee();
       charge.reglages.modeObjectifs = mode;
       const erreur = refuse(() => COMMANDES.get('changerPriorites')(figer(charge), { paliers: HORS_JOINTS }), 'PRIORITES_INVALIDES');
-      assert.deepEqual(erreur.details, { faute: 'seulASonPalier', critere: HORS, palier: 2, remede: null }, mode);
+      assert.deepEqual(erreur.details, { faute: 'seulASonPalier', critere: HORS, palier: 3, remede: null }, mode);
       // Seuls, ils se déplacent.
       const monte = accepter('changerPriorites', charge, { paliers: ordre(EXCEDENT, REPETEES, CUMULEES, HORS, ECART, ANIMATEURS, REDONDANCE) });
-      assert.equal(monte.libelle, 'Ordre des priorités : « tours hors objectif » au palier 5 sur 8');
+      assert.equal(monte.libelle, 'Ordre des priorités : « tours hors objectif » au palier 6 sur 9');
     }
   });
 
@@ -1972,7 +2158,7 @@ describe('mobilier : le mode des objectifs (§ 5.3, § 8.9, A8, A12, D23)', () =
     figer(charge);
     for (const mode of ['chacun', 'minimum']) {
       const erreur = refuse(() => COMMANDES.get('modifierReglage')(charge, { cle: 'modeObjectifs', valeur: mode }), 'OBJECTIFS_PALIER_PARTAGE');
-      assert.deepEqual(erreur.details, { mode, palier: 2, remede: null });
+      assert.deepEqual(erreur.details, { mode, palier: 3, remede: null });
     }
     assert.equal(modeObjectifs(charge), 'places');
     assert.deepEqual(priorites(charge), HORS_JOINTS);
@@ -1982,7 +2168,7 @@ describe('mobilier : le mode des objectifs (§ 5.3, § 8.9, A8, A12, D23)', () =
     figer(chargeLoin);
     for (const mode of ['chacun', 'minimum']) {
       const erreur = refuse(() => COMMANDES.get('modifierReglage')(chargeLoin, { cle: 'modeObjectifs', valeur: mode }), 'OBJECTIFS_PALIER_PARTAGE');
-      assert.deepEqual(erreur.details, { mode, palier: 5, remede: null });
+      assert.deepEqual(erreur.details, { mode, palier: 6, remede: null });
     }
     assert.equal(modeObjectifs(chargeLoin), 'places');
     assert.deepEqual(priorites(chargeLoin), loin);

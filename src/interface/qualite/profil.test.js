@@ -176,7 +176,15 @@ describe('profilDe : un plafond réalisé nul (§ 12.3, B12, D51)', () => {
     assert.equal(comptes.marques[rang], 'plafondNul');
     assert.equal(pourcentages.series[0].valeurs[rang], null);
     assert.deepEqual(infobulle.lignes[rang].pourcent, { texte: null, compte: t('qualite.profil.ligne', { rencontres: 0, plafond: 0 }) });
-    assert.equal(infobulle.lignes[rang].marque, t('qualite.profil.marque.plafondNul'));
+    // La marque de sa ligne renvoie à son écart d'itinéraire : son plafond a
+    // priori, moins un plafond réalisé nul.
+    const { plafondAPriori } = detail.profil[rang];
+    assert.ok(plafondAPriori > 0);
+    assert.equal(infobulle.lignes[rang].marque, t('qualite.profil.marqueLigne.plafondNul', { ecart: plafondAPriori }));
+    assert.equal(
+      infobulle.lignes[rang].marque,
+      `plafond réalisé nul ; écart d'itinéraire de ${plafondAPriori} ${plafondAPriori > 1 ? 'personnes' : 'personne'}`,
+    );
     // Ancrée, la première marque qui s'applique.
     const ancree = detaillerQualite(chargeSeule({ reservee: true }), 1);
     const sonRang = ancree.profil.findIndex(({ id }) => id === 4);
@@ -215,6 +223,25 @@ describe('profilDe : le second graphique, en pourcentages (§ 12.3, B12, D51)', 
     assert.equal(pourcentages.series[0].valeurs[2], null);
     assert.equal(comptes.marques[2], 'plafondNul');
     assert.deepEqual(infobulle.lignes[2].pourcent, { texte: null, compte: t('qualite.profil.ligne', { rencontres: 0, plafond: 0 }) });
+  });
+
+  test('un plafond réalisé nul sans plafond a priori connu : la marque de sa ligne écrit l’écart d’itinéraire « inconnu », jamais 0', () => {
+    const detail = structuredClone(detaillerQualite(chargeSeule(), 1));
+    const rang = detail.profil.findIndex(({ id }) => id === 4);
+    detail.profil[rang].plafondAPriori = null;
+    const { infobulle, tableaux } = profilDe(detail, outils);
+    assert.equal(infobulle.lignes[rang].marque, t('qualite.profil.marqueLigne.plafondNul', { ecart: null }));
+    assert.equal(infobulle.lignes[rang].marque, "plafond réalisé nul ; écart d'itinéraire inconnu");
+    assert.equal(tableaux[0].lignes[rang].marque, infobulle.lignes[rang].marque);
+  });
+
+  test('la légende garde le libellé court du signe ; seule la ligne d’un rang au plafond nul porte le renvoi', () => {
+    assert.equal(t('graphiques.signe.plafondNul'), t('qualite.profil.marque.plafondNul'));
+    const detail = structuredClone(detailDe(chargeSix({ reservation: true })));
+    const marque = detail.profil.findIndex(({ marque: signe }) => signe !== null);
+    assert.ok(marque >= 0);
+    const { infobulle } = profilDe(detail, outils);
+    assert.equal(infobulle.lignes[marque].marque, t(`qualite.profil.marque.${detail.profil[marque].marque}`));
   });
 
   test('la personne au rang 1 au plafond réalisé nul : la synthèse du second graphique le dit en entier, sans pourcentage', () => {

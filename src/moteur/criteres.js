@@ -9,23 +9,26 @@
 // Ces faits n'existent que là : la recherche, le classement, le schéma, les
 // commandes et l'écran les lisent.
 //
-// Une liste de priorités range les huit critères en paliers, du premier au
+// Une liste de priorités range les neuf critères en paliers, du premier au
 // dernier : [[{critere, poids}, …], …]. Elle est complète, chaque critère y
 // figure une fois, coché ou non ; un critère qui ne compte pas garde son
 // rang et ne pose rien à la compilation (D10). Dans un palier, les critères
 // suivent l'ordre de CRITERES (A16) : deux listes de même effet s'écrivent
-// de la même façon.
+// de la même façon. Un critère de CRITERES_POSTERIEURS peut seul manquer à
+// une liste écrite avant lui : completerPriorites lui rend sa place.
 //
 // Les noms reçus de la saisie ne servent jamais de clé avant d'être reconnus
 // par CRITERES ou MODES_OBJECTIFS : un nom hérité d'Object (« constructor »,
 // « __proto__ ») est inconnu, et ne lit rien dans les tables du registre.
 
 /**
- * Les huit critères, dans l'ordre canonique du tableau du § 5.7 : celui des
+ * Les neuf critères, dans l'ordre canonique du tableau du § 5.7 : celui des
  * critères dans un palier (A16), de l'état des critères et des listes que le
- * registre rend. Le conflit d'organisation, toujours seul à son palier, y
- * vient en dernier : il ne range aucun palier partagé. L'ordre par défaut
- * des paliers est ORDRE_PAR_DEFAUT.
+ * registre rend. Le conflit d'organisation et les inclusions non
+ * satisfaites, toujours seuls à leur palier, y viennent en dernier : ils ne
+ * rangent aucun palier partagé, et les rangs des autres dans l'état des
+ * critères ne dépendent pas d'eux. L'ordre par défaut des paliers est
+ * ORDRE_PAR_DEFAUT.
  */
 export const CRITERES = Object.freeze([
   'ecartAuPlafondAPrioriMax',
@@ -36,6 +39,7 @@ export const CRITERES = Object.freeze([
   'animateursNonRencontres',
   'redondance',
   'conflitsOrganisation',
+  'inclusionsNonSatisfaites',
 ]);
 
 /** La famille de chaque critère (§ 5.7), qui fait celle de son palier (D15). */
@@ -48,12 +52,14 @@ export const FAMILLE = Object.freeze({
   animateursNonRencontres: 'raffinement',
   redondance: 'raffinement',
   conflitsOrganisation: 'contrainte',
+  inclusionsNonSatisfaites: 'contrainte',
 });
 
 /**
  * Les clés de contraintes qui font compter chaque critère (§ 5.3, A8) : le
  * critère est coché quand l'une d'elles l'est ; une liste vide, toujours —
- * le conflit d'organisation, qu'aucune case ne règle, et l'écart.
+ * le conflit d'organisation et les inclusions, qu'aucune case ne règle, et
+ * l'écart.
  */
 export const CASES = Object.freeze({
   ecartAuPlafondAPrioriMax: Object.freeze([]),
@@ -64,6 +70,7 @@ export const CASES = Object.freeze({
   animateursNonRencontres: Object.freeze(['rencontrerAnimateurs']),
   redondance: Object.freeze(['varierOrganisations']),
   conflitsOrganisation: Object.freeze([]),
+  inclusionsNonSatisfaites: Object.freeze([]),
 });
 
 // La valeur d'une case facultative absente des contraintes (A16) : les
@@ -73,14 +80,15 @@ const CASES_ABSENTES = Object.freeze({ respecterObjectifs: true, rencontrerAnima
 
 /**
  * L'ordre par défaut des critères (§ 5.7, D11), du premier palier au
- * dernier : le conflit d'organisation, l'excédent de collisions, les
- * rencontres répétées et les retours, les collisions cumulées, l'écart au
- * plafond a priori, puis les tours hors objectif, les animateurs non
- * rencontrés et la redondance. Une permutation de CRITERES, qui garde son
- * ordre canonique.
+ * dernier : le conflit d'organisation, les inclusions non satisfaites,
+ * l'excédent de collisions, les rencontres répétées et les retours, les
+ * collisions cumulées, l'écart au plafond a priori, puis les tours hors
+ * objectif, les animateurs non rencontrés et la redondance. Une permutation
+ * de CRITERES, qui garde son ordre canonique.
  */
 export const ORDRE_PAR_DEFAUT = Object.freeze([
   'conflitsOrganisation',
+  'inclusionsNonSatisfaites',
   'excedentCollisions',
   'rencontresRepetees',
   'collisionsCumulees',
@@ -97,6 +105,14 @@ export const ORDRE_PAR_DEFAUT = Object.freeze([
 export const PRIORITES_PAR_DEFAUT = Object.freeze(
   ORDRE_PAR_DEFAUT.map((critere) => Object.freeze([Object.freeze({ critere, poids: 1 })])),
 );
+
+/**
+ * Les critères ajoutés au registre après que des listes de priorités ont pu
+ * s'écrire sans eux (§ 8.9) : seuls à pouvoir manquer à une liste lue, ils
+ * y prennent leur place de l'ordre par défaut (completerPriorites). Tout
+ * autre critère absent reste une faute.
+ */
+export const CRITERES_POSTERIEURS = Object.freeze(['inclusionsNonSatisfaites']);
 
 /** Le plus grand poids d'un critère ; le plus petit est 1. */
 export const POIDS_MAX = 100;
@@ -134,9 +150,15 @@ const COMPOSANTES_DE_L_ECART = Object.freeze(['ecartAuPlafondAPrioriMax', 'carre
 // Les critères seuls à leur palier sous tout mode (A16) : l'écart, dont la
 // valeur nulle est le certificat du § 5.5 ; les rencontres répétées, dont
 // les deux valeurs ne s'échangent pas au même taux contre un autre critère
-// (D8, D9) ; le conflit d'organisation, qu'aucune somme pondérée n'échange
-// contre un autre critère.
-const TOUJOURS_SEULS = Object.freeze(['ecartAuPlafondAPrioriMax', 'rencontresRepetees', 'conflitsOrganisation']);
+// (D8, D9) ; le conflit d'organisation et les inclusions non satisfaites,
+// qu'aucune somme pondérée n'échange contre un autre critère : une rencontre
+// promise ne se paie pas de quelques collisions.
+const TOUJOURS_SEULS = Object.freeze([
+  'ecartAuPlafondAPrioriMax',
+  'rencontresRepetees',
+  'conflitsOrganisation',
+  'inclusionsNonSatisfaites',
+]);
 
 function exigerCritere(nom) {
   if (!CRITERES.includes(nom)) throw new RangeError(`critère ${String(nom)} : inconnu du registre`);
@@ -148,9 +170,10 @@ function exigerMode(mode) {
 
 /**
  * Vrai quand les cases de ces contraintes font compter le critère (§ 5.3,
- * A8) : l'écart et le conflit d'organisation toujours ; un autre quand l'une
- * de ses cases est cochée, une case facultative absente valant son défaut. « A un objet » ne se lit pas
- * ici : il dépend de l'instance. Lève RangeError pour un critère inconnu.
+ * A8) : l'écart, le conflit d'organisation et les inclusions toujours ; un
+ * autre quand l'une de ses cases est cochée, une case facultative absente
+ * valant son défaut. « A un objet » ne se lit pas ici : il dépend de
+ * l'instance. Lève RangeError pour un critère inconnu.
  *
  * @param {string} nom
  * @param {Object<string, boolean>} contraintes
@@ -164,11 +187,11 @@ export function estCoche(nom, contraintes) {
 
 /**
  * Les critères seuls à leur palier sous ce mode, dans l'ordre de CRITERES :
- * l'écart, les rencontres répétées et le conflit d'organisation toujours, et
- * les tours hors objectif sous les modes qui leur font comparer deux valeurs
- * (D8, D23). Chacun y porte le poids 1 (A16) : un critère qui compare deux
- * valeurs l'une après l'autre ne se pondère pas. Lève RangeError pour un
- * mode inconnu.
+ * l'écart, les rencontres répétées, le conflit d'organisation et les
+ * inclusions non satisfaites toujours, et les tours hors objectif sous les
+ * modes qui leur font comparer deux valeurs (D8, D23). Chacun y porte le
+ * poids 1 (A16) : un critère qui compare deux valeurs l'une après l'autre ne
+ * se pondère pas. Lève RangeError pour un mode inconnu.
  *
  * @param {'places'|'chacun'|'minimum'} [mode='places']
  * @returns {string[]}
@@ -355,7 +378,7 @@ function familleDuPalier(criteres) {
  * autres gardant leur ordre et chaque palier ses composantes ensemble.
  * rangEcart est le rang de la composante du plus grand écart, null quand
  * l'écart ne compte pas — l'ordre des contraintes égale alors celui du
- * score. taille, le nombre de composantes, est au plus 11.
+ * score. taille, le nombre de composantes, est au plus 12.
  *
  * Lève RangeError pour un mode inconnu, ou pour une liste que
  * verifierPriorites refuse sous ce mode, le message nommant la faute. Rend

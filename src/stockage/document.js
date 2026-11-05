@@ -19,25 +19,28 @@
 // FORMAT_INCONNU s'il n'est pas un entier ≥ 1, FORMAT_TROP_ANCIEN s'il est
 // plus petit que FORMAT) ; la forme de chaque champ, dans l'ordre du schéma
 // puis des rangs (FORME) ; les identifiants des participants et des tables,
-// le tour des réservations, la portée et le tour des objectifs de table, la
-// présence de chaque personne, sa propre organisation nommée dans ses
-// conflits, l'ordre des priorités sous le mode des objectifs et les titres
-// répétés à l'identique (FORME) ; les comptes de la saisie dans l'en-tête —
-// participants, tables, réservations, titres — (COMPTES) ; les références,
-// dont chaque organisation que nomment les conflits d'une personne
-// (REFERENCE). Les comptes des
-// propositions et du retenu ne refusent jamais le fichier (§ 8.9, point 3) :
-// ce que l'en-tête annonce sans que la charge le porte se rend à côté d'elle,
-// et le dépôt l'annonce. Un fichier d'un format plus récent que FORMAT se lit
-// réduit aux clés que le schéma connaît, et ce qui serait FORME au format
-// courant y porte la raison FORMAT_PLUS_RECENT : la lecture ne le distingue
-// pas d'une évolution du format. Ses comptes et ses références gardent leur
-// raison, une corruption quel que soit le format ; tout refus d'un tel
-// fichier porte le format lu dans ses détails, qui disent au dépôt d'où il
-// vient. Le dépôt complète les détails — base, secours — et pose lui-même la
-// raison ABSENT, quand le journal existe sans l'état. Des propositions et du
-// retenu, l'analyse ne lit que le conteneur : leur forme, leur cohérence et
-// leurs identifiants, comparés entre eux et à prochainsIds.proposition, sont
+// les noms des tours, l'image des badges, le tour des réservations, la portée
+// et le tour des objectifs de table, la présence de chaque personne, sa
+// propre organisation nommée dans ses conflits, sa propre organisation puis
+// elle-même nommées dans ses inclusions, le numéro final de son nom quand
+// elle porte la marque du nom numéroté, l'ordre des priorités sous le mode
+// des objectifs et les titres répétés à l'identique (FORME) ; les comptes de
+// la saisie dans l'en-tête — participants, tables, réservations, titres —
+// (COMPTES) ; les références, dont chaque organisation que nomment les
+// conflits d'une personne, puis chaque organisation et chaque participant que
+// nomment ses inclusions (REFERENCE). Les comptes des propositions et du
+// retenu ne refusent jamais le fichier (§ 8.9, point 3) : ce que l'en-tête
+// annonce sans que la charge le porte se rend à côté d'elle, et le dépôt
+// l'annonce. Un fichier d'un format plus récent que FORMAT se lit réduit aux
+// clés que le schéma connaît, et ce qui serait FORME au format courant y
+// porte la raison FORMAT_PLUS_RECENT : la lecture ne le distingue pas d'une
+// évolution du format. Ses comptes et ses références gardent leur raison, une
+// corruption quel que soit le format ; tout refus d'un tel fichier porte le
+// format lu dans ses détails, qui disent au dépôt d'où il vient. Le dépôt
+// complète les détails — base, secours — et pose lui-même la raison ABSENT,
+// quand le journal existe sans l'état. Des propositions et du retenu,
+// l'analyse ne lit que le conteneur : leur forme, leur cohérence et leurs
+// identifiants, comparés entre eux et à prochainsIds.proposition, sont
 // l'affaire du contrôle des placements, qui écarte une proposition fautive et
 // signale un retenu fautif sans refuser le fichier (§ 8.9, point 3).
 //
@@ -55,7 +58,14 @@
 // Les autres fonctions créent une charge ou dérivent d'elle la configuration
 // du moteur, l'état qu'impose son contenu, la capacité d'une table et la
 // valeur d'un réglage facultatif. Aucune ne modifie ce qu'elle reçoit.
-import { CRITERES, POIDS_MAX, PRIORITES_PAR_DEFAUT, completerPriorites, verifierPriorites } from '../moteur/criteres.js';
+import {
+  CRITERES,
+  CRITERES_POSTERIEURS,
+  POIDS_MAX,
+  PRIORITES_PAR_DEFAUT,
+  completerPriorites,
+  verifierPriorites,
+} from '../moteur/criteres.js';
 import { ETIQUETTES_MAX, estEtiquetteBienFormee } from './etiquettes.js';
 import { ErreurStockage } from './erreurs.js';
 import { estCheminLogo } from './logos.js';
@@ -128,6 +138,15 @@ export function estLibelleTable(valeur) {
     [...valeur].length <= LIBELLE_TABLE_MAX
   );
 }
+
+/**
+ * Le numéro final d'un nom numéroté (§ 8.9, § 10.1) : une espace U+0020,
+ * puis deux chiffres ASCII ou plus, rien après — la forme qu'écrit
+ * rendreNomsUniques (noms_uniques.js). Une personne marquée nomNumerote
+ * porte un nom qui y répond ; un autre blanc, des chiffres d'une autre
+ * écriture ou un seul chiffre n'y répondent pas.
+ */
+export const SUFFIXE_NUMERO = / [0-9]{2,}$/;
 
 // AAAA-MM-JJTHH:MM:SS±HH:MM, la forme que rend l'horloge de l'application.
 // Le calendrier ne se contrôle pas : un horodatage ne décide d'aucun ordre.
@@ -259,6 +278,19 @@ const FILIATION = objet(
   { nul: true },
 );
 
+/**
+ * Les positions de l'image des badges sur la carte (§ 11.4), dans l'ordre où
+ * la section les offre : en haut du badge, au centre — entre le nom et les
+ * lignes de tour —, en bas — au-dessus du pied.
+ */
+export const POSITIONS_IMAGE_BADGES = Object.freeze(['haut', 'centre', 'bas']);
+
+/**
+ * L'image des badges d'un événement qui ne porte pas le champ imageBadges :
+ * la case décochée, aucune image choisie, la position en haut.
+ */
+export const IMAGE_BADGES_DEFAUT = Object.freeze({ active: false, chemin: null, position: 'haut' });
+
 const EVENEMENT = objet([
   ['id', CHAINE],
   ['nom', CHAINE],
@@ -268,6 +300,29 @@ const EVENEMENT = objet([
   ['unite', parmi('cm')],
   ['etat', parmi('brouillon', 'propose', 'retenu', 'bloque')],
   ['filiation', FILIATION],
+  // Facultatif, en dernier. nomsTours absent : aucun tour n'a de nom, et
+  // chacun se dit « Tour N » ; présent, une liste d'un élément par tour, le
+  // nom du tour, un libellé de table (estLibelleTable), ou null pour un tour
+  // sans nom ; examinerNomsTours la compare au nombre de tours et refuse une
+  // liste sans aucun nom.
+  ['nomsTours', liste(regle('libelleTable', { nul: true }), { min: 1, max: TOURS_MAX, optionnel: true })],
+  // Facultatif, après nomsTours. imageBadges absent : aucune image sur les
+  // badges, sa case décochée, sans image choisie, en haut
+  // (IMAGE_BADGES_DEFAUT) ; présent, la case (active), le chemin de l'image
+  // dans le dossier de l'événement, logo/<empreinte>.png (estCheminLogo), ou
+  // null sans image, et la position (POSITIONS_IMAGE_BADGES) ;
+  // examinerImageBadges refuse le défaut écrit. Le moteur ne le lit pas.
+  [
+    'imageBadges',
+    objet(
+      [
+        ['active', BOOLEEN],
+        ['chemin', regle('logo', { nul: true })],
+        ['position', parmi(...POSITIONS_IMAGE_BADGES)],
+      ],
+      { optionnel: true },
+    ),
+  ],
 ]);
 
 // Les étiquettes d'une personne ou d'un objectif (§ 4.5, § 8.9) : une liste
@@ -355,17 +410,35 @@ const PARTICIPANT = objet([
   // (src/moteur/presence.js) ; présent, les tours où elle l'est, une liste
   // non vide d'entiers distincts de 1 à TOURS_MAX, rangée croissante à
   // l'écriture ; examinerPresences la compare au nombre de tours. conflits
-  // absent : la personne n'est en conflit avec aucune organisation ;
-  // présent, une liste non vide d'organisations distinctes, rangée par
-  // unités de code à l'écriture ; examinerConflits refuse la sienne, et
-  // examinerReferences une organisation que nul participant ne porte. logo
-  // absent : la personne ne porte aucun logo ; présent, le chemin de son
-  // image dans le dossier de l'événement, logo/<empreinte>.png
-  // (estCheminLogo), que le moteur ne lit pas.
+  // absent : la personne n'est en conflit avec aucune organisation ; présent,
+  // une liste non vide d'organisations distinctes, rangée par unités de code
+  // à l'écriture ; examinerConflits refuse la sienne, et examinerReferences
+  // une organisation que nul participant ne porte. inclusionsOrganisation et
+  // inclusionsParticipant absents : la personne n'a aucune organisation, ou
+  // aucun participant, à rencontrer ; présents, ceux qu'elle doit rencontrer
+  // au moins une fois, une liste non vide d'éléments distincts, les
+  // organisations rangées par unités de code et les identifiants croissants à
+  // l'écriture ; examinerInclusions refuse sa propre organisation et son
+  // propre identifiant, examinerReferences une organisation que nul
+  // participant ne porte et un identifiant que nul participant n'a, et le
+  // moteur ne les lit pas. logo absent : la personne ne porte aucun logo ;
+  // présent, le chemin de son image dans le dossier de l'événement,
+  // logo/<empreinte>.png (estCheminLogo), que le moteur ne lit pas.
+  // nomNumerote absent : le nom est celui que la personne a reçu ; présent,
+  // toujours vrai, le numéro final de son nom est celui qu'y a ajouté
+  // « Rendre les noms uniques » à l'import ; examinerNomsNumerotes exige ce
+  // numéro, et le moteur ne lit pas la marque. animationReservee absent : la
+  // personne n'a pas à animer une table ; présent, toujours vrai, elle est à
+  // désigner animatrice (§ 4) — la marque dit une intention, jamais qu'elle
+  // anime, et le moteur ne la lit pas.
   ['etiquettes', regle('liste', { ...ETIQUETTES, optionnel: true })],
   ['presence', liste(entier(1, TOURS_MAX), { min: 1, distincts: true, tri: croissant, optionnel: true })],
   ['conflits', liste(CHAINE, { min: 1, distincts: true, tri: comparerTextes, optionnel: true })],
+  ['inclusionsOrganisation', liste(CHAINE, { min: 1, distincts: true, tri: comparerTextes, optionnel: true })],
+  ['inclusionsParticipant', liste(IDENTIFIANT, { min: 1, distincts: true, tri: croissant, optionnel: true })],
   ['logo', regle('logo', { optionnel: true })],
+  ['nomNumerote', horsDuDefaut(true)],
+  ['animationReservee', horsDuDefaut(true)],
 ]);
 
 const TABLE = objet([
@@ -870,6 +943,28 @@ function examinerObjectifs({ evenement, tables }, faute) {
   });
 }
 
+// Les noms des tours, quand l'événement les porte : une liste d'une autre
+// longueur que le nombre de tours est fautive, et une liste sans aucun nom,
+// le défaut écrit, l'est aussi, nommées par la liste. faute(chemin) lève
+// l'écart.
+function examinerNomsTours({ evenement }, faute) {
+  const { nomsTours, tours } = evenement;
+  if (nomsTours === undefined) return;
+  if (nomsTours.length !== tours || nomsTours.every((nom) => nom === null)) faute('charge.evenement.nomsTours');
+}
+
+// L'image des badges, quand l'événement la porte : écrite à son défaut
+// (IMAGE_BADGES_DEFAUT), elle est fautive, nommée par le champ. faute(chemin)
+// lève l'écart.
+function examinerImageBadges({ evenement }, faute) {
+  const { imageBadges } = evenement;
+  if (imageBadges === undefined) return;
+  const { active, chemin, position } = IMAGE_BADGES_DEFAUT;
+  if (imageBadges.active === active && imageBadges.chemin === chemin && imageBadges.position === position) {
+    faute('charge.evenement.imageBadges');
+  }
+}
+
 // Présence de chaque personne qui la porte, exclues comprises, dans l'ordre
 // des personnes : un tour au-delà des tours de l'événement est fautif, le
 // premier dans l'ordre écrit ; une liste qui porte chaque tour, le défaut
@@ -897,19 +992,51 @@ function examinerConflits({ participants }, faute) {
   });
 }
 
+// Les inclusions de chaque personne qui en porte, exclues comprises, dans
+// l'ordre des personnes : sa propre organisation est fautive, au rang qui la
+// nomme, puis son propre identifiant, au rang qui le porte. Une personne sans
+// organisation n'en a aucune à refuser. faute(chemin) lève l'écart.
+function examinerInclusions({ participants }, faute) {
+  participants.forEach(({ id, organisation, inclusionsOrganisation = [], inclusionsParticipant = [] }, rang) => {
+    const chemin = `charge.participants[${rang}]`;
+    const sienne = inclusionsOrganisation.indexOf(organisation);
+    if (sienne >= 0) faute(`${chemin}.inclusionsOrganisation[${sienne}]`);
+    const soi = inclusionsParticipant.indexOf(id);
+    if (soi >= 0) faute(`${chemin}.inclusionsParticipant[${soi}]`);
+  });
+}
+
+// La marque du nom numéroté de chaque personne qui la porte, exclues
+// comprises, dans l'ordre des personnes : un nom qui ne finit pas par un
+// numéro (SUFFIXE_NUMERO) la rend fautive, nommée par la marque. La forme
+// garantit qu'une marque présente vaut vrai. faute(chemin) lève l'écart.
+function examinerNomsNumerotes({ participants }, faute) {
+  participants.forEach(({ nom, nomNumerote }, rang) => {
+    if (nomNumerote === true && !SUFFIXE_NUMERO.test(nom)) faute(`charge.participants[${rang}].nomNumerote`);
+  });
+}
+
 // L'ordre des priorités, quand les réglages le portent, chaque palier rangé
 // dans l'ordre du registre : la liste se juge par verifierPriorites sous le
 // mode des objectifs de la charge, et l'ordre par défaut écrit est une faute
-// (§ 8.9, A16). Une faute d'un palier désigne ce palier ; une autre, la
-// liste. faute(chemin) lève l'écart.
+// (§ 8.9, A16). Une liste à qui ne manque qu'un critère de
+// CRITERES_POSTERIEURS — le premier absent dans l'ordre du registre, qui les
+// range en dernier — se juge complétée (completerPriorites) : elle s'est
+// écrite avant que ce critère existe ; complétée, elle ne doit pas égaler
+// l'ordre par défaut, qu'aucun fichier n'écrit. Une faute d'un palier
+// désigne ce palier ; une autre, la liste. faute(chemin) lève l'écart.
 function examinerPriorites(charge, faute) {
   const { priorites: portee } = charge.reglages;
   if (portee === undefined) return;
   const chemin = 'charge.reglages.priorites';
   const rangee = rangerPriorites(portee);
-  const ecart = verifierPriorites(rangee, modeObjectifs(charge));
+  const mode = modeObjectifs(charge);
+  let ecart = verifierPriorites(rangee, mode);
+  if (ecart?.faute === 'critereAbsent' && CRITERES_POSTERIEURS.includes(ecart.critere)) {
+    ecart = verifierPriorites(completerPriorites(rangee), mode);
+  }
   if (ecart !== null) faute(ecart.palier === undefined ? chemin : `${chemin}[${ecart.palier}]`);
-  if (egaleAuDefaut(rangee)) faute(chemin);
+  if (egaleAuDefaut(completerPriorites(rangee))) faute(chemin);
 }
 
 // Copie d'une liste de priorités, chaque palier rangé dans l'ordre du
@@ -950,13 +1077,16 @@ function examinerComptes(comptes, charge, plus) {
   };
 }
 
-// Références des réservations, puis des titres, puis des conflits : la
-// personne et la table désignées existent, et le siège, quand il est donné,
-// tient dans la capacité courante de la table (§ 6.2) ; chaque organisation
-// que nomment les conflits d'une personne est celle d'un participant,
-// exclus compris, comparée chaîne à chaîne. La réservation d'une personne
-// exclue reste admise : elle est suspendue, non fautive (§ 4.4). plus
-// s'ajoute aux détails du refus.
+// Références des réservations, puis des titres, puis des conflits, puis des
+// inclusions : la personne et la table désignées existent, et le siège, quand
+// il est donné, tient dans la capacité courante de la table (§ 6.2) ; chaque
+// organisation que nomment les conflits d'une personne est celle d'un
+// participant, exclus compris, comparée chaîne à chaîne ; chaque organisation
+// qu'elle inclut l'est de même, puis chaque identifiant qu'elle inclut est
+// celui d'un participant, exclus compris, personne par personne. La
+// réservation d'une personne exclue reste admise : elle est suspendue, non
+// fautive (§ 4.4) ; une inclusion qui vise une exclue aussi. plus s'ajoute
+// aux détails du refus.
 function examinerReferences(charge, plus) {
   const personnes = new Set(charge.participants.map(({ id }) => id));
   const tables = new Map(charge.tables.map((table) => [table.id, table]));
@@ -975,6 +1105,13 @@ function examinerReferences(charge, plus) {
   charge.participants.forEach(({ conflits = [] }, rang) => {
     const inconnue = conflits.findIndex((nom) => !organisations.has(nom));
     if (inconnue >= 0) illisible('REFERENCE', `charge.participants[${rang}].conflits[${inconnue}]`, plus);
+  });
+  charge.participants.forEach(({ inclusionsOrganisation = [], inclusionsParticipant = [] }, rang) => {
+    const chemin = `charge.participants[${rang}]`;
+    const organisation = inclusionsOrganisation.findIndex((nom) => !organisations.has(nom));
+    if (organisation >= 0) illisible('REFERENCE', `${chemin}.inclusionsOrganisation[${organisation}]`, plus);
+    const participant = inclusionsParticipant.findIndex((id) => !personnes.has(id));
+    if (participant >= 0) illisible('REFERENCE', `${chemin}.inclusionsParticipant[${participant}]`, plus);
   });
 }
 
@@ -1033,10 +1170,14 @@ export function analyser(texte) {
   const { entete, charge } = fichier;
   oublierDesReglages(charge.reglages);
   examinerIdentifiants(charge, faute);
+  examinerNomsTours(charge, faute);
+  examinerImageBadges(charge, faute);
   examinerTours(charge, faute);
   examinerObjectifs(charge, faute);
   examinerPresences(charge, faute);
   examinerConflits(charge, faute);
+  examinerInclusions(charge, faute);
+  examinerNomsNumerotes(charge, faute);
   examinerPriorites(charge, faute);
   examinerTitres(charge, faute);
   const manquants = examinerComptes(entete.comptes, charge, plus);
@@ -1046,31 +1187,32 @@ export function analyser(texte) {
 
 /**
  * Configuration du moteur tirée d'une charge : les participants avec leur
- * organisation, leur exclusion, leurs étiquettes, leur présence et leurs
- * conflits ; les tables avec leur capacité courante ; le nombre de tours ;
- * les réservations sans leur siège, que le moteur ne lit pas, et sans tour
- * pour la portée « tous » ; les quatre contraintes des réglages et les deux
- * cases facultatives ; les objectifs des tables, chacun { table, tour, regle,
- * etiquettes }, tour null pour la soirée, sa règle résolue : la sienne, sinon
- * la règle par défaut (regleObjectifs) ; le mode des objectifs ; l'ordre des
- * priorités, tel que le rend priorites. Chaque champ facultatif est absent à
- * son défaut — étiquettes d'une personne qui n'en porte pas, présence d'une
- * personne présente à tous les tours, conflits d'une personne qui n'en porte
- * pas, objectifs quand aucune table n'en a, modeObjectifs à « places »,
- * respecterObjectifs coché, rencontrerAnimateurs décoché, priorites quand les
- * réglages ne le portent pas — : la configuration d'une charge sans eux ne
- * porte que les clés toujours présentes. Qui anime à chaque tour ne se lit
- * pas ici : configurationDe (src/application/configuration.js) l'ajoute, sur
- * la règle des titres pourvus, que le stockage n'importe pas. Les tables vont
- * par identifiant croissant, l'ordre du texte canonique : le moteur assoit
- * table après table, et une charge aux tables dans un autre ordre, relue
- * après un enregistrement, ne régénérerait plus ses propositions (§ 8.9). Les
+ * organisation, leur exclusion, leurs étiquettes, leur présence, leurs
+ * conflits et leurs inclusions ; les tables avec leur capacité courante ; le
+ * nombre de tours ; les réservations sans leur siège, que le moteur ne lit
+ * pas, et sans tour pour la portée « tous » ; les quatre contraintes des
+ * réglages et les deux cases facultatives ; les objectifs des tables, chacun
+ * { table, tour, regle, etiquettes }, tour null pour la soirée, sa règle
+ * résolue : la sienne, sinon la règle par défaut (regleObjectifs) ; le mode
+ * des objectifs ; l'ordre des priorités, tel que le rend priorites. Chaque
+ * champ facultatif est absent à son défaut — étiquettes d'une personne qui
+ * n'en porte pas, présence d'une personne présente à tous les tours, conflits
+ * ou inclusions d'une personne qui n'en porte pas, objectifs quand aucune
+ * table n'en a, modeObjectifs à « places », respecterObjectifs coché,
+ * rencontrerAnimateurs décoché, priorites quand les réglages ne le portent
+ * pas — : la configuration d'une charge sans eux ne porte que les clés
+ * toujours présentes. Qui anime à chaque tour ne se lit pas ici :
+ * configurationDe (src/application/configuration.js) l'ajoute, sur la règle
+ * des titres pourvus, que le stockage n'importe pas. Les tables vont par
+ * identifiant croissant, l'ordre du texte canonique : le moteur assoit table
+ * après table, et une charge aux tables dans un autre ordre, relue après un
+ * enregistrement, ne régénérerait plus ses propositions (§ 8.9). Les
  * objectifs suivent l'ordre des tables, puis la soirée et les tours
  * croissants. Les participants et les réservations gardent l'ordre de la
  * charge : le rang d'une réservation que nomme une ErreurConfiguration est
- * son rang dans la charge. Les listes d'étiquettes, de présence, de conflits
- * et de priorités sont des copies ; la présence, que le fichier admet dans un
- * autre ordre, s'y range croissante, comme le moteur la lit.
+ * son rang dans la charge. Les listes d'étiquettes, de présence, de conflits,
+ * d'inclusions et de priorités sont des copies ; la présence, que le fichier
+ * admet dans un autre ordre, s'y range croissante, comme le moteur la lit.
  *
  * @param {import('./types.js').Charge} charge
  * @returns {import('../moteur/types.js').Configuration}
@@ -1094,13 +1236,17 @@ export function configurationDepuisCharge(charge) {
     if (critereCoche(charge, cle) !== defaut) contraintes[cle] = !defaut;
   }
   const configuration = {
-    participants: charge.participants.map(({ id, nom, organisation, exclu, etiquettes, presence, conflits }) => {
-      const participant = { id, nom, organisation, exclu };
-      if (etiquettes !== undefined) participant.etiquettes = [...etiquettes];
-      if (presence !== undefined) participant.presence = [...presence].sort(croissant);
-      if (conflits !== undefined) participant.conflits = [...conflits];
-      return participant;
-    }),
+    participants: charge.participants.map(
+      ({ id, nom, organisation, exclu, etiquettes, presence, conflits, inclusionsOrganisation, inclusionsParticipant }) => {
+        const participant = { id, nom, organisation, exclu };
+        if (etiquettes !== undefined) participant.etiquettes = [...etiquettes];
+        if (presence !== undefined) participant.presence = [...presence].sort(croissant);
+        if (conflits !== undefined) participant.conflits = [...conflits];
+        if (inclusionsOrganisation !== undefined) participant.inclusionsOrganisation = [...inclusionsOrganisation];
+        if (inclusionsParticipant !== undefined) participant.inclusionsParticipant = [...inclusionsParticipant];
+        return participant;
+      },
+    ),
     tables: tables.map((table) => ({ id: table.id, numero: table.numero, capacite: capacite(charge, table) })),
     tours: evenement.tours,
     reservations: charge.reservations.map(({ participant, table, portee, tour }) =>
@@ -1223,6 +1369,32 @@ export function modeObjectifs(charge) {
 export function priorites(charge) {
   const { priorites: portee } = charge.reglages;
   return portee === undefined ? rangerPriorites(PRIORITES_PAR_DEFAUT) : completerPriorites(rangerPriorites(portee));
+}
+
+/**
+ * Les noms des tours de l'événement (§ 4, § 8.9) : une liste neuve d'un
+ * élément par tour, le nom que l'événement donne au tour, ou null pour un
+ * tour sans nom, que les écrans et les sorties disent « Tour N ». C'est la
+ * seule lecture de ce champ ; elle ne modifie pas la charge.
+ *
+ * @param {import('./types.js').Charge} charge
+ * @returns {Array<string|null>}
+ */
+export function nomsDesTours({ evenement }) {
+  return Array.from({ length: evenement.tours }, (_, rang) => evenement.nomsTours?.[rang] ?? null);
+}
+
+/**
+ * L'image des badges de l'événement (§ 8.9, § 11.4) : un objet neuf, {active,
+ * chemin, position}, le champ imageBadges quand l'événement le porte, son
+ * défaut sinon (IMAGE_BADGES_DEFAUT). C'est la seule lecture de ce champ ;
+ * elle ne modifie pas la charge.
+ *
+ * @param {import('./types.js').Charge} charge
+ * @returns {{active: boolean, chemin: string|null, position: 'haut'|'centre'|'bas'}}
+ */
+export function imageBadgesDe({ evenement }) {
+  return { ...(evenement.imageBadges ?? IMAGE_BADGES_DEFAUT) };
 }
 
 /**

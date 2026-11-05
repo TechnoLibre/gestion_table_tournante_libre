@@ -85,6 +85,18 @@
  * @property {string[]} planchersRetires   les planchers que la présence par
  *           tour retire : ['ecartItineraire'] dès qu'une absence existe, []
  *           sinon
+ * @property {{horsDAtteinte: Array<{participant: number,
+ *               cible: {organisation: string}|{participant: number},
+ *               raison: string}>,
+ *             auDelaDuPlafond: Array<{participant: number, actives: number,
+ *               besoin: number, plafond: number,
+ *               atteignables: number}>}} inclusions
+ *           horsDAtteinte, les inclusions qu'aucun plan ne satisfait
+ *           (instance.inclusionsHorsAtteinte), la source par identifiant ;
+ *           auDelaDuPlafond, chaque personne dont la liste demande plus de
+ *           personnes qu'elle n'en peut rencontrer, b(p) > K(p) : k°(p),
+ *           b(p), K(p) et I(p), ses inclusions atteignables (inclusions.js).
+ *           Ni l'une ni l'autre ne fait d'avis ; listes vides sans inclusion
  */
 import {
   LIBRE,
@@ -96,6 +108,7 @@ import {
   normaliser,
   placesManquantesParTour,
 } from './configuration.js';
+import { ciblesDesInclusions } from './inclusions.js';
 import { mesurer } from './indicateurs.js';
 import { plafondsAPriori } from './plafond.js';
 
@@ -496,6 +509,30 @@ function objectifsInevitables({ N, T, R, fixe, possible, objectifDe, siegesLibre
   };
 }
 
+// Les inclusions du diagnostic : les lignes hors d'atteinte, puis les
+// personnes au-delà du plafond, chacune par index croissant, désignées par
+// identifiant. Les cibles des inclusions se calculent ici sur aPriori, que
+// la mesure du plan imposé relit ensuite sans le recalculer.
+function inclusionsDuDiagnostic(instance, aPriori) {
+  const { N, ids, inclusionsHorsAtteinte } = instance;
+  const { actives, besoin, plafond, atteignables, auDela } = ciblesDesInclusions(instance, aPriori);
+  const auDelaDuPlafond = [];
+  for (let p = 0; p < N; p += 1) {
+    if (auDela[p] === 0) continue;
+    auDelaDuPlafond.push({
+      participant: ids[p],
+      actives: actives[p],
+      besoin: besoin[p],
+      plafond: plafond[p],
+      atteignables: atteignables[p],
+    });
+  }
+  return {
+    horsDAtteinte: inclusionsHorsAtteinte.map(({ p, cible, raison }) => ({ participant: ids[p], cible: { ...cible }, raison })),
+    auDelaDuPlafond,
+  };
+}
+
 // Plus petite et plus grande valeur, null pour une liste vide.
 function etendue(valeurs) {
   if (valeurs.length === 0) return { min: null, max: null };
@@ -548,6 +585,9 @@ function etendue(valeurs) {
  *   compare. parTour porte le plancher de chaque tour, que le détail de la
  *   page de qualité lit sans le recompter (qualite.js).
  *   animateursMemeOrganisation garde son sens : les ancrés.
+ * - inclusions : les inclusions hors d'atteinte, avec leur raison, et les
+ *   personnes dont la liste dépasse ce qu'elles peuvent rencontrer, avec
+ *   leurs inclusions atteignables ; information seule, jamais un avis.
  *
  * @param {import('./types.js').Configuration} configuration
  * @param {{planchersCollisions?: typeof planchersCollisions}} [calcul]
@@ -562,6 +602,7 @@ export function diagnostiquer(configuration, { planchersCollisions: chiffrer = p
   const placesManquantes = nombrePlacesManquantes(instance);
   const avecAbsences = instance.absences > 0;
   const minimale = redondanceMinimale(instance, aPriori);
+  const inclusions = inclusionsDuDiagnostic(instance, aPriori);
   const imposes = mesurer(instance, instance.fixe);
   return {
     placesManquantes,
@@ -586,5 +627,6 @@ export function diagnostiquer(configuration, { planchersCollisions: chiffrer = p
     placesManquantesParTour: placesManquantesParTour(instance),
     presence: { absences: instance.absences, presentsParTour: Array.from(instance.presentsParTour) },
     planchersRetires: avecAbsences ? ['ecartItineraire'] : [],
+    inclusions,
   };
 }

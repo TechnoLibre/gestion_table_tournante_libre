@@ -184,12 +184,24 @@ describe('bilans : changer les tours (§ 2.1 étape 5, § 4.3)', () => {
       retenuTouche: true,
       presencesRognees: [],
       presencesVidees: [],
+      nomsRetires: [],
     });
+  });
+
+  test('retirer des tours nomme les noms qui partent, {tour, nom}, par tour croissant ; un tour sans nom n’y figure pas', () => {
+    const charge = quatreTours();
+    charge.evenement.nomsTours = ['Apéritif', null, 'Fromages', 'Dessert'];
+    assert.deepEqual(bilanTours(charge, 2).nomsRetires, [
+      { tour: 3, nom: 'Fromages' },
+      { tour: 4, nom: 'Dessert' },
+    ]);
+    assert.deepEqual(bilanTours(charge, 3).nomsRetires, [{ tour: 4, nom: 'Dessert' }]);
+    assert.deepEqual(bilanTours(charge, 5).nomsRetires, []);
   });
 
   test("le même nombre ne touche rien ; en ajouter ne détruit rien, mais périme les placements", () => {
     const charge = quatreTours();
-    const rien = { reservationsDetruites: [], objectifsDetruits: [], presencesRognees: [], presencesVidees: [] };
+    const rien = { reservationsDetruites: [], objectifsDetruits: [], presencesRognees: [], presencesVidees: [], nomsRetires: [] };
     assert.deepEqual(bilanTours(charge, 4), { ...rien, propositionsTouchees: [], retenuTouche: false });
     assert.deepEqual(bilanTours(charge, 5), { ...rien, propositionsTouchees: [1, 2], retenuTouche: true });
   });
@@ -331,6 +343,7 @@ describe('bilans : la présence par tour (§ 5.8, § 6.1)', () => {
       retenuTouche: false,
       presencesRognees: [{ participant: 3, avant: [2, 3], apres: [2] }],
       presencesVidees: [],
+      nomsRetires: [],
     });
     const baisse = bilanTours(charge, 1);
     assert.deepEqual(baisse.presencesVidees, [3]);

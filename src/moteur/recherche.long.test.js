@@ -3,27 +3,31 @@
 
 // Épreuves lourdes de la recherche (§ 5.10, § 14.10, § 15.3). Sur chacune des
 // quatre démonstrations, une suite déterministe de mouvements, acceptés ou
-// défaits, confronte l'état tenu à jour au recalcul complet à 1, 10, 100,
-// 1 000 et 10 000 mouvements appliqués, et non au seul terme : une dérive qui
-// se compense passe inaperçue à la fin, et le palier où un désaccord affleure
-// est le chiffre que l'épreuve rend. Le relevé liste chaque désaccord, palier
-// et grandeur, au lieu de s'arrêter au premier. La même suite se joue sur une
-// configuration inventée qui porte des objectifs de table — de soirée et de
-// tour, des personnes aux tours possibles inégaux — et des animateurs — l'un
-// d'un seul tour, une table à deux titres —, les deux critères cochés, sous
-// chacun des trois modes et sous un ordre déplacé (A13). La petite
-// démonstration et sa variante conflit atteignent ensuite leur optimum sur
-// vingt graines, trois propositions chacune, sous l'ordre du registre ; une
-// recherche longue sur la grande démonstration rend des plans que jugent
-// verifierInvariants et verifierIndicateurs, et chaque point de relevé de sa
-// course égale le plan que regenerer rend à son compte. Une dérivée sur la
-// grande démonstration, deux tours figés, rend de même chaque point de relevé
-// par regenerer sous son départ, chacun portant les tours figés du départ,
-// liste pour liste. Sur la grande démonstration où une personne sur sept est
-// absente à un tour, l'état tenu à jour s'accorde au recalcul à chaque
-// palier, et une recherche longue n'assied aucune absente, assied chaque
-// présente une fois par tour, et tient la chaîne des plafonds jusqu'aux
-// co-présents.
+// défaits, confronte l'état tenu à jour au recalcul complet, et son score au
+// n-uplet que l'oracle de test/oracle_score.js énumère sur la configuration
+// hors du moteur, à 1, 10, 100, 1 000 et 10 000 mouvements appliqués, et non
+// au seul terme : une dérive qui se compense passe inaperçue à la fin, et le
+// palier où un désaccord affleure est le chiffre que l'épreuve rend. Les
+// mouvements gardés, défaits du dernier au premier, ramènent le score au
+// départ. Le relevé liste chaque désaccord, palier et grandeur, au lieu de
+// s'arrêter au premier. La même suite se joue sur une configuration inventée
+// qui porte des objectifs de table — de soirée et de tour, des personnes aux
+// tours possibles inégaux —, des animateurs — l'un d'un seul tour, une table
+// à deux titres —, et des conflits d'organisation — une organisation en nomme
+// une autre, une personne sans organisation une troisième —, les deux
+// critères cochés, sous chacun des trois modes et sous un ordre déplacé
+// (A13). La petite démonstration et sa variante conflit atteignent ensuite
+// leur optimum sur vingt graines, trois propositions chacune, sous l'ordre du
+// registre ; une recherche longue sur la grande démonstration rend des plans
+// que jugent verifierInvariants et verifierIndicateurs, et chaque point de
+// relevé de sa course égale le plan que regenerer rend à son compte. Une
+// dérivée sur la grande démonstration, deux tours figés, rend de même chaque
+// point de relevé par regenerer sous son départ, chacun portant les tours
+// figés du départ, liste pour liste. Sur la grande démonstration où une
+// personne sur sept est absente à un tour, l'état tenu à jour s'accorde au
+// recalcul à chaque palier, et une recherche longue n'assied aucune absente,
+// assied chaque présente une fois par tour, et tient la chaîne des plafonds
+// jusqu'aux co-présents.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
@@ -44,6 +48,7 @@ import {
 } from './recherche.js';
 import { verifierIndicateurs, verifierInvariants } from './verification.js';
 import { differences, empreintesDesPlans, exigerVerification, lireEmpreintes } from '../../test/empreintes_moteur.js';
+import { scoreOracle } from '../../test/oracle_score.js';
 
 const PALIERS = [1, 10, 100, 1_000, 10_000];
 // Graine des suites de mouvements, écrite ici.
@@ -63,13 +68,17 @@ const egales = (a, b) =>
   a.length === b.length && a.every((valeur, i) => Number.isFinite(valeur) && valeur === b[i]);
 
 // Ajoute à releve un libellé « palier : grandeur » pour chaque grandeur où
-// l'état tenu à jour diffère du recalcul complet.
-function relever(etat, instance, palier, releve) {
+// l'état tenu à jour diffère du recalcul complet, et « palier : score
+// énuméré » quand le score tenu à jour diffère du n-uplet que l'oracle
+// énumère sur la configuration, hors du moteur ; aPriori porte les plafonds
+// a priori de l'instance.
+function relever(etat, instance, configuration, aPriori, palier, releve) {
   const mesures = mesurer(instance, etat.tableDe);
   const confronter = (grandeur, tenue, recalculee) => {
     if (!egales(tenue, recalculee)) releve.push(`${palier} : ${grandeur}`);
   };
   confronter('score', scoreIncremental(etat), scoreComplet(etat));
+  confronter('score énuméré', scoreIncremental(etat), scoreOracle(instance, etat.tableDe, aPriori, configuration).nUplet);
   confronter('rencontres', Array.from(etat.rencontres), mesures.rencontres);
   confronter('affilies', Array.from(etat.affilies), mesures.affilies);
   confronter('organisationsVues', Array.from(etat.organisationsVues), mesures.organisationsVues);
@@ -92,13 +101,20 @@ function relever(etat, instance, palier, releve) {
   }
 }
 
-// La suite déterministe de mouvements sur une instance, relevée à chaque
-// palier : rend le relevé, et les comptes de mouvements appliqués et défaits.
-function suivre(instance) {
+// La suite déterministe de mouvements sur la configuration, relevée à chaque
+// palier, puis chaque mouvement gardé défait, du dernier au premier : le
+// relevé porte « retour : score » quand le score tenu à jour ne revient pas
+// à celui du départ. Rend le relevé, et les comptes de mouvements appliqués
+// et défaits pendant la suite.
+function suivre(configuration) {
+  const instance = normaliser(configuration);
+  const aPriori = plafondsAPriori(instance);
   const rng = creerPcg32(GRAINE, FLUX.RECHERCHE);
   const etat = creerEtat(instance, rng);
+  const depart = scoreIncremental(etat);
   const releve = [];
-  relever(etat, instance, 0, releve);
+  relever(etat, instance, configuration, aPriori, 0, releve);
+  const gardes = [];
   let appliques = 0;
   let defaits = 0;
   let palier = 0;
@@ -109,12 +125,16 @@ function suivre(instance) {
     if (appliques % DEFAIT_TOUS_LES === 0) {
       defaire(etat, mouvement);
       defaits += 1;
+    } else {
+      gardes.push(mouvement);
     }
     if (appliques === PALIERS[palier]) {
-      relever(etat, instance, appliques, releve);
+      relever(etat, instance, configuration, aPriori, appliques, releve);
       palier += 1;
     }
   }
+  for (const mouvement of gardes.reverse()) defaire(etat, mouvement);
+  if (!egales(scoreIncremental(etat), depart)) releve.push('retour : score');
   return { releve, appliques, defaits };
 }
 
@@ -132,7 +152,9 @@ const e = (critere, poids = 1) => ({ critere, poids });
 // l'autre sous « et ». 10 anime à la table 1 à chaque tour ; 11 et 12
 // tiennent les deux titres de la table 3 au seul tour 2 ; 13 est réservé
 // sans animer. Les conflits d'organisation relient A et B, et la personne 4
-// à C.
+// à C. Inclusions : 1 inclut 7, 8 et C, et 7 inclut 1 ; 12 et 14
+// s'incluent, et 12 inclut A ; 8 inclut B ; 3 inclut 2 ; 9 inclut B, que le
+// conflit de A et B contredit.
 function soireeAObjectifs(mode, priorites) {
   const etiquettes = [
     ['finance'], ['finance'], ['finance'], ['Montréal', 'finance'], ['Montréal', 'finance'],
@@ -140,6 +162,15 @@ function soireeAObjectifs(mode, priorites) {
   ];
   const anime = new Map([[10, [1, 2, 3, 4]], [11, [2]], [12, [2]]]);
   const conflits = new Map([[1, ['B']], [4, ['C']]]);
+  const inclusions = new Map([
+    [1, { inclusionsParticipant: [7, 8], inclusionsOrganisation: ['C'] }],
+    [3, { inclusionsParticipant: [2] }],
+    [7, { inclusionsParticipant: [1] }],
+    [8, { inclusionsOrganisation: ['B'] }],
+    [9, { inclusionsOrganisation: ['B'] }],
+    [12, { inclusionsParticipant: [14], inclusionsOrganisation: ['A'] }],
+    [14, { inclusionsParticipant: [12] }],
+  ]);
   const auTour = (participant, table, tour) => ({ participant, table, portee: 'tour', tour });
   return {
     participants: Array.from({ length: 14 }, (_, rang) => ({
@@ -148,6 +179,7 @@ function soireeAObjectifs(mode, priorites) {
       ...(rang < etiquettes.length ? { etiquettes: etiquettes[rang] } : {}),
       ...(anime.has(rang + 1) ? { anime: anime.get(rang + 1) } : {}),
       ...(conflits.has(rang + 1) ? { conflits: conflits.get(rang + 1) } : {}),
+      ...(inclusions.get(rang + 1) ?? {}),
     })),
     tables: [1, 2, 3, 4].map((id) => ({ id, capacite: 4 })),
     tours: 4,
@@ -176,9 +208,10 @@ function soireeAObjectifs(mode, priorites) {
 }
 
 // Les ordres déplacés : sous places, le palier { excédent × 1, tours hors
-// objectif × 3 } en deuxième, le conflit d'organisation en quatrième ; sous
-// les deux autres modes, les tours hors objectif seuls en deuxième, le
-// conflit d'organisation en dernier.
+// objectif × 3 } en deuxième, le conflit d'organisation en quatrième, les
+// inclusions en dernier ; sous les deux autres modes, les inclusions en
+// deuxième, les tours hors objectif seuls en troisième, le conflit
+// d'organisation en dernier.
 const ORDRES_DEPLACES = {
   places: [
     [e('ecartAuPlafondAPrioriMax')],
@@ -188,9 +221,11 @@ const ORDRES_DEPLACES = {
     [e('rencontresRepetees')],
     [e('animateursNonRencontres', 2)],
     [e('redondance')],
+    [e('inclusionsNonSatisfaites')],
   ],
   autres: [
     [e('ecartAuPlafondAPrioriMax')],
+    [e('inclusionsNonSatisfaites')],
     [e('toursHorsObjectif')],
     [e('excedentCollisions')],
     [e('collisionsCumulees')],
@@ -207,7 +242,7 @@ describe('recherche : incrémental contre recalcul complet (§ 5.10, § 14.10)',
 
   for (const { cle, construire } of CATALOGUE) {
     test(`${cle} : accord à 1, 10, 100, 1 000 et 10 000 mouvements`, () => {
-      const { releve, appliques, defaits } = suivre(normaliser(construire()));
+      const { releve, appliques, defaits } = suivre(construire());
       assert.equal(appliques, PALIERS.at(-1), `${cle} : mouvements appliqués`);
       assert.equal(defaits, Math.floor(PALIERS.at(-1) / DEFAIT_TOUS_LES));
       assert.deepEqual(releve, [], cle);
@@ -217,9 +252,11 @@ describe('recherche : incrémental contre recalcul complet (§ 5.10, § 14.10)',
   for (const mode of ['places', 'chacun', 'minimum']) {
     for (const [ordre, priorites] of [['ordre par défaut', undefined], ['ordre déplacé', mode === 'places' ? ORDRES_DEPLACES.places : ORDRES_DEPLACES.autres]]) {
       test(`soirée à objectifs et animateurs, ${mode}, ${ordre} : accord à 1, 10, 100, 1 000 et 10 000 mouvements`, () => {
-        const instance = normaliser(soireeAObjectifs(mode, priorites));
+        const configuration = soireeAObjectifs(mode, priorites);
+        const instance = normaliser(configuration);
         assert.ok(instance.etatCriteres.every(({ coche, sansObjet }) => coche && !sansObjet));
-        const { releve, appliques } = suivre(instance);
+        assert.ok(instance.pairesEnConflit > 0);
+        const { releve, appliques } = suivre(configuration);
         assert.equal(appliques, PALIERS.at(-1));
         assert.deepEqual(releve, [], `${mode}, ${ordre}`);
       });
@@ -383,9 +420,10 @@ function grandeSousAbsences() {
 
 describe('recherche : la grande démonstration sous absences (§ 5.9, § 5.10, § 14.10)', () => {
   test('accord à 1, 10, 100, 1 000 et 10 000 mouvements, plus de trente absences', () => {
-    const instance = normaliser(grandeSousAbsences());
+    const configuration = grandeSousAbsences();
+    const instance = normaliser(configuration);
     assert.ok(instance.absences >= 30, `${instance.absences} absences`);
-    const { releve, appliques } = suivre(instance);
+    const { releve, appliques } = suivre(configuration);
     assert.equal(appliques, PALIERS.at(-1));
     assert.deepEqual(releve, []);
   });

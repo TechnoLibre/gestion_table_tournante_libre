@@ -242,7 +242,6 @@ const MODULE = [
   'export const VERSION = Object.freeze({',
   "  affichee: '2026.10.05.01',",
   "  technique: '2026.1005.1',",
-  "  windows: '2026.1005.1.0',",
   '});',
   '',
 ].join('\n');
@@ -614,6 +613,12 @@ describe('version : contrôle du § 18.5, un défaut à la fois', () => {
       exigerEchecs(racine, [6], [/^6\. electron\/main\.js, ligne 1 : « 2026\.10\.05\.01 », forme affichée/]);
     }));
 
+  test('point 6 : les fichiers que la page sert tels quels, sous public/, sont dans le périmètre', () =>
+    surArbre((racine) => {
+      ecrire(racine, 'public/collecteur.js', "const version = '2026.10.05.01';\n");
+      exigerEchecs(racine, [6], [/^6\. public\/collecteur\.js, ligne 1 : « 2026\.10\.05\.01 », forme affichée/]);
+    }));
+
   test('point 6 : une version ne se lit pas dans un nombre plus long qui la contient', () =>
     surArbre((racine) => {
       // Un chiffre ou un point devant, un chiffre derrière : chaque ligne
@@ -783,14 +788,14 @@ describe('version : engendrement', () => {
     assert.equal(engendrerModule(VERSION), MODULE);
   });
 
-  test('le module engendré porte les formes affichée, technique et Windows de deriver, et elles seules', async () => {
+  test('le module engendré porte les formes affichée et technique de deriver, et elles seules : la forme Windows n’y est pas', async () => {
     const dossier = mkdtempSync(join(tmpdir(), 'version-module-'));
     try {
       const chemin = join(dossier, 'version.genere.js');
       writeFileSync(chemin, engendrerModule('2026.10.06.02'));
       const { VERSION: engendree } = await import(pathToFileURL(chemin).href);
-      const { affichee, technique, windows } = deriver('2026.10.06.02');
-      assert.deepEqual(engendree, { affichee, technique, windows });
+      const { affichee, technique } = deriver('2026.10.06.02');
+      assert.deepEqual(engendree, { affichee, technique });
       assert.ok(Object.isFrozen(engendree));
     } finally {
       rmSync(dossier, { recursive: true, force: true });

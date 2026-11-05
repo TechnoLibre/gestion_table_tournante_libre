@@ -8,10 +8,11 @@
 // sonde qui échoue, exécutable non publié, support amovible — et la
 // plateforme web ; puis ce qui arrive ensuite : la question quand un dossier
 // qui porte des événements refuse l'écriture, la proposition d'import quand
-// le dossier retenu est neuf et vide, le compte des événements, et la
-// lecture qui échoue : celle du dossier retenu fait rejeter, celle de l'autre
-// emplacement laisse un compte inconnu. La perte d'inscriptibilité en cours
-// de séance n'est pas de cette règle, qui ne s'applique qu'une fois.
+// le dossier retenu est neuf, vide et inscriptible, le compte des
+// événements, et la lecture qui échoue : celle du dossier retenu fait
+// rejeter, celle de l'autre emplacement laisse un compte inconnu. La perte
+// d'inscriptibilité en cours de séance n'est pas de cette règle, qui ne
+// s'applique qu'une fois.
 //
 // Le relevé des écritures de la règle — primitive et racine, dans l'ordre des
 // appels — montre qu'elle n'en fait pas d'autre que ses sondes. Les noms
@@ -406,6 +407,29 @@ describe('determinerDossierTravail : ce qui arrive ensuite (§ 8.6)', () => {
       (await determinerDossierTravail(sansEvenement.fs)).question,
       { code: 'DOCUMENTS_NON_INSCRIPTIBLE', racine: DOC, evenements: 0, cause: 'EPERM' },
     );
+  });
+
+  test("le dossier retenu qui refuse l'écriture ne propose pas d'importer : la copie y échouerait, et la question, ou à défaut la première écriture refusée, nomme ce refus", async () => {
+    // Les Documents retenus, neufs et vides, refusent l'écriture ; data/,
+    // sous AppData, porte un événement.
+    const documents = preparer({ executable: SOUS_APPDATA, sonde: { documents: 'EPERM' } });
+    poserEvenement(documents.fs, 'portable', 'gala');
+    assert.deepEqual(
+      await determinerDossierTravail(documents.fs),
+      dossier({
+        racine: DOC,
+        mode: 'documents',
+        raison: 'DONNEES_APPLICATIVES',
+        question: { code: 'DOCUMENTS_NON_INSCRIPTIBLE', racine: DOC, evenements: 0, cause: 'EPERM' },
+      }),
+    );
+
+    // Les deux sondes échouent, et data/ porte un événement : la question
+    // nomme data/, et les Documents retenus ne proposent rien.
+    const lesDeux = preparer({ executable: 'E:\\soirees', sonde: { portable: 'EROFS', documents: 'EPERM' } });
+    poserEvenement(lesDeux.fs, 'portable', 'gala');
+    const { question, autre } = await determinerDossierTravail(lesDeux.fs);
+    assert.deepEqual([question.code, autre], ['PORTABLE_NON_INSCRIPTIBLE', null]);
   });
 
   test("la lecture du dossier retenu qui échoue autrement que sur un dossier absent remonte : une panne n'est pas un dossier vide", async () => {

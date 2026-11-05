@@ -3,11 +3,11 @@
 
 // L'horloge de l'application (§ 19.4, § 14.7) : la seule lecture de
 // l'horloge du moteur d'exécution, et les seules minuteries. Hors du moteur,
-// src/application et src/interface lisent l'heure et arment leurs minuteries
-// par l'horloge qu'on leur injecte, jamais autrement : creerHorlogeSysteme est
-// le seul code de ces deux couches qui appelle new Date, performance.now,
-// setTimeout et clearTimeout. Les épreuves injectent l'horloge pilotée, où
-// rien n'avance seul.
+// src/application, src/interface et src/stockage lisent l'heure et arment
+// leurs minuteries par l'horloge qu'on leur injecte, jamais autrement :
+// creerHorlogeSysteme est le seul code de ces trois couches qui appelle
+// new Date, performance.now, setTimeout et clearTimeout. Les épreuves
+// injectent l'horloge pilotée, où rien n'avance seul.
 //
 // Une horloge est quatre fermetures, appelables détachées de leur objet :
 //   horodatage()          AAAA-MM-JJTHH:MM:SS±HH:MM, heure locale et décalage

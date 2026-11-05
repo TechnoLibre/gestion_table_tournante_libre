@@ -6,8 +6,9 @@
 // à deux chiffres puis trois, le numéro libre suivant quand un nom suffixé
 // existe déjà, le doublon qui recoupe l'événement, la mise à jour qui garde
 // le nom de la personne qu'elle met à jour, le remplacement qui ne lit pas
-// l'événement, et l'aperçu recalculé sur les noms rendus, sans doublon. Les
-// noms d'épreuve sont inventés.
+// l'événement, et l'aperçu recalculé sur les noms rendus, sans doublon, ses
+// seules lignes renommées marquées du nom numéroté. Les noms d'épreuve sont
+// inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { apercevoir, issuesDeMiseAJour } from './apercu.js';
@@ -136,6 +137,26 @@ describe('apercevoir : les noms rendus uniques, l’aperçu recalculé sur eux (
     assert.deepEqual(paires(rendreNomsUniques(rendu)), []);
   });
 
+  test('la marque du nom numéroté suit les seules lignes renommées, jamais un nom qui porte déjà un numéro', () => {
+    const texte = csv('nom;prenom', 'Galet;Roger', 'Galet;Roger', 'Galet 07;Lise', 'Galet;Roger');
+    const marques = (apercu) => apercu.lignes.map(({ ligne, champs }) => [ligne, champs.nom, champs.nomNumerote]);
+    const apercu = apercevoir(texte);
+    assert.deepEqual(marques(apercu), [
+      [2, 'Galet', undefined],
+      [3, 'Galet', undefined],
+      [4, 'Galet 07', undefined],
+      [5, 'Galet', undefined],
+    ]);
+    const rendu = apercevoir(texte, { noms: rendreNomsUniques(apercu) });
+    assert.deepEqual(marques(rendu), [
+      [2, 'Galet', undefined],
+      [3, 'Galet 01', true],
+      [4, 'Galet 07', undefined],
+      [5, 'Galet 02', true],
+    ]);
+    assert.deepEqual(rendu.lignes.filter(({ champs }) => champs.nomNumerote).map(({ ligne }) => ligne), rendu.renommes);
+  });
+
   test('mettre à jour : la ligne renommée ne désigne plus personne, et s’ajoute ; la ligne qui met à jour reste désignée', () => {
     const participants = [existant(4, 'Galet', 'Roger')];
     const texte = csv('nom;prenom', 'Galet;Roger', 'Galet;Roger');
@@ -148,13 +169,16 @@ describe('apercevoir : les noms rendus uniques, l’aperçu recalculé sur eux (
     assert.deepEqual(rendu.renommes, [3]);
   });
 
-  test('un rang qui n’est pas celui d’une ligne valide est ignoré ; noms doit être une Map', () => {
+  test('un rang qui n’est pas celui d’une ligne valide est ignoré ; noms doit être une Map, au nom fini par un numéro', () => {
     const texte = csv('nom;exclu', 'Galet;', 'Galet;peut-être');
     const rendu = apercevoir(texte, { noms: new Map([[3, 'Galet 01'], [9, 'Houle']]) });
     assert.deepEqual(rendu.lignes.map(({ champs }) => champs.nom), ['Galet']);
     assert.deepEqual(rendu.refusees.map(({ ligne }) => ligne), [3]);
     assert.deepEqual(rendu.renommes, []);
     assert.throws(() => apercevoir(texte, { noms: { 2: 'Galet 01' } }), TypeError);
+    for (const nom of ['Houle', 'Galet 1', 'Galet\u{A0}01', 7]) {
+      assert.throws(() => apercevoir(texte, { noms: new Map([[2, nom]]) }), TypeError, String(nom));
+    }
   });
 
   test('sous un refus global, renommes est vide', () => {

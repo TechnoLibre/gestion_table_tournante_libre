@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes de la planche de badges (§ 11.3 à § 11.8, contrainte 25) : les
-// refus qui la gardent avant de produire, ce qu'un badge imprime — ses
-// lignes de tour, son pied, le pied TechnoLibre —, les lignes de la feuille
-// de contrôle et les en-têtes de la liste des badges en CSV. Le papier et le
-// CSV les lisent par libelle, jamais décorés par la langue témoin : un texte
-// imprimé est une donnée. Un horodatage et une date se mettent en mots à
-// partir de leur seule forme, sans horloge ni langue du système. Le nom
-// d'un papier arrive dans les détails : cette table n'en écrit aucun.
+// refus qui la gardent avant de produire, l'entrée et le refus de l'image des
+// badges, ce qu'un badge imprime — ses lignes de tour, son pied, le pied
+// TechnoLibre —, les lignes de la feuille de contrôle et les en-têtes de la
+// liste des badges en CSV. Le papier et le CSV les lisent par libelle, jamais
+// décorés par la langue témoin : un texte imprimé est une donnée. Un
+// horodatage et une date se mettent en mots à partir de leur seule forme,
+// sans horloge ni langue du système. Le nom d'un papier arrive dans les
+// détails : cette table n'en écrit aucun.
 import { lireHorodatage } from '../format.js';
-import { cite, compte, enumeration, nomDans, ouEcrire, phraseDeRaison } from './aides.js';
+import { cite, compte, enumeration, nomDans, nomDuTour, ouEcrire, phraseDeRaison } from './aides.js';
 
 // Les impositions de la planche (§ 11.6), comme la feuille de contrôle les
 // nomme.
@@ -72,6 +73,19 @@ const LES_FICHIERS = new Map([
   ['liste', 'La liste des badges'],
 ]);
 
+// Ce que changerImageBadges fait de l'image des badges, d'après celle
+// d'avant et celle d'après, et chaque position comme l'entrée la dit.
+const EFFETS_DE_L_IMAGE = new Map([
+  ['pose', 'image posée'],
+  ['remplace', 'image remplacée'],
+  ['retire', 'image retirée'],
+]);
+const LES_POSITIONS = new Map([
+  ['haut', 'en haut'],
+  ['centre', 'au centre'],
+  ['bas', 'en bas'],
+]);
+
 export const TABLE = new Map([
   // --- Les refus de la planche (§ 11.5, § 11.8, Q3) --------------------------
   [
@@ -90,17 +104,31 @@ export const TABLE = new Map([
       'Le placement ne décrit plus la soirée, la planche ne se produit pas : ' +
       raisons.map((raison) => phraseDeRaison(raison.code, raison, texte)).join(' '),
   ],
+  // lignesLongues : des lignes de tour repliées sous un nom de tour, un
+  // libellé de table ou un titre débordent ; le texte nomme alors la
+  // personne et ce qui se raccourcit, et non le nombre de tours.
   [
     'PLANCHE_TROP_DE_TOURS',
-    ({ tours }) =>
-      `Les ${tours} tours ne tiennent pas sur un badge, même sur deux colonnes au plus petit corps : ` +
-      "la planche n'est pas produite, plutôt qu'une liste de tours tronquée.",
+    (details) =>
+      details.lignesLongues
+        ? `Les lignes de tour de ${laPersonne(details)}, repliées par un nom de tour, un libellé de table ou un titre long, ` +
+          'ne tiennent pas sur son badge, même sur deux colonnes au plus petit corps : raccourcissez ce nom, ce libellé ' +
+          "ou ce titre. La planche n'est pas produite, plutôt qu'une liste de tours tronquée."
+        : `Les ${details.tours} tours ne tiennent pas sur un badge, même sur deux colonnes au plus petit corps : ` +
+          "la planche n'est pas produite, plutôt qu'une liste de tours tronquée.",
   ],
+  // organisation : c'est l'organisation, mise en gros à la place du nom,
+  // qui ne tient pas ; le texte la nomme et dit qu'une case la remet en
+  // petit.
   [
     'PLANCHE_NOM_TROP_LONG',
     (details) =>
-      `Le nom de ${laPersonne(details)} ne tient pas sur son badge, même replié sur trois lignes au plus petit corps : ` +
-      'la planche ne se produit pas, plutôt que de tronquer ses tours.',
+      details.organisation === true
+        ? `L'organisation de ${laPersonne(details)}, en gros au-dessus du nom, ne tient pas sur son badge, même repliée ` +
+          "sur trois lignes au plus petit corps : raccourcissez-la, ou décochez la case qui met l'organisation en gros. " +
+          'La planche ne se produit pas, plutôt que de tronquer ses tours.'
+        : `Le nom de ${laPersonne(details)} ne tient pas sur son badge, même replié sur trois lignes au plus petit corps : ` +
+          'la planche ne se produit pas, plutôt que de tronquer ses tours.',
   ],
 
   // --- Les refus de la production (§ 8.5, § 11.6, décision 13) -------------
@@ -125,14 +153,40 @@ export const TABLE = new Map([
     },
   ],
 
+  // --- L'image des badges (§ 8.9, § 11.4) -----------------------------------
+  // L'entrée de changerImageBadges : ce qui change, dans l'ordre du champ —
+  // la case (active, null quand elle ne change pas), l'image (effet : pose,
+  // remplace, retire, ou null), la position (null quand elle ne change pas).
+  [
+    'ENTREE_CHANGER_IMAGE_BADGES',
+    ({ active, effet, position }) => {
+      const changes = [
+        ...(active === null ? [] : [active ? 'case cochée' : 'case décochée']),
+        ...(effet === null ? [] : [nomDans(EFFETS_DE_L_IMAGE, effet, "effet de l'image")]),
+        ...(position === null ? [] : [nomDans(LES_POSITIONS, position, 'position')]),
+      ];
+      return `Image des badges : ${changes.join(', ')}`;
+    },
+  ],
+  // L'image refusée par le disque, avant toute entrée : chemin, le fichier
+  // relatif au dossier de l'événement ; dossier, ce dossier ; cause, celle
+  // que le système donne, ou null.
+  [
+    'IMAGE_BADGES_NON_ECRITE',
+    (details, texte) =>
+      `L'image des badges n'a pas pu s'écrire : ${ouEcrire(details, texte)}. ` +
+      "Rien n'est enregistré : les badges gardent leur image d'avant, ou aucune.",
+  ],
+
   // --- Les lignes de tour d'un badge (§ 11.4, § 11.5) ------------------------
-  // Une ligne : le tour, ou « Toute la soirée » pour un itinéraire constant,
-  // puis la place de la personne ; « absente » à un tour où elle est
-  // absente (ligne.absente vrai), qu'une ligne « Toute la soirée » ne porte
-  // jamais.
+  // Une ligne : le tour, son nom (ligne.nomTour) ou « Tour 3 » sans lui, ou
+  // « Toute la soirée » pour un itinéraire constant, puis la place de la
+  // personne ; « absente » à un tour où elle est absente (ligne.absente
+  // vrai), qu'une ligne « Toute la soirée » ne porte jamais.
   [
     'planche.tour',
-    (ligne, texte) => `Tour ${ligne.tour} — ${ligne.absente ? texte('planche.absente') : place(ligne, texte)}`,
+    (ligne, texte) =>
+      `${ligne.nomTour ?? nomDuTour(ligne.tour)} — ${ligne.absente ? texte('planche.absente') : place(ligne, texte)}`,
   ],
   ['planche.touteLaSoiree', (ligne, texte) => `Toute la soirée — ${place(ligne, texte)}`],
   ['planche.libelleTable', ({ libelleTable }) => ` (${libelleTable})`],
@@ -140,12 +194,17 @@ export const TABLE = new Map([
   ['planche.absente', 'absente'],
   ['planche.siege', ({ siege }) => `, siège ${siege}`],
   ['planche.titre', ({ titre }) => ` — ${titre}`],
+  // La place seule, sous la tête de son tour, dans la liste des badges en
+  // CSV d'une colonne par tour.
+  ['planche.liste.place', (ligne, texte) => (ligne.absente ? texte('planche.absente') : place(ligne, texte))],
 
   // --- Les en-têtes de la liste des badges en CSV (§ 11.6) ----------------
   ['planche.liste.nom', 'Nom'],
   ['planche.liste.prenom', 'Prénom'],
   ['planche.liste.organisation', 'Organisation'],
   ['planche.liste.tours', 'Tours'],
+  // La tête de la colonne d'un tour sans nom ; un tour nommé y pose son nom.
+  ['planche.liste.tour', ({ tour }) => nomDuTour(tour)],
 
   // --- Le pied d'un badge, et la marque du brouillon (§ 11.4, § 11.7) -------
   // L'événement et sa date ; la date seule, quand le nom de l'événement

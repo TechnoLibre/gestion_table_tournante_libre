@@ -8,8 +8,10 @@
   // se montre que lorsqu'une personne non exclue manque un tour : sans
   // absence, le modèle rend null et rien n'est dans le DOM. Un manque
   // positif se pose dans une pastille d'avis, son signe et son nombre de
-  // l'encre de la page ; un manque nul s'écrit seul.
+  // l'encre de la page ; un manque nul s'écrit seul. Chaque ligne se nomme
+  // par le nom de son tour, ou par son numéro pour un tour sans nom.
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import Pastille from '../primitives/Pastille.svelte';
   import { lignesPresences } from './presences.js';
 
@@ -18,6 +20,7 @@
   const t = getContext('t');
 
   const lignes = $derived(lignesPresences(charge));
+  const nomsTours = $derived(nomsDesTours(charge));
 </script>
 
 {#if lignes !== null}
@@ -34,7 +37,7 @@
     <tbody>
       {#each lignes as ligne (ligne.tour)}
         <tr data-presences-tour={ligne.tour}>
-          <th scope="row">{ligne.tour}</th>
+          <th scope="row">{t('tables.presences.ligne', { tour: ligne.tour, nomsTours })}</th>
           <td class="nombre">{ligne.presentes}</td>
           <td class="nombre">{ligne.places}</td>
           <td class="nombre">

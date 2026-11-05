@@ -27,19 +27,20 @@ import * as relais from './csv.js';
 import { libelle } from './libelles.js';
 
 describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
-  test('decoder, apercevoir, rendreNomsUniques, exporterParticipants, bilanRemplacement, cleNormalisee, CHAMPS, JOINTURE_ETIQUETTES et ceux des objectifs sont ceux de src/csv', () => {
+  test('decoder, apercevoir, rendreNomsUniques, exporterParticipants, inclusionsVersHomonymes, bilanRemplacement, cleNormalisee, CHAMPS, JOINTURE_ETIQUETTES, les deux tables d’en-têtes et ceux des objectifs sont ceux de src/csv', () => {
     const attendus = [
       ['decoder', encodage.decoder],
       ['apercevoir', apercu.apercevoir],
       ['rendreNomsUniques', nomsUniques.rendreNomsUniques],
       ['exporterParticipants', exportCsv.exporterParticipants],
+      ['inclusionsVersHomonymes', exportCsv.inclusionsVersHomonymes],
       ['bilanRemplacement', importCsv.bilanRemplacement],
       ['cleNormalisee', normalisation.cleNormalisee],
       ['apercevoirObjectifs', objectifs.apercevoirObjectifs],
       ['exporterObjectifs', objectifs.exporterObjectifs],
       ['bilanRemplacementObjectifs', objectifs.bilanRemplacementObjectifs],
     ];
-    assert.equal(attendus.length, 9);
+    assert.equal(attendus.length, 10);
     for (const [nom, fonction] of attendus) {
       assert.equal(typeof fonction, 'function', nom);
       assert.equal(relais[nom], fonction, nom);
@@ -48,10 +49,13 @@ describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
     assert.equal(relais.JOINTURE_ETIQUETTES, exportCsv.JOINTURE_ETIQUETTES);
     assert.equal(relais.JOINTURE_ETIQUETTES, ', ');
     assert.equal(relais.CHAMPS_OBJECTIFS, objectifs.CHAMPS_OBJECTIFS);
+    assert.equal(relais.ENTETES_DES_CHAMPS, colonnes.ENTETES_DES_CHAMPS);
+    assert.equal(relais.ENTETES_DES_OBJECTIFS, objectifs.ENTETES_DES_OBJECTIFS);
     assert.deepEqual(Object.keys(relais).sort(), [
-      'CHAMPS', 'CHAMPS_OBJECTIFS', 'JOINTURE_ETIQUETTES', 'apercevoir', 'apercevoirObjectifs', 'bilanRemplacement',
+      'CHAMPS', 'CHAMPS_OBJECTIFS', 'ENTETES_DES_CHAMPS', 'ENTETES_DES_OBJECTIFS', 'JOINTURE_ETIQUETTES', 'apercevoir',
+      'apercevoirObjectifs', 'bilanRemplacement',
       'bilanRemplacementObjectifs', 'cleNormalisee', 'decoder', 'exporterObjectifs', 'exporterParticipants', 'exporterRefus',
-      'modeleObjectifs', 'modeleParticipants', 'rendreNomsUniques',
+      'inclusionsVersHomonymes', 'modeleObjectifs', 'modeleParticipants', 'rendreNomsUniques',
     ]);
   });
 
@@ -238,8 +242,8 @@ describe('csv : le modèle des participants, sur l’événement (§ 10.1)', () 
       assert.deepEqual([lu.refusGlobal, lu.refusees], [null, []], `${tours} tours`);
     }
     const quatre = creerCharge({ id: 'evt-modele', nom: 'Soirée des Hérons', siegesParDefaut: 4, tours: 4 });
-    assert.match(relais.decoder(relais.modeleParticipants(quatre)).texte, /^Tourteau;Basile;;;;non;;bénévole;1-3;Atelier Ressac\r$/m);
-    assert.match(relais.decoder(relais.modeleParticipants(quatre)).texte, /;2, 3;\r$/m);
+    assert.match(relais.decoder(relais.modeleParticipants(quatre)).texte, /^Tourteau;Basile;;;;non;;bénévole;1-3;Atelier Ressac;non;;\r$/m);
+    assert.match(relais.decoder(relais.modeleParticipants(quatre)).texte, /;2, 3;;non;Atelier Ressac;\r$/m);
   });
 });
 

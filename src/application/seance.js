@@ -63,22 +63,24 @@
 // l'état observable, calculé par la même fonction que celle qui refuse
 // (exigerEcriture) : aucun composant ne refait ce contrôle.
 //
-// La séance est observable : etat() rend un instantané figé en profondeur,
-// neuf à chaque changement et le même entre deux, et subscribe suit le
-// contrat des magasins de Svelte. Le cadrage de l'événement ouvert se range
-// hors du fichier, dans reglages_locaux.json, par un écrivain différé
-// (§ 8.5) : regarder n'écrit jamais l'événement. Le papier des planches, de
-// la machine et non du plan, s'y range aussi, dans tout mode, avec ou sans
-// événement (§ 8.5, § 11.2), et de même le modèle des badges, la case du pied
-// TechnoLibre et la taille du texte de l'écran (§ 18.6) ; une seule file y
-// écrit, que le cadrage, le papier, le modèle, la case et la taille
-// partagent. Des réglages que la lecture ne prend pas ne s'écrasent jamais :
-// le cadrage attend, et le papier choisi vaut pour la séance, en mémoire,
-// sans être retenu sur la machine. Il en va de même du papier d'une écriture
-// que le dossier refuse : ni des réglages illisibles ni un dossier en lecture
-// seule ne bloquent le choix du papier, et les sorties écrivent là où le
-// dossier l'accepte — un dossier qui refuse l'écriture refuse aussi le PDF
-// des planches.
+// La séance est observable : etat() rend un instantané figé en profondeur, neuf
+// à chaque changement et le même entre deux, et subscribe suit le contrat des
+// magasins de Svelte. Le cadrage de l'événement ouvert se range hors du
+// fichier, dans reglages_locaux.json, par un écrivain différé (§ 8.5) :
+// regarder n'écrit jamais l'événement. Le papier des planches, de la machine et
+// non du plan, s'y range aussi, dans tout mode, avec ou sans événement (§ 8.5,
+// § 11.2), et de même le modèle des badges, ses cases — celle du pied
+// TechnoLibre, celle qui laisse en blanc le nom des doublons, celle qui met
+// l'organisation en gros —, les colonnes de la liste des badges en CSV et la
+// taille du texte de l'écran (§ 18.6) ; une seule file y écrit, que le cadrage,
+// le papier, le modèle, les cases, les colonnes et la taille partagent. Des
+// réglages que la lecture ne prend pas ne s'écrasent jamais : le cadrage
+// attend, et le papier choisi vaut pour la séance, en mémoire, sans être retenu
+// sur la machine. Il en va de même du papier d'une écriture que le dossier
+// refuse : ni des réglages illisibles ni un dossier en lecture seule ne
+// bloquent le choix du papier, et les sorties écrivent là où le dossier
+// l'accepte — un dossier qui refuse l'écriture refuse aussi le PDF des
+// planches.
 //
 // Chaque geste lit l'horloge une fois : l'instant de son entrée au journal
 // date aussi le placement qu'il change (§ 8.9, § 11.8).
@@ -123,22 +125,29 @@ import { fil, lignesHistorique, reconstruire } from '../stockage/journal.js';
 import { cheminLogo, ecrireLogo, empreinteSha256, estCheminLogo } from '../stockage/logos.js';
 import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import {
+  COLONNES_LISTE_BADGES,
   DONNEES_BADGE,
   FICHIER_REGLAGES,
+  avecCacherNumero,
   avecCadrage,
+  avecColonnesListe,
   avecDonneeBadge,
   avecModeleBadge,
+  avecOrganisationEnGros,
   avecPapier,
   avecPiedTechnolibre,
   avecTailleTexte,
   avecTextePiedTechnolibre,
+  cacherNumeroDe,
   cadrageDe,
+  colonnesListeDe,
   creerEcrivainDiffere,
   donneesBadgeDe,
   ecrireReglages,
   lireReglages,
   modeleBadgeDe,
   normaliserTextePied,
+  organisationEnGrosDe,
   piedTechnolibreDe,
   tailleTexteDe,
   textePiedTechnolibreDe,
@@ -151,9 +160,15 @@ import { nomAffiche } from './personnes.js';
 import { creerPlanches } from './planche_seance.js';
 
 /** Les données qu'une case retire du badge (§ 11.4), dans l'ordre des cases,
- *  et la forme gardée du texte du pied TechnoLibre (§ 8.5), que l'interface
- *  lit ici : le stockage lui est fermé. */
-export { DONNEES_BADGE, normaliserTextePied };
+ *  les formes de la liste des badges en CSV (§ 11.6), la première par
+ *  défaut, et la forme gardée du texte du pied TechnoLibre (§ 8.5), que
+ *  l'interface lit ici : le stockage lui est fermé. */
+export { COLONNES_LISTE_BADGES, DONNEES_BADGE, normaliserTextePied };
+
+/** Les positions de l'image des badges (§ 11.4), dans l'ordre où la section
+ *  les offre, et la lecture de l'image des badges d'une charge (§ 8.9), que
+ *  l'interface lit ici, comme les cases. */
+export { POSITIONS_IMAGE_BADGES, imageBadgesDe } from '../stockage/document.js';
 
 /** La phrase d'origine du pied TechnoLibre (§ 11.4), celle d'une machine qui
  *  n'en garde pas d'autre. */
@@ -391,8 +406,13 @@ export function creerSeance({
   // texte, normalisé, de même, TEXTE_PIED_TECHNOLIBRE_DEFAUT tant que ni l'un
   // ni l'autre n'est venu et pour des réglages relus sans la clé ;
   // donneesBadge : les cases de ce que le badge imprime, une par donnée de
-  // DONNEES_BADGE, de même, chacune lue ou choisie pour elle-même, cochées
-  // tant que rien n'est venu.
+  // DONNEES_BADGE, de même, chacune lue ou choisie pour elle-même, cochées tant
+  // que rien n'est venu ; cacherNumero : la case qui laisse en blanc le nom des
+  // doublons sur les badges, comme celle du pied TechnoLibre ;
+  // organisationEnGros : la case qui met l'organisation en gros au-dessus du
+  // nom sur les badges, de même ; colonnesListe : les colonnes de la liste des
+  // badges en CSV, de même, une par tour tant que ni l'un ni l'autre n'est
+  // venu.
   const etat = {
     racine,
     ouvert: null,
@@ -416,6 +436,9 @@ export function creerSeance({
     piedTechnolibre: true,
     textePiedTechnolibre: TEXTE_PIED_TECHNOLIBRE_DEFAUT,
     donneesBadge: donneesBadgeDe({}),
+    cacherNumero: true,
+    organisationEnGros: true,
+    colonnesListe: COLONNES_LISTE_BADGES[0],
   };
 
   // --- L'observation ------------------------------------------------------------
@@ -425,6 +448,12 @@ export function creerSeance({
   const abonnes = new Set();
   const annulations = new Set();
   let instantane = null;
+  // La racine dont EtatSeance.papier est le papier, celle que la dernière
+  // relecture des réglages a posée (relireReglagesMachine) ; la racine
+  // reçue au départ, dont le papier n'est pas encore lu mais n'est pas
+  // celui d'une autre. Tant qu'elle n'est pas la racine de la séance,
+  // publier se tait (changerDeRacine).
+  let racineDuPapier = racine;
   // Par Ouvert, sa charge et son examen figés (copiePubliee), et
   // INVARIANT_VIOLE : un Ouvert ne change jamais, ses copies se font une
   // fois. La charge publiée est neuve pour chaque Ouvert, et partage ses
@@ -503,6 +532,9 @@ export function creerSeance({
       piedTechnolibre: etat.piedTechnolibre,
       textePiedTechnolibre: etat.textePiedTechnolibre,
       donneesBadge: etat.donneesBadge,
+      cacherNumero: etat.cacherNumero,
+      organisationEnGros: etat.organisationEnGros,
+      colonnesListe: etat.colonnesListe,
     });
     return figer({
       racine: petit.racine,
@@ -523,6 +555,9 @@ export function creerSeance({
       piedTechnolibre: petit.piedTechnolibre,
       textePiedTechnolibre: petit.textePiedTechnolibre,
       donneesBadge: petit.donneesBadge,
+      cacherNumero: petit.cacherNumero,
+      organisationEnGros: petit.organisationEnGros,
+      colonnesListe: petit.colonnesListe,
     });
   }
 
@@ -532,8 +567,12 @@ export function creerSeance({
   }
 
   // Un changement a pu avoir lieu : l'instantané se refait, et chaque abonné
-  // reçoit le nouveau.
+  // reçoit le nouveau. Pendant un changement de racine, tant que le papier
+  // de la racine nouvelle n'est pas relu, rien ne se publie et l'instantané
+  // figé avant le changement reste (changerDeRacine) : l'appel en file qui
+  // a changé la racine publie en finissant.
   function publier() {
+    if (!memeRacine(racineDuPapier, etat.racine)) return;
     instantane = null;
     if (abonnes.size === 0) return;
     const courant = lireEtat();
@@ -663,14 +702,19 @@ export function creerSeance({
   }
 
   // Le rang du dernier choix de la taille du texte, celui du modèle de badge,
-  // celui de la case du pied TechnoLibre, celui de son texte et celui des
-  // cases de ce que le badge imprime : une relecture des réglages partie
-  // avant un choix ne pose pas sa valeur, plus ancienne.
+  // celui de la case du pied TechnoLibre, celui de son texte, celui des
+  // cases de ce que le badge imprime, celui de la case du numéro des
+  // doublons, celui de la case de l'organisation en gros et celui des
+  // colonnes de la liste : une relecture des réglages partie avant un choix
+  // ne pose pas sa valeur, plus ancienne.
   let choixTaille = 0;
   let choixModele = 0;
   let choixPied = 0;
   let choixTexte = 0;
   let choixDonnees = 0;
+  let choixCacher = 0;
+  let choixEnGros = 0;
+  let choixColonnes = 0;
 
   // À son tour dans la file des réglages, lit une fois les réglages de dossier
   // et pose dans l'état ce que la machine y garde, quand dossier est encore la
@@ -680,21 +724,26 @@ export function creerSeance({
   // dossier. La taille du texte : celle que les réglages portent, à défaut
   // celle de la séance — sans taille, pour des réglages que la lecture ne prend
   // pas, sans dossier, et quand un choix a suivi le départ de la relecture. Le
-  // modèle de badge et la case du pied TechnoLibre, de même ; les cases de ce
-  // que le badge imprime aussi, chacune pour elle-même : une case que les
-  // réglages ne portent pas garde celle de la séance. Le texte du pied, celui
-  // que les réglages portent, à défaut la phrase d'origine
+  // modèle de badge, la case du pied TechnoLibre, celle du numéro des doublons,
+  // celle de l'organisation en gros et les colonnes de la liste, de même ; les
+  // cases de ce que le badge imprime aussi, chacune pour elle-même : une case
+  // que les réglages ne portent pas garde celle de la séance. Le texte du pied,
+  // celui que les réglages portent, à défaut la phrase d'origine
   // (TEXTE_PIED_TECHNOLIBRE_DEFAUT) — la clé absente la désigne ; celui de la
   // séance seulement pour des réglages que la lecture ne prend pas, sans
-  // dossier, et quand un choix a suivi le départ de la relecture. Ne lève
-  // jamais ; ne publie pas : l'appelant est un travail de la file des appels,
-  // qui publie en finissant.
+  // dossier, et quand un choix a suivi le départ de la relecture. Le papier
+  // posé, dossier devient la racine du papier (racineDuPapier), et publier
+  // reprend. Ne lève jamais ; ne publie pas : l'appelant est un travail de la
+  // file des appels, qui publie en finissant.
   function relireReglagesMachine(dossier) {
     const rang = choixTaille;
     const rangModele = choixModele;
     const rangPied = choixPied;
     const rangTexte = choixTexte;
     const rangDonnees = choixDonnees;
+    const rangCacher = choixCacher;
+    const rangEnGros = choixEnGros;
+    const rangColonnes = choixColonnes;
     return enFileReglages(async () => {
       let lus = null;
       if (dossier !== null) {
@@ -708,9 +757,17 @@ export function creerSeance({
       const papier = dossier === null ? null : (papierDuChoix(dossier) ?? lus?.papier ?? choixSeance?.papier ?? null);
       if (!memeRacine(dossier, etat.racine)) return;
       etat.papier = papier;
+      racineDuPapier = dossier;
       if (lus !== null && Object.hasOwn(lus, 'taille_texte') && rang === choixTaille) etat.tailleTexte = tailleTexteDe(lus);
       if (lus !== null && Object.hasOwn(lus, 'modele_badge') && rangModele === choixModele) etat.modeleBadge = modeleBadgeDe(lus);
       if (lus !== null && Object.hasOwn(lus, 'pied_technolibre') && rangPied === choixPied) etat.piedTechnolibre = piedTechnolibreDe(lus);
+      if (lus !== null && Object.hasOwn(lus, 'cacher_numero_doublon') && rangCacher === choixCacher) etat.cacherNumero = cacherNumeroDe(lus);
+      if (lus !== null && Object.hasOwn(lus, 'organisation_en_gros') && rangEnGros === choixEnGros) {
+        etat.organisationEnGros = organisationEnGrosDe(lus);
+      }
+      if (lus !== null && Object.hasOwn(lus, 'colonnes_liste_badges') && rangColonnes === choixColonnes) {
+        etat.colonnesListe = colonnesListeDe(lus);
+      }
       // Sans la clé, les réglages lus disent la phrase d'origine : la
       // séance ne l'écrit pas, elle la retire.
       if (lus !== null && rangTexte === choixTexte) {
@@ -724,6 +781,25 @@ export function creerSeance({
         );
       }
     });
+  }
+
+  // Fait de nouvelle la racine de la séance, du dedans d'un appel en file :
+  // fige d'abord l'instantané de l'état observable, puis poser() — qui peut
+  // attendre et lever — pose la racine nouvelle et ce qui l'accompagne, puis
+  // le papier s'en relit (relireReglagesMachine), même quand poser() lève.
+  // Entre les deux, publier se tait et etat() rend l'instantané figé : ni un
+  // abonné ni un lecteur ne voit la racine nouvelle avec le papier de
+  // l'ancienne, pas même quand une écriture des réglages de l'ancienne
+  // racine, déjà dans la file, publie en finissant. seance.racine, elle, est
+  // la nouvelle dès poser() : un papier choisi pendant la relecture s'écrit
+  // là.
+  async function changerDeRacine(nouvelle, poser) {
+    lireEtat();
+    try {
+      await poser();
+    } finally {
+      await relireReglagesMachine(nouvelle);
+    }
   }
 
   // Le cadrage demandé, écrit par la file dans les réglages de sa racine. Un
@@ -1218,6 +1294,38 @@ export function creerSeance({
     return { libelle: texte, chemin };
   }
 
+  // Pose l'image des badges de l'événement, PNG de octets, comme le logo
+  // d'une personne : les refus de l'écriture, puis le PNG, puis le geste
+  // changerImageBadges essayé à blanc sur le chemin logo/<empreinte>.png,
+  // puis l'image, par ecrireLogo, puis le geste. Une image que le disque
+  // refuse lève IMAGE_BADGES_NON_ECRITE {chemin, dossier, cause}, remède
+  // null, sans rien enregistrer ; la même image, disparue du dossier, se
+  // réécrit avant SANS_EFFET. Ni la case ni la position ne changent. Rend
+  // le libellé et le chemin.
+  async function poserImageBadges(demande) {
+    const { octets } = demande ?? {};
+    const ouvert = exigerEcriture();
+    exigerPngDeLogo(octets);
+    const chemin = cheminLogo(empreinteSha256(octets));
+    let sansEffet = null;
+    try {
+      appliquerCommande('changerImageBadges', ouvert.charge, { chemin });
+    } catch (erreur) {
+      if (erreur?.code !== 'SANS_EFFET') throw erreur;
+      sansEffet = erreur;
+    }
+    try {
+      await ecrireLogo(ouvert.fs, ouvert.racine, octets);
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage) || !['ECRITURE', 'LECTURE'].includes(erreur.code)) throw erreur;
+      const { chemin: fichier = chemin, dossier = null, cause = null } = erreur.details ?? {};
+      throw new ErreurSeance('IMAGE_BADGES_NON_ECRITE', { chemin: fichier, dossier, cause, remede: null });
+    }
+    if (sansEffet !== null) throw sansEffet;
+    const { libelle: texte } = await geste('changerImageBadges', { chemin });
+    return { libelle: texte, chemin };
+  }
+
   // Retire le logo de la personne id : le geste changerLogo, chemin null.
   // Aucune image ne s'efface.
   function retirerLogoParticipant(demande) {
@@ -1524,20 +1632,22 @@ export function creerSeance({
   // (§ 8.6) : la paire alignée de l'Ouvert gardé (enregistrerAilleurs), puis
   // les logos de son dossier, recopiés un à un dans le dossier neuf — un logo
   // que l'ancien support ne rend plus ne refuse rien, et LOGOS_NON_COPIES
-  // s'annonce parmi les avertissements de l'Ouvert (§ 8.7) —, puis
-  // le verrou rendu là où il était, puis, en écriture, pris là-bas. La séance
-  // s'y poursuit, son support rétabli. Un dossier qui porte déjà
-  // l'événement (dejaPresent), celui de la séance compris, se refuse
-  // IDENTIFIANT_PRESENT, sans rien écrire : la paire s'y poserait sous une
-  // seconde base. Un état que le support refuse là-bas, le journal écrit, y
-  // transporte la séance : l'Ouvert avancé du refus et la racine nouvelle, en
-  // lecture, le support rompu par ce refus, le verrou rendu là où il était ;
-  // un nouvel essai y trouve ce journal, et se refuse. Tout autre échec
-  // laisse tout en l'état, le support toujours rompu. Réussi, il demande le
-  // type du support de la racine nouvelle, et SUPPORT_AMOVIBLE {dossier}
-  // annonce la garantie affaiblie d'un support amovible, comme la règle du
-  // dossier de travail au démarrage (§ 8.8). Le cadrage de l'événement se
-  // demande alors pour les réglages de la racine nouvelle (§ 8.5).
+  // s'annonce parmi les avertissements de l'Ouvert (§ 8.7) —, puis le verrou
+  // rendu là où il était, puis, en écriture, pris là-bas. La séance s'y
+  // poursuit, son support rétabli. Un dossier qui porte déjà l'événement
+  // (dejaPresent), celui de la séance compris, se refuse IDENTIFIANT_PRESENT,
+  // sans rien écrire : la paire s'y poserait sous une seconde base. Un état que
+  // le support refuse là-bas, le journal écrit, y transporte la séance :
+  // l'Ouvert avancé du refus et la racine nouvelle, en lecture, le support
+  // rompu par ce refus, le verrou rendu là où il était ; un nouvel essai y
+  // trouve ce journal, et se refuse. Réussi ou ainsi refusé, il ne publie la
+  // racine nouvelle qu'avec son papier, relu avant toute publication
+  // (changerDeRacine). Tout autre échec laisse tout en l'état, le support
+  // toujours rompu. Réussi, il demande le type du support de la racine
+  // nouvelle, et SUPPORT_AMOVIBLE {dossier} annonce la garantie affaiblie d'un
+  // support amovible, comme la règle du dossier de travail au démarrage
+  // (§ 8.8). Le cadrage de l'événement se demande alors pour les réglages de la
+  // racine nouvelle (§ 8.5).
   //
   // Sans racine, le dossier se demande à l'opérateur par fs.choisirDossier ;
   // son annulation ne change rien, et rend null.
@@ -1560,23 +1670,26 @@ export function creerSeance({
     } catch (erreur) {
       if (erreur instanceof ErreurStockage && erreur.code === 'ETAT_NON_ECRIT') {
         suspendre();
-        etat.mode = 'lecture';
-        etat.racine = nouvelle;
-        await rompre(erreur, erreur.details.ouvert);
-        etat.avertissementsGeste = await rendreVerrou(ouvert);
+        await changerDeRacine(nouvelle, async () => {
+          etat.mode = 'lecture';
+          etat.racine = nouvelle;
+          await rompre(erreur, erreur.details.ouvert);
+          etat.avertissementsGeste = await rendreVerrou(ouvert);
+        });
       }
       throw erreur;
     }
     const avertissements = await rendreVerrou(ouvert);
-    Object.assign(etat, {
-      ouvert: ailleurs,
-      source: null,
-      racine: nouvelle,
-      supportRompu: false,
-      refusSupport: null,
-      ailleurs: null,
+    await changerDeRacine(nouvelle, () => {
+      Object.assign(etat, {
+        ouvert: ailleurs,
+        source: null,
+        racine: nouvelle,
+        supportRompu: false,
+        refusSupport: null,
+        ailleurs: null,
+      });
     });
-    await relireReglagesMachine(nouvelle);
     // Le cadrage de l'événement suit la séance : demandé de nouveau pour la
     // racine nouvelle, il y remplace celui qui attendait l'ancienne, que son
     // support refuse.
@@ -1641,8 +1754,9 @@ export function creerSeance({
 
   // Ce que la planche lit de l'événement ouvert, à son tour dans la file des
   // appels, une fois faites les écritures de réglages déjà demandées : le
-  // papier, le modèle de badge, la case du pied TechnoLibre, son texte et les
-  // cases de ce que le badge imprime qu'un choix vient de poser comptent.
+  // papier, le modèle de badge, la case du pied TechnoLibre, son texte, les
+  // cases de ce que le badge imprime, celle du nom des doublons et les
+  // colonnes de la liste qu'un choix vient de poser comptent.
   // AUCUN_EVENEMENT sans événement. Le système de fichiers est la vue du
   // dossier de l'événement, sous la racine de l'Ouvert : la planche se pose
   // dans ce dossier.
@@ -1661,6 +1775,9 @@ export function creerSeance({
       piedTechnolibre: etat.piedTechnolibre,
       textePiedTechnolibre: etat.textePiedTechnolibre,
       donneesBadge: etat.donneesBadge,
+      cacherNumero: etat.cacherNumero,
+      organisationEnGros: etat.organisationEnGros,
+      colonnesListe: etat.colonnesListe,
     };
   }
 
@@ -1736,7 +1853,9 @@ export function creerSeance({
     /**
      * L'état observable (EtatSeance), figé en profondeur : le même objet
      * entre deux changements, un objet neuf à chaque changement, ses
-     * propositions figées partagées d'un état au suivant.
+     * propositions figées partagées d'un état au suivant. Pendant un
+     * changement de racine, celui d'avant, jusqu'à ce que le papier de la
+     * racine nouvelle soit relu (changerDeRacine).
      */
     etat: () => lireEtat(),
     /**
@@ -1914,6 +2033,81 @@ export function creerSeance({
       return { retenu: ecrit, avertissements };
     },
     /**
+     * Coche ou décoche la case qui laisse en blanc le nom des doublons sur
+     * les badges (§ 8.5, § 11.4) : EtatSeance.cacherNumero la porte
+     * aussitôt, et le choix s'écrit dans reglages_locaux.json de la racine
+     * sous cacher_numero_doublon, comme la case du pied TechnoLibre, dans
+     * tout mode, avec ou sans événement.
+     *
+     * Rend {retenu, avertissements}, aux règles de choisirPiedTechnolibre :
+     * sans dossier, des réglages que la lecture ne prend pas, ou une
+     * écriture que le dossier refuse, la case vaut pour la séance, en
+     * mémoire.
+     *
+     * @param {boolean} coche
+     * @returns {Promise<{retenu: boolean, avertissements: Array<{code: string, details: Object}>}>}
+     * @throws {TypeError} une valeur qui n'est pas un booléen, sans rien lire
+     *         ni écrire
+     */
+    async choisirCacherNumero(coche) {
+      avecCacherNumero({ format: 1, papier: null, cadrages: [] }, coche);
+      choixCacher += 1;
+      etat.cacherNumero = coche;
+      publier();
+      const { ecrit, avertissements } = await retenirSurLaMachine((reglages) => avecCacherNumero(reglages, coche));
+      return { retenu: ecrit, avertissements };
+    },
+    /**
+     * Coche ou décoche la case qui met l'organisation en gros au-dessus du
+     * nom sur les badges (§ 8.5, § 11.4) : EtatSeance.organisationEnGros la
+     * porte aussitôt, et le choix s'écrit dans reglages_locaux.json de la
+     * racine sous organisation_en_gros, comme la case du pied TechnoLibre,
+     * dans tout mode, avec ou sans événement.
+     *
+     * Rend {retenu, avertissements}, aux règles de choisirPiedTechnolibre :
+     * sans dossier, des réglages que la lecture ne prend pas, ou une
+     * écriture que le dossier refuse, la case vaut pour la séance, en
+     * mémoire.
+     *
+     * @param {boolean} coche
+     * @returns {Promise<{retenu: boolean, avertissements: Array<{code: string, details: Object}>}>}
+     * @throws {TypeError} une valeur qui n'est pas un booléen, sans rien lire
+     *         ni écrire
+     */
+    async choisirOrganisationEnGros(coche) {
+      avecOrganisationEnGros({ format: 1, papier: null, cadrages: [] }, coche);
+      choixEnGros += 1;
+      etat.organisationEnGros = coche;
+      publier();
+      const { ecrit, avertissements } = await retenirSurLaMachine((reglages) => avecOrganisationEnGros(reglages, coche));
+      return { retenu: ecrit, avertissements };
+    },
+    /**
+     * Choisit les colonnes de la liste des badges en CSV (§ 8.5, § 11.6),
+     * une par tour ou une seule : EtatSeance.colonnesListe les porte
+     * aussitôt, et le choix s'écrit dans reglages_locaux.json de la racine
+     * sous colonnes_liste_badges, comme la case du pied TechnoLibre, dans
+     * tout mode, avec ou sans événement.
+     *
+     * Rend {retenu, avertissements}, aux règles de choisirPiedTechnolibre :
+     * sans dossier, des réglages que la lecture ne prend pas, ou une
+     * écriture que le dossier refuse, le choix vaut pour la séance, en
+     * mémoire.
+     *
+     * @param {'parTour'|'unique'} colonnes   l'une de COLONNES_LISTE_BADGES
+     * @returns {Promise<{retenu: boolean, avertissements: Array<{code: string, details: Object}>}>}
+     * @throws {TypeError} hors de COLONNES_LISTE_BADGES, sans rien lire ni
+     *         écrire
+     */
+    async choisirColonnesListe(colonnes) {
+      avecColonnesListe({ format: 1, papier: null, cadrages: [] }, colonnes);
+      choixColonnes += 1;
+      etat.colonnesListe = colonnes;
+      publier();
+      const { ecrit, avertissements } = await retenirSurLaMachine((reglages) => avecColonnesListe(reglages, colonnes));
+      return { retenu: ecrit, avertissements };
+    },
+    /**
      * Choisit le papier des planches de la machine (§ 8.5, § 11.2) :
      * l'écrit dans reglages_locaux.json de la racine, par la file des
      * réglages, puis EtatSeance.papier le porte. Vivant dans tout mode, avec
@@ -1964,14 +2158,16 @@ export function creerSeance({
     /**
      * Ferme l'événement ouvert, comme fermer, puis fait de racine le dossier
      * de travail, où la séance ouvre et crée désormais, et relit le papier
-     * de ses réglages ; rien ne s'écrit sans événement ouvert.
+     * de ses réglages avant de rien publier (changerDeRacine) ; rien ne
+     * s'écrit sans événement ouvert.
      */
     changerRacine: (nouvelle, quitter) =>
       enFile(async () => {
         exigerSauve(quitter);
         const avertissements = await fermerEvenement();
-        etat.racine = nouvelle;
-        await relireReglagesMachine(nouvelle);
+        await changerDeRacine(nouvelle, () => {
+          etat.racine = nouvelle;
+        });
         return { avertissements };
       }),
     passerEnEcriture: () => enFile(passerEnEcriture),
@@ -2003,9 +2199,21 @@ export function creerSeance({
     /**
      * Les octets de l'image d'un logo, chemin logo/<empreinte>.png relatif
      * au dossier de l'événement ouvert, null quand le fichier n'y est pas :
-     * une lecture, admise dans tout mode, qui n'écrit rien.
+     * une lecture, admise dans tout mode, qui n'écrit rien. L'image des
+     * badges, rangée dans le même dossier, se lit de même.
      */
     lireLogoParticipant: (chemin) => enFile(() => lireLogoParticipant(chemin)),
+    /**
+     * Pose l'image des badges de l'événement (§ 8.9, § 11.4) : demande
+     * {octets}, ceux d'un PNG d'au plus LOGO_PARTICIPANT_COTE_MAX pixels de
+     * côté, que l'interface compose comme un logo. L'image s'écrit dans
+     * logo/ du dossier de l'événement, sous le SHA-256 de ses octets, avant
+     * l'entrée du geste changerImageBadges : {libelle, chemin,
+     * avertissements}. Refusé comme un geste, sans rien écrire ;
+     * IMAGE_BADGES_NON_ECRITE quand le disque refuse l'image. La case, le
+     * retrait de l'image et la position passent par executer.
+     */
+    poserImageBadges: (demande) => enFile(() => suivi(() => poserImageBadges(demande))),
     /**
      * Défait le dernier geste du fil courant (§ 8.3). options facultatives,
      * {touche} : 'Ctrl+Z', que le libellé figé de l'entrée nomme ; une autre

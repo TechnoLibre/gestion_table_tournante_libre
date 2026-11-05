@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du texte du plan (§ 7.4, § 14.1) : la troncature avec marque, le
-// repli d'un libellé de table en lignes, et les décalages des lignes d'une
-// liste. La mesure est injectée : ici, une
+// repli d'un libellé de table en lignes, le repli entier, sans marque, et
+// les décalages des lignes d'une liste. La mesure est injectée : ici, une
 // somme de largeurs par glyphe écrites dans l'épreuve, où le glyphe large
 // coûte plus que la moyenne ; au navigateur, getComputedTextLength.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
-import { GABARIT_HAUTEUR_LIGNE, TAILLE_TEXTE_LISTE_CM, decalagesLignes, replier, tronquer } from './texte.js';
+import { GABARIT_HAUTEUR_LIGNE, TAILLE_TEXTE_LISTE_CM, decalagesLignes, replier, replierEntier, tronquer } from './texte.js';
 
 const MARQUE = '…';
 
@@ -174,5 +174,71 @@ describe('texte : le repli en lignes, puis la troncature (§ 7.4)', () => {
       }
     }
     assert.equal(comptes, 5 * 29);
+  });
+});
+
+describe('texte : le repli entier, sans marque (§ 7.4)', () => {
+  test('un texte qui tient reste sur une ligne ; un texte vide ou fait de blancs ne rend aucune ligne', () => {
+    assert.deepEqual(replierEntier('Ombrelle', 48, mesurer), ['Ombrelle']);
+    assert.deepEqual(replierEntier('', 48, mesurer), []);
+    assert.deepEqual(replierEntier('  \u{0009} ', 48, mesurer), []);
+  });
+
+  test('le texte se replie entre les mots, chaque ligne aussi pleine que la largeur le permet, sur autant de lignes qu\u{2019}il faut', () => {
+    assert.deepEqual(replierEntier('Iris Ombrelle Pervenche', 80, mesurer), ['Iris Ombrelle', 'Pervenche']);
+    assert.deepEqual(replierEntier('Iris Ombrelle Pervenche', 60, mesurer), ['Iris', 'Ombrelle', 'Pervenche']);
+    assert.deepEqual(replierEntier('  Iris \u{0009}  Iris  Iris Iris Iris ', 50, mesurer), ['Iris Iris', 'Iris Iris', 'Iris']);
+  });
+
+  test('un mot plus large que la ligne s\u{2019}y coupe entre deux caractères, le plus loin possible, et sa suite ouvre la ligne suivante ; jamais de marque', () => {
+    assert.deepEqual(replierEntier('WWWWWWWWWW', 30, mesurer), ['WWW', 'WWW', 'WWW', 'W']);
+    assert.deepEqual(replierEntier('Iris WWWWWWWW', 50, mesurer), ['Iris', 'WWWWW', 'WWW']);
+    assert.ok(replierEntier('Iris Ombrelle Pervenche', 50, mesurer).every((ligne) => !ligne.includes(MARQUE)));
+  });
+
+  test('un caractère plus large que la ligne y tient seul : le texte entier se pose, sans boucle sans fin', () => {
+    assert.deepEqual(replierEntier('WWW', 5, mesurer), ['W', 'W', 'W']);
+    assert.deepEqual(replierEntier('Iris W', 7, mesurer), ['I', 'r', 'i', 's', 'W']);
+  });
+
+  test('une coupe ne tombe jamais entre les deux moitiés d\u{2019}une paire de substitution, ni devant une marque combinante, ni de part et d\u{2019}autre d\u{2019}un liant sans chasse', () => {
+    const paires = '\u{1D49C}'.repeat(8);
+    const combine = 'e\u{0301}'.repeat(8);
+    const liees = '\u{1F469}\u{200D}\u{1F4BB}'.repeat(4);
+    for (const texte of [paires, `Iris ${paires}`, combine, `${combine} Iris`, liees]) {
+      for (let largeur = 0; largeur <= 40; largeur += 1) {
+        const lignes = replierEntier(texte, largeur, mesurer);
+        for (const ligne of lignes) {
+          assert.ok(ligne.isWellFormed(), `${JSON.stringify(texte)} à ${largeur} : ${JSON.stringify(lignes)}`);
+          assert.ok(!/^\p{M}/u.test(ligne), `${JSON.stringify(texte)} à ${largeur} : ${JSON.stringify(lignes)}`);
+          assert.ok(!/^\u{200D}|\u{200D}$/u.test(ligne), `${JSON.stringify(texte)} à ${largeur} : ${JSON.stringify(lignes)}`);
+        }
+        assert.equal(lignes.join('').split(' ').join(''), texte.split(' ').join(''), `${JSON.stringify(texte)} à ${largeur}`);
+      }
+    }
+  });
+
+  test('chaque ligne tient dans la largeur dès qu\u{2019}un caractère y tient ; les lignes rendent le texte entier, dans l\u{2019}ordre', () => {
+    const textes = ['Table d\u{2019}honneur des invités', 'WWWWWWWWWWWWWWWWWWWW', 'Æ Æ Æ ÆÆÆÆÆÆ iii W', 'Ondine \u{1D49C}\u{1D49C}\u{1D49C} Lacasse', 'x'.repeat(60)];
+    let comptes = 0;
+    for (const texte of textes) {
+      for (let largeur = 11; largeur <= 90; largeur += 3) {
+        const lignes = replierEntier(texte, largeur, mesurer);
+        for (const ligne of lignes) {
+          assert.ok(mesurer(ligne) <= largeur, `${texte} à ${largeur} : ${JSON.stringify(lignes)}`);
+          assert.ok(ligne !== '' && ligne === ligne.trim() && !ligne.includes('  '), `${texte} à ${largeur} : ${JSON.stringify(lignes)}`);
+        }
+        assert.equal(lignes.join('').split(' ').join(''), texte.split(' ').join(''), `${texte} à ${largeur}`);
+        // Une ligne ne pouvait prendre le premier mot de la suivante.
+        lignes.slice(1).forEach((ligne, rang) => {
+          const premier = ligne.split(' ')[0];
+          if (texte.split(' ').includes(premier)) {
+            assert.ok(mesurer(`${lignes[rang]} ${premier}`) > largeur, `${texte} à ${largeur} : ${JSON.stringify(lignes)}`);
+          }
+        });
+        comptes += 1;
+      }
+    }
+    assert.equal(comptes, 5 * 27);
   });
 });

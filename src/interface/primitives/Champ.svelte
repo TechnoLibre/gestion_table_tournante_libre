@@ -37,6 +37,10 @@
   // l'étiquette le nomme. L'étiquette visible ne change pas. Le refus reçoit
   // nom pour nommer son remède.
   //
+  // indice, déjà traduit, est le texte indicatif de l'entrée (placeholder),
+  // qu'elle montre vide, dans l'encre secondaire de la page ; null, elle
+  // n'en montre aucun. Il ne nomme pas le champ : l'étiquette le nomme.
+  //
   // type est celui de l'entrée : 'text', le défaut, ou 'number', un champ
   // étroit de six caractères, qui porte min, max et pas (step) quand ils
   // sont donnés. La lecture reste celle de lire, et le domaine celui de
@@ -56,6 +60,7 @@
     executer,
     details = {},
     nom = null,
+    indice = null,
     gestes = {},
     type = 'text',
     min = null,
@@ -217,6 +222,7 @@
     step={pas ?? undefined}
     data-champ={cle}
     value={saisie}
+    placeholder={indice ?? undefined}
     aria-label={nom ?? undefined}
     aria-invalid={refus === null ? undefined : 'true'}
     aria-describedby={refus === null ? undefined : idRefus}
@@ -245,6 +251,14 @@
     color: var(--couleur-page-texte);
     font: inherit;
     font-size: var(--taille-texte);
+  }
+
+  /* Le texte indicatif prend l'encre secondaire, à pleine opacité, que la
+     palette mesure sur la carte dans les deux thèmes : le gris par défaut
+     du navigateur ne change pas de thème. */
+  input::placeholder {
+    color: var(--couleur-page-texte-secondaire);
+    opacity: 1;
   }
 
   /* Un nombre : six caractères de large, flèches comprises. */

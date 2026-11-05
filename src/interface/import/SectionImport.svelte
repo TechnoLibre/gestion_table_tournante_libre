@@ -25,9 +25,11 @@
   // importerParticipants ou importerObjectifs —, et son refus se pose à
   // côté d'elle ; « Remplacer » passe d'abord par la fenêtre à confirmer,
   // qui porte les quatre comptes de bilanRemplacement pour des
-  // participants, les deux de bilanRemplacementObjectifs — objectifs et
-  // tables — pour des objectifs, et ne l'ouvre que sur un import que la
-  // commande accepterait. Le rapport lit le résumé que la séance rend.
+  // participants, et les logos retirés quand il y en a, les deux de
+  // bilanRemplacementObjectifs — objectifs et tables — pour des objectifs,
+  // et ne l'ouvre que sur un import que la commande accepterait. Le rapport
+  // lit le résumé que la séance rend, et, pour des participants, le nombre
+  // de personnes à désigner animatrices dans la charge écrite (aDesigner).
   // L'import appliqué, et l'essai de « Remplacer » avant sa fenêtre, passent
   // par l'indicateur d'activité (activite.js).
   //
@@ -51,7 +53,11 @@
   // objectifs se refuse à côté d'elle sans table, ou quand chaque numéro de
   // table est partagé, avec le remède qui ouvre la section des tables ; la
   // commande se recrée à chaque nature, son refus avec elle.
+  //
+  // Le guide de l'import (GuideImport.svelte), replié sous elle et dernier de
+  // la carte, décrit les colonnes de la nature cochée.
   import { getContext, untrack } from 'svelte';
+  import { aDesigner } from '../../application/animateurs.js';
   import { appliquerCommande } from '../../application/commandes.js';
   import { bilanRemplacement, bilanRemplacementObjectifs, decoder, exporterRefus } from '../../application/csv.js';
   import { suivre } from '../activite.js';
@@ -59,10 +65,12 @@
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
   import Apercu from './Apercu.svelte';
+  import GuideImport from './GuideImport.svelte';
   import Rapport from './Rapport.svelte';
   import {
     NATURES_D_IMPORT,
     NATURE_PAR_DEFAUT,
+    annonceRemplacementParticipants,
     apercevoirSelon,
     avecEntetesDeLaGrille,
     modeleApercu,
@@ -221,8 +229,9 @@
   }
 
   // L'aperçu appliqué par la séance, par la commande de sa nature, dans son
-  // mode, sous l'indicateur d'activité ; le rapport lit le résumé rendu, et
-  // l'aperçu se ferme.
+  // mode, sous l'indicateur d'activité ; le rapport lit le résumé rendu et
+  // compte les personnes à désigner de la charge écrite, et l'aperçu se
+  // ferme.
   async function appliquer(applique, sonMode, depuis, saNature) {
     const { libelle, resume } = await suivre(() =>
       seance.executer(COMMANDES_DES_NATURES.get(saNature), { apercu: applique, mode: sonMode }),
@@ -234,6 +243,7 @@
       apercu: applique,
       resume,
       libelle,
+      aDesigner: saNature === 'participants' ? aDesigner(seance.etat().charge).length : 0,
     };
     source = null;
     enregistre = null;
@@ -261,17 +271,18 @@
     const { refus, charge: courante } = seance.etat();
     if (refus !== null) throw refus;
     const annonce = await suivre(() => {
-      appliquerCommande(COMMANDES_DES_NATURES.get(saNature), courante, { apercu: applique, mode: sonMode });
-      return annonceDuRemplacement(saNature, courante);
+      const essai = appliquerCommande(COMMANDES_DES_NATURES.get(saNature), courante, { apercu: applique, mode: sonMode });
+      return annonceDuRemplacement(saNature, courante, essai.resume);
     });
     confirmation = { nature: saNature, apercu: applique, depuis, ...annonce };
   }
 
   // Le titre de la fenêtre de « Remplacer » et ce qu'elle nomme détruit :
   // les personnes, réservations, titres pourvus et propositions pour des
-  // participants ; les objectifs et les tables qui en portent pour des
-  // objectifs.
-  function annonceDuRemplacement(saNature, courante) {
+  // participants, puis les logos que le résumé de l'essai compte retirés,
+  // quand il y en a (annonceRemplacementParticipants) ; les objectifs et les
+  // tables qui en portent pour des objectifs.
+  function annonceDuRemplacement(saNature, courante, resume) {
     if (saNature === 'objectifs') {
       const bilan = bilanRemplacementObjectifs(courante);
       return {
@@ -279,16 +290,8 @@
         elements: [t('import.remplacer.objectifs', { n: bilan.objectifs }), t('import.remplacer.tables', { n: bilan.tables })],
       };
     }
-    const bilan = bilanRemplacement(courante);
-    return {
-      titre: 'import.remplacer.titre',
-      elements: [
-        t('import.remplacer.participants', { n: bilan.participants }),
-        t('import.remplacer.reservations', { n: bilan.reservations }),
-        t('import.remplacer.titres', { n: bilan.titresPourvus }),
-        t('import.remplacer.propositions', { n: bilan.propositions }),
-      ],
-    };
+    const elements = annonceRemplacementParticipants(bilanRemplacement(courante), resume.logosRetires);
+    return { titre: 'import.remplacer.titre', elements: elements.map(({ cle, details }) => t(cle, details)) };
   }
 
   async function confirmerRemplacement() {
@@ -339,6 +342,7 @@
         </p>
       {/if}
     </div>
+    <GuideImport {nature} />
   </Carte>
 
   {#if source !== null}

@@ -4,8 +4,8 @@
 // Les libellés de la page de qualité (§ 12 à § 12.14, § 14.6), une table.
 // Chaque clé commence par « qualite. » : la source et ses cas, la liste des
 // vues, le refus de dessiner, les pourcentages, puis un sous-préfixe par vue
-// — tuile, profil, comparaison, collisions, tables, paires, objectifs,
-// animateurs, diversite, performance.
+// — tuile, profil, comparaison, collisions, tables, paires, inclusions,
+// objectifs, animateurs, diversite, performance.
 //
 // Le signe « % » ne s'écrit que sous qualite.pourcentage.* : la valeur
 // « N % », les graduations d'un axe en pourcentages et le libellé de sa
@@ -20,7 +20,7 @@
 // « points de relevé » de la recherche ; « le moins varié », « le plus
 // varié » et « au minimum » pour la diversité d'un animateur ; « des tours
 // possibles servis » pour la part servie des objectifs.
-import { auxToursNommes, capitale, compte, enumeration } from '../../application/libelles/aides.js';
+import { auxToursNommes, capitale, compte, enumeration, nomDuTour, tourDansPhrase, tourOuNom } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
   // --- La source et les cas sans source mesurable (§ 12, B9, § 12.6) ---------
@@ -66,6 +66,8 @@ export const TABLE = new Map([
   ['qualite.vue.tables.question', 'Où les mêmes cercles se retrouvent-ils à une même table ?'],
   ['qualite.vue.paires.titre', 'Paires répétées'],
   ['qualite.vue.paires.question', 'Qui revoit trop souvent la même personne ?'],
+  ['qualite.vue.inclusions.titre', 'Inclusions'],
+  ['qualite.vue.inclusions.question', 'Quelles rencontres demandées par les inclusions ce placement ne fait-il pas ?'],
   ['qualite.vue.objectifs.titre', 'Objectifs des tables'],
   [
     'qualite.vue.objectifs.question',
@@ -122,10 +124,11 @@ export const TABLE = new Map([
   // la personne au rang 1, que l'infobulle du minimum brut ajoute à
   // l'explication de sa colonne, explication étant la clé de celle-ci.
   ['qualite.entete.plancherNonProuve', 'Plancher non prouvé : une personne au moins est absente à un tour.'],
-  ['qualite.entete.rang1Presence', ({ tours }) => `présente ${auxToursNommes(tours)}`],
+  ['qualite.entete.rang1Presence', ({ tours, nomsTours }) => `présente ${auxToursNommes(tours, nomsTours)}`],
   [
     'qualite.entete.explicationRang1',
-    ({ explication, nom, tours }, texte) => `${texte(explication)} ${nom}, au rang 1, est ${texte('qualite.entete.rang1Presence', { tours })}.`,
+    ({ explication, nom, tours, nomsTours }, texte) =>
+      `${texte(explication)} ${nom}, au rang 1, est ${texte('qualite.entete.rang1Presence', { tours, nomsTours })}.`,
   ],
 
   // --- Les colonnes côte à côte de la comparaison (§ 12.10.6, D67, D84) ------
@@ -161,6 +164,16 @@ export const TABLE = new Map([
   ['qualite.profil.marque.reserve', 'en réserve à un tour au moins'],
   ['qualite.profil.marque.absente', 'absente à un tour au moins'],
   ['qualite.profil.marque.plafondNul', 'plafond réalisé nul'],
+  // La marque d'un rang à plafond réalisé nul dans sa ligne, à l'infobulle
+  // et au jumeau : elle renvoie à son écart d'itinéraire, le plafond a priori
+  // moins un plafond réalisé nul ; ecart null quand il est inconnu.
+  [
+    'qualite.profil.marqueLigne.plafondNul',
+    ({ ecart }) =>
+      ecart === null
+        ? "plafond réalisé nul ; écart d'itinéraire inconnu"
+        : `plafond réalisé nul ; écart d'itinéraire de ${compte(ecart, 'personne', 'personnes')}`,
+  ],
   ['qualite.profil.colonne.rang', 'Rang'],
   ['qualite.profil.colonne.nom', 'Personne'],
   ['qualite.profil.colonne.organisation', 'Organisation'],
@@ -353,7 +366,7 @@ export const TABLE = new Map([
   ],
   ['qualite.tables.graphique', 'Organisations à chaque table, tables par tours'],
   ['qualite.tables.table', ({ numero }) => `Table ${numero}`],
-  ['qualite.tables.tour', ({ tour }) => `Tour ${tour}`],
+  ['qualite.tables.tour', ({ tour, nomsTours }) => nomDuTour(tour, nomsTours)],
   // Les colonnes du jumeau et de l'infobulle d'une case : les trois comptes,
   // puis le pourcentage de chacun, δ sur c, sur o, sur α.
   ['qualite.tables.colonne.table', 'Table'],
@@ -368,9 +381,14 @@ export const TABLE = new Map([
   ['qualite.tables.colonne.affilies', 'Affiliés'],
   ['qualite.tables.colonne.capacite', 'Capacité'],
   ['qualite.tables.sansAffilie', 'aucun affilié à ce tour'],
+  // La synthèse de la grille : la pire table, sa case la plus haute, puis le
+  // nombre de cases de la grille à ce compte, l'effectif du pire cas.
   [
     'qualite.tables.synthese',
-    ({ numero, valeur }) => `La table ${numero} porte la case la plus haute : ${valeur}.`,
+    ({ numero, valeur, cases }) =>
+      cases === 1
+        ? `La table ${numero} porte la case la plus haute : ${valeur}, seule à ce compte.`
+        : `La table ${numero} porte la case la plus haute : ${valeur} ; ${cases} cases sont à ce compte.`,
   ],
   ['qualite.tables.tropLarge', 'La grille ne tient pas dans la largeur de la carte : son tableau jumeau la remplace.'],
   ['qualite.tables.aucuneOrganisation', "Aucune organisation : aucune table n'a d'organisation à mélanger."],
@@ -382,16 +400,16 @@ export const TABLE = new Map([
   ['qualite.paires.colonne.paire', 'Paire'],
   ['qualite.paires.colonne.fois', 'Rencontres de la paire'],
   ['qualite.paires.colonne.tours', 'Tours'],
-  ['qualite.paires.premierTour', ({ tour }) => `Voir au tour ${tour}`],
-  ['qualite.paires.tour', ({ tour, table }) => `Tour ${tour}, table ${table}`],
+  ['qualite.paires.premierTour', ({ tour, nomsTours }) => `Voir au ${tourDansPhrase(tour, nomsTours)}`],
+  ['qualite.paires.tour', ({ tour, table, nomsTours }) => `${nomDuTour(tour, nomsTours)}, table ${table}`],
   ['qualite.paires.fois', ({ fois }) => `${fois} fois`],
   ['qualite.paires.aucune', 'Aucune paire ne se revoit : chaque rencontre est unique.'],
   ['qualite.paires.uneTable', 'Une seule table : chaque paire se revoit à chaque tour.'],
   ['qualite.paires.unTour', 'Un seul tour : aucune paire ne peut se revoir.'],
   // Le nom accessible d'une commande de ligne : son libellé, puis la paire,
   // qui le distingue des commandes des autres lignes.
-  ['qualite.paires.premierTourNom', ({ tour, a, b }) => `Voir au tour ${tour} : ${a} et ${b}`],
-  ['qualite.paires.tourNom', ({ tour, table, a, b }) => `Tour ${tour}, table ${table} : ${a} et ${b}`],
+  ['qualite.paires.premierTourNom', ({ tour, a, b, nomsTours }) => `Voir au ${tourDansPhrase(tour, nomsTours)} : ${a} et ${b}`],
+  ['qualite.paires.tourNom', ({ tour, table, a, b, nomsTours }) => `${nomDuTour(tour, nomsTours)}, table ${table} : ${a} et ${b}`],
   ['qualite.paires.homonyme', ({ id }) => `n° ${id}`],
   // Un homonyme dans un nom accessible : son nom, puis son identifiant.
   ['qualite.paires.nomHomonyme', ({ nom, id }) => `${nom} (n° ${id})`],
@@ -431,6 +449,59 @@ export const TABLE = new Map([
     "La matrice n'est pas dessinée : ses cases ne tiendraient pas dans la largeur de la carte. La fiche de chaque personne porte ses rencontres.",
   ],
 
+  // --- Les inclusions (§ 12.15) ----------------------------------------------
+  // Une phrase d'inclusion (PhraseInclusion.svelte) pose chaque nom et chaque
+  // organisation dans son propre nœud, entre ces textes, qui portent leurs
+  // blancs de bord : « Prénom Nom », avis.participant, « Prénom Nom ». Une
+  // raison se lit dans la phrase qui la cite, par parce, qui reçoit sa clé
+  // (cleDeRaison, inclusions.js).
+  ['qualite.inclusions.avis.participant', " n'a pas rencontré "],
+  ['qualite.inclusions.avis.organisation', " n'a rencontré personne de "],
+  ['qualite.inclusions.avis.reciproque', ', une rencontre demandée des deux côtés'],
+  ['qualite.inclusions.vers', ' \u{2192} '],
+  ['qualite.inclusions.parce', ({ raison }, texte) => ` : ${texte(raison)}`],
+  ['qualite.inclusions.raison.exclue', 'la personne incluse est exclue'],
+  ['qualite.inclusions.raison.sansPresent', "aucun présent ne porte l'organisation"],
+  ['qualite.inclusions.raison.conflit', "un conflit d'organisation la contredit"],
+  ['qualite.inclusions.raison.sansTourCommun', 'les deux ne sont jamais présentes au même tour'],
+  ['qualite.inclusions.raison.tablesImposees', 'les réservations les assoient à deux tables différentes à chaque tour commun'],
+  ['qualite.inclusions.raison.pleine', "aucune table n'a de place pour les deux"],
+  // cible vaut 0 quand chaque liste active dépasse ce que sa personne peut
+  // rencontrer : aucune ne fait d'avis.
+  [
+    'qualite.inclusions.synthese',
+    ({ avis, cible }) => {
+      if (cible === 0) return "Aucune rencontre demandée ne fait d'avis : chaque liste dépasse ce que sa personne peut rencontrer.";
+      if (avis > 0) {
+        return `${compte(avis, 'inclusion non satisfaite', 'inclusions non satisfaites')} sur ${compte(cible, 'rencontre demandée', 'rencontres demandées')}.`;
+      }
+      return cible === 1 ? 'La rencontre demandée se fait.' : `Chacune des ${cible} rencontres demandées se fait.`;
+    },
+  ],
+  ['qualite.inclusions.nonSatisfaites', 'Inclusions non satisfaites'],
+  ['qualite.inclusions.aucunAvis', 'Aucune.'],
+  ['qualite.inclusions.auDela', 'Listes au-delà du plafond'],
+  [
+    'qualite.inclusions.auDela.explication',
+    "Ces listes demandent plus de personnes que la soirée n'en fait rencontrer : ne pas les satisfaire tout entières n'est pas une erreur, et elles ne font aucun avis.",
+  ],
+  [
+    'qualite.inclusions.auDela.ligne',
+    ({ satisfaites, actives, atteignables, possibles }) =>
+      ` : ${compte(satisfaites, 'inclusion satisfaite', 'inclusions satisfaites')} sur ${actives}, au plus ` +
+      `${compte(atteignables, 'possible', 'possibles')} ; ` +
+      (possibles === 0
+        ? 'toutes ses inclusions encore possibles sont atteintes'
+        : compte(possibles, 'inclusion encore possible non atteinte', 'inclusions encore possibles non atteintes')),
+  ],
+  ['qualite.inclusions.horsDAtteinte', "Inclusions hors d'atteinte"],
+  [
+    'qualite.inclusions.horsDAtteinte.explication',
+    'Aucun placement ne peut les satisfaire : elles ne comptent ni parmi les satisfaites, ni parmi les non satisfaites.',
+  ],
+  ['qualite.inclusions.aucun', "Aucune inclusion n'est active : la vue n'a rien à montrer."],
+  ['qualite.inclusions.aucun.horsDAtteinte', "Aucune inclusion n'est active : celles que les listes portent sont toutes hors d'atteinte."],
+
   // --- Les objectifs des tables, tour par tour (§ 12.12, B21, D36) -----------
   ['qualite.objectifs.jamaisServies', 'Personnes jamais servies'],
   ['qualite.objectifs.toursPossibles', ({ possibles }) => compte(possibles, 'tour possible', 'tours possibles')],
@@ -444,7 +515,7 @@ export const TABLE = new Map([
     ({ hors, plancher }) => `${compte(hors, 'tour hors objectif', 'tours hors objectif')}, plancher ${plancher}`,
   ],
   ['qualite.objectifs.soiree', 'La soirée'],
-  ['qualite.objectifs.tour', ({ tour }) => `Tour ${tour}`],
+  ['qualite.objectifs.tour', ({ tour, nomsTours }) => nomDuTour(tour, nomsTours)],
   ['qualite.objectifs.assisSansTable', ({ assis }) => `${assis} assis sans table possible`],
   ['qualite.objectifs.sansCouple', 'aucun couple possible à ce tour'],
   ['qualite.objectifs.segment.prouve', 'prouvé inévitable'],
@@ -483,12 +554,13 @@ export const TABLE = new Map([
   // objectif ; hors du domaine des planchers, ces derniers seuls.
   [
     'qualite.objectifs.synthese',
-    ({ tour, reste, hors }) =>
-      `En tête, le tour ${tour}, au plus grand reste : ${reste} au-delà de son plancher, sur ${compte(hors, 'tour hors objectif', 'tours hors objectif')}.`,
+    ({ tour, reste, hors, nomsTours }) =>
+      `En tête, le ${tourDansPhrase(tour, nomsTours)}, au plus grand reste : ${reste} au-delà de son plancher, ` +
+      `sur ${compte(hors, 'tour hors objectif', 'tours hors objectif')}.`,
   ],
   [
     'qualite.objectifs.syntheseHorsDomaine',
-    ({ tour, hors }) => `En tête, le tour ${tour} : ${compte(hors, 'tour hors objectif', 'tours hors objectif')}.`,
+    ({ tour, hors, nomsTours }) => `En tête, le ${tourDansPhrase(tour, nomsTours)} : ${compte(hors, 'tour hors objectif', 'tours hors objectif')}.`,
   ],
   ['qualite.objectifs.aucuneJamaisServie', 'Chaque personne concernée est servie à un tour au moins.'],
   ['qualite.objectifs.parTour', 'Tours possibles servis, tour par tour'],
@@ -529,7 +601,7 @@ export const TABLE = new Map([
   ['qualite.diversite.plus', 'le plus varié'],
   ['qualite.diversite.auMinimum', 'au minimum'],
   ['qualite.diversite.soiree', 'la soirée'],
-  ['qualite.diversite.tour', ({ tour, table }) => `tour ${tour}, table ${table}`],
+  ['qualite.diversite.tour', ({ tour, table, nomsTours }) => `${tourOuNom(tour, nomsTours)}, table ${table}`],
   ['qualite.diversite.toursAnimes', ({ tours }) => compte(tours, 'tour animé', 'tours animés')],
   ['qualite.diversite.personnes', ({ personnes }) => `${compte(personnes, 'personne rencontrée', 'personnes rencontrées')} en animant`],
   [
@@ -544,7 +616,10 @@ export const TABLE = new Map([
     'qualite.diversite.rien',
     "Ni étiquette, ni plus d'une organisation : la diversité par animateur n'a rien à dessiner. Son tableau jumeau garde les tours animés et les personnes rencontrées en animant.",
   ],
-  ['qualite.diversite.aucunAnimateur', "Aucun animateur n'est désigné : la vue n'a rien à montrer."],
+  [
+    'qualite.diversite.aucun',
+    "Aucune personne n'est concernée par les animateurs, ou aucun animateur n'est désigné : la vue n'a rien à montrer.",
+  ],
   // Le texte secondaire d'une ligne : ses tours animés et ses personnes
   // rencontrées en animant.
   [

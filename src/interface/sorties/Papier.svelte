@@ -2,16 +2,16 @@
      SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
-  // La question du papier (§ 8.5, § 11.2), que l'aperçu avant impression et
-  // la section des badges partagent : le papier est un réglage de la
-  // machine, retenu dans reglages_locaux.json, demandé à la première sortie
-  // et jamais ensuite. Sans papier — EtatSeance.papier null — ni défaut, le
-  // composant pose la question, un choix par papier de PAPIERS, chacun
-  // décrit ; avec un papier, il le montre, « Papier : A4 », et offre
-  // « Changer », qui rouvre la question. Le défaut, quand l'écran en donne
-  // un, se montre comme un papier tant que la machine n'en a pas : il ne
-  // s'écrit pas, et seul un choix de la question devient le papier de la
-  // machine. Sans défaut, aucun papier n'est choisi pour l'opérateur.
+  // La question du papier (§ 8.5, § 11.2), que les badges et l'aperçu avant
+  // impression de la section de l'impression partagent : le papier est un
+  // réglage de la machine, retenu dans reglages_locaux.json, demandé à la
+  // première sortie et jamais ensuite. Sans papier — EtatSeance.papier null —
+  // ni défaut, le composant pose la question, un choix par papier de PAPIERS,
+  // chacun décrit ; avec un papier, il le montre, « Papier : A4 », et offre
+  // « Changer », qui rouvre la question. Le défaut, quand l'écran en donne un,
+  // se montre comme un papier tant que la machine n'en a pas : il ne s'écrit
+  // pas, et seul un choix de la question devient le papier de la machine. Sans
+  // défaut, aucun papier n'est choisi pour l'opérateur.
   //
   // Un choix passe par seance.choisirPapier, vivant dans tout mode, sur un
   // plan bloqué comme en lecture. Des réglages illisibles ou une écriture

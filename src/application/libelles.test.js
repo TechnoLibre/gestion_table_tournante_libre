@@ -39,7 +39,7 @@ import { CRITERES as CRITERES_DU_REGISTRE, MODES_OBJECTIFS, valeursQuiClassent }
 import { TABLES_INTERFACE } from '../interface/libelles.js';
 import { creerTraduction } from './traduction.js';
 import { CODES, TABLES_APPLICATION, libelle } from './libelles.js';
-import { auxToursNommes, toursNommes } from './libelles/aides.js';
+import { auxToursNommes, nomDuTour, tourDansPhrase, toursNommes } from './libelles/aides.js';
 import * as exemplesCsv from '../../test/libelles/csv.js';
 import * as exemplesEvenements from '../../test/libelles/evenements.js';
 import * as exemplesFormat from '../../test/libelles/format.js';
@@ -388,6 +388,34 @@ describe('libellés : les tours nommés (aides.js)', () => {
       [[1, 3, 5], 'aux tours 1, 3 et 5'],
     ];
     for (const [tours, attendu] of CAS) assert.equal(auxToursNommes(tours), attendu, JSON.stringify(tours));
+  });
+
+  test('un tour que l’événement nomme : son nom seul, ou après son numéro dans une phrase ; sans nom, « Tour 3 » et « tour 3 »', () => {
+    const noms = [null, 'Plat principal', null];
+    assert.equal(nomDuTour(2, noms), 'Plat principal');
+    assert.equal(nomDuTour(3, noms), 'Tour 3');
+    assert.equal(nomDuTour(3), 'Tour 3');
+    assert.equal(tourDansPhrase(2, noms), 'tour 2 (Plat principal)');
+    assert.equal(tourDansPhrase(1, noms), 'tour 1');
+    assert.equal(tourDansPhrase(1), 'tour 1');
+  });
+
+  test('toursNommes et auxToursNommes : un tour nommé porte son nom entre parenthèses et ne se fond dans aucune suite', () => {
+    const noms = ['Apéritif', null, null, null, 'Dessert', null];
+    const CAS = [
+      [[1], 'tour 1 (Apéritif)'],
+      [[1, 2], 'tours 1 (Apéritif) et 2'],
+      [[1, 2, 3, 4], 'tours 1 (Apéritif) et 2 à 4'],
+      [[2, 3, 4, 5, 6], 'tours 2 à 4, 5 (Dessert) et 6'],
+      [[2, 3, 6], 'tours 2, 3 et 6'],
+      [[4, 5, 6], 'tours 4, 5 (Dessert) et 6'],
+    ];
+    for (const [tours, attendu] of CAS) assert.equal(toursNommes(tours, noms), attendu, JSON.stringify(tours));
+    assert.equal(auxToursNommes([5], noms), 'au tour 5 (Dessert)');
+    assert.equal(auxToursNommes(null, noms), 'à tous les tours');
+    // Sans nom, ou noms absente : les formes d'avant.
+    assert.equal(toursNommes([2, 3, 4], [null, null, null, null]), 'tours 2 à 4');
+    assert.equal(toursNommes([2, 3, 4], undefined), 'tours 2 à 4');
   });
 
   test("une liste vide, non croissante ou qui porte un tour qui n'est pas un entier positif lève RangeError", () => {
@@ -902,7 +930,7 @@ describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7
         for (const critere of CRITERES_DU_REGISTRE) for (const valeur of valeursQuiClassent(critere, contraintes, mode)) valeurs.add(valeur);
       }
     }
-    assert.equal(valeurs.size, 11);
+    assert.equal(valeurs.size, 12);
     const textes = [...valeurs].map((valeur) => libelle(`moteur.valeur.${valeur}`));
     for (const texte of textes) {
       assert.ok(texte.length > 0);
@@ -1114,7 +1142,7 @@ describe('libellés : les étiquettes et les objectifs des tables (§ 4.5, § 5.
 
 describe("libellés : l'ordre des priorités et le mode des objectifs (§ 5.7, § 5.9, § 8.2, A11, A12, D22)", () => {
   test('chaque critère du registre a son nom complet mobilier.critere.<nom>, deux à deux distincts', () => {
-    assert.equal(CRITERES_DU_REGISTRE.length, 8);
+    assert.equal(CRITERES_DU_REGISTRE.length, 9);
     const noms = CRITERES_DU_REGISTRE.map((critere) => libelle(`mobilier.critere.${critere}`));
     for (const nom of noms) {
       assert.ok(nom.length > 0);

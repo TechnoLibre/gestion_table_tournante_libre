@@ -3,12 +3,15 @@
 
 // Les modules purs de la liste des participants (§ 4, § 7.4, § 10.2) : les
 // lignes de la grille, triées et filtrées, la navigation au clavier,
-// l'orthographe d'organisation à reprendre, l'itinéraire d'une personne dans
+// l'orthographe d'organisation à reprendre, le nom que le message d'ajout
+// donne et la durée de ce message, l'itinéraire d'une personne dans
 // le retenu, ses réservations, l'ordre des colonnes, celui de l'export, et
 // les groupes de la liste groupée par une colonne ou plusieurs, imbriqués,
 // la présence par tour comprise — sa cellule exportée, son tri, ses groupes,
-// l'étape « absente » de l'itinéraire — et la commande d'une cellule.
-// Les noms d'épreuve sont inventés.
+// l'étape « absente » de l'itinéraire — et la commande d'une cellule ; les
+// inclusions, leur tri, la colonne masquée par défaut, la cellule active
+// qui suit sa colonne et la commande unique de leur cellule. Les noms
+// d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { cleNormalisee, decoder, exporterParticipants } from '../../application/csv.js';
@@ -16,10 +19,13 @@ import { ecrirePresence } from '../../csv/presence.js';
 import {
   CHAMP_DE_COLONNE,
   COLONNES,
+  DUREE_MESSAGE_AJOUT_MS,
   GROUPEMENTS,
+  MASQUABLES,
   MESURES,
   TRIABLES,
   basculerGroupe,
+  celluleAnimation,
   celluleSuivante,
   cheminDe,
   choisirGroupement,
@@ -27,8 +33,10 @@ import {
   cleDeGroupement,
   cleDeStatut,
   clesPremierNiveau,
+  colonnesMontrees,
   colonnesOffertes,
   commandeDeCellule,
+  commandeDeValidation,
   deplierChemin,
   entreeValide,
   groupesGrille,
@@ -37,10 +45,13 @@ import {
   lignesVisibles,
   ligneVoisine,
   niveauxAffiches,
+  nomAjoute,
   nomExport,
   orthographeExistante,
+  rangDeColonne,
   reservationsDe,
 } from './grille.js';
+import { saisieInclusionsEnregistree } from './liste_inclusions.js';
 
 // Un participant ; les champs absents valent null, exclu faux.
 const personne = (id, nom, champs = {}) => ({
@@ -109,6 +120,24 @@ describe('lignesGrille : tri et filtre (§ 10.2)', () => {
     assert.deepEqual(ids(decroissant), [1, 3, 4, 2]);
   });
 
+  test('inclusions : par le nombre de lignes, une personne sans inclusion après toute liste, dans les deux sens ; deux nombres égaux par identifiant', () => {
+    const liste = [
+      personne(1, 'Ombrelle', { inclusionsOrganisation: ['Société Alpha'] }),
+      personne(2, 'Pervenche'),
+      personne(3, 'Lacasse', { inclusionsOrganisation: ['Club des Merles'], inclusionsParticipant: [1, 4] }),
+      personne(4, 'Grisaille', { inclusionsParticipant: [1] }),
+    ];
+    const croissant = lignesGrille(liste, { tri: { colonne: 'inclusions', sens: 'croissant' }, filtre: '' }, cleNormalisee);
+    assert.deepEqual(ids(croissant), [1, 4, 3, 2]);
+    const decroissant = lignesGrille(liste, { tri: { colonne: 'inclusions', sens: 'decroissant' }, filtre: '' }, cleNormalisee);
+    assert.deepEqual(ids(decroissant), [3, 1, 4, 2]);
+  });
+
+  test('le filtre ne lit pas les inclusions : une organisation incluse ne retient pas la personne', () => {
+    const liste = [personne(1, 'Ombrelle', { inclusionsOrganisation: ['Club des Merles'] }), personne(2, 'Pervenche', { organisation: 'Club des Merles' })];
+    assert.deepEqual(ids(lignesGrille(liste, { tri: null, filtre: 'merles' }, cleNormalisee)), [2]);
+  });
+
   test('le filtre ne lit pas les conflits : une organisation nommée en conflit ne retient pas la personne', () => {
     const liste = [personne(1, 'Ombrelle', { conflits: ['Club des Merles'] }), personne(2, 'Pervenche', { organisation: 'Club des Merles' })];
     assert.deepEqual(ids(lignesGrille(liste, { tri: null, filtre: 'merles' }, cleNormalisee)), [2]);
@@ -171,18 +200,32 @@ describe('lignesGrille : tri et filtre (§ 10.2)', () => {
     assert.throws(() => lignesGrille(participants, { tri: { colonne: 'nom', sens: 'haut' }, filtre: '' }, cleNormalisee), RangeError);
   });
 
-  test('les conflits du placement, une mesure, ne se trient ni ne se filtrent : TRIABLES les écarte, et leur tri lève', () => {
-    assert.deepEqual(MESURES, ['conflitsPlacement']);
+  test('les conflits et les inclusions du placement et l’animation, trois mesures, ne se trient ni ne se filtrent : TRIABLES les écarte, et leur tri lève', () => {
+    assert.deepEqual(MESURES, ['conflitsPlacement', 'inclusionsPlacement', 'animation']);
     assert.ok(Object.isFrozen(MESURES));
-    assert.deepEqual(TRIABLES, COLONNES.filter((colonne) => colonne !== 'conflitsPlacement'));
+    assert.deepEqual(TRIABLES, COLONNES.filter((colonne) => !['conflitsPlacement', 'inclusionsPlacement', 'animation'].includes(colonne)));
     assert.ok(Object.isFrozen(TRIABLES));
-    for (const sens of ['croissant', 'decroissant']) {
-      assert.throws(() => lignesGrille(participants, { tri: { colonne: 'conflitsPlacement', sens }, filtre: '' }, cleNormalisee), RangeError);
+    for (const colonne of MESURES) {
+      for (const sens of ['croissant', 'decroissant']) {
+        assert.throws(() => lignesGrille(participants, { tri: { colonne, sens }, filtre: '' }, cleNormalisee), RangeError);
+      }
     }
     // Une propriété de ce nom, que la grille n'écrit jamais, n'est pas lue
     // par le filtre.
-    const porteuse = [personne(1, 'Ombrelle', { conflitsPlacement: 'tour 2' })];
+    const porteuse = [personne(1, 'Ombrelle', { conflitsPlacement: 'tour 2', inclusionsPlacement: 'sans Iris', animation: 'table 3' })];
     assert.deepEqual(lignesGrille(porteuse, { tri: null, filtre: 'tour' }, cleNormalisee), []);
+    assert.deepEqual(lignesGrille(porteuse, { tri: null, filtre: 'Iris' }, cleNormalisee), []);
+    assert.deepEqual(lignesGrille(porteuse, { tri: null, filtre: 'table' }, cleNormalisee), []);
+  });
+
+  test('celluleAnimation : les tables animées, sinon « à désigner » sous la marque, sinon rien ; une exclue n’est pas à désigner', () => {
+    const animees = new Map([[1, [3, 5]], [2, [4]]]);
+    assert.deepEqual(celluleAnimation(personne(1, 'Ombrelle', { animationReservee: true }), animees), { sorte: 'tables', numeros: [3, 5] });
+    assert.deepEqual(celluleAnimation(personne(2, 'Pervenche'), animees), { sorte: 'tables', numeros: [4] });
+    assert.deepEqual(celluleAnimation(personne(3, 'Lacasse', { animationReservee: true }), animees), { sorte: 'aDesigner' });
+    assert.deepEqual(celluleAnimation(personne(4, 'Grisaille', { animationReservee: true, exclu: true }), animees), { sorte: 'vide' });
+    assert.deepEqual(celluleAnimation(personne(5, 'Lisonnet'), animees), { sorte: 'vide' });
+    assert.throws(() => commandeDeCellule('animation', 1, 'oui'), RangeError);
   });
 });
 
@@ -265,8 +308,26 @@ describe('la colonne de la présence : filtre, tri, groupes, commande', () => {
       args: { id: 2, champs: { courriel: 'iris@exemple.test' } },
     });
     assert.deepEqual(commandeDeCellule('notes', 9, ''), { nom: 'modifierParticipant', args: { id: 9, champs: { notes: '' } } });
-    // Les conflits du placement se lisent, ne s'écrivent pas.
+    // Les conflits du placement se lisent, ne s'écrivent pas ; les
+    // inclusions passent par commandeDeValidation.
     assert.throws(() => commandeDeCellule('conflitsPlacement', 9, 'tour 2'), RangeError);
+    assert.throws(() => commandeDeCellule('inclusions', 9, { organisations: [], participants: [] }), RangeError);
+  });
+
+  test('commandeDeValidation : celle de la cellule ; pour les inclusions, une seule, des listes que la saisie change, contre l’ouverture et contre la personne', () => {
+    const iris = personne(4, 'Ombrelle', { inclusionsOrganisation: ['Club des Merles'] });
+    assert.deepEqual(commandeDeValidation('presence', iris, [1, 3], '1,2,3'), commandeDeCellule('presence', 4, [1, 3]));
+    const ouverture = saisieInclusionsEnregistree(iris);
+    assert.deepEqual(commandeDeValidation('inclusions', iris, { organisations: [], participants: [2] }, ouverture), {
+      nom: 'changerInclusions',
+      args: { id: 4, organisations: [], participants: [2] },
+    });
+    assert.deepEqual(commandeDeValidation('inclusions', iris, { organisations: ['Club des Merles'], participants: [2] }, ouverture), {
+      nom: 'changerInclusions',
+      args: { id: 4, participants: [2] },
+    });
+    assert.equal(commandeDeValidation('inclusions', iris, { organisations: ['Club des Merles'], participants: [] }, ouverture), null);
+    assert.throws(() => commandeDeValidation('animation', iris, 'oui', ''), RangeError);
   });
 });
 
@@ -327,6 +388,23 @@ describe('orthographeExistante (§ 10.1, § 10.2)', () => {
     const deux = [...participants, personne(4, 'Grisaille', { organisation: 'club des merles' })];
     assert.equal(orthographeExistante('club des merles', deux, cleNormalisee), null);
     assert.equal(orthographeExistante('Club Des Merles', deux, cleNormalisee), 'Club des Merles');
+  });
+});
+
+describe('le message d’ajout du formulaire (§ 10.2)', () => {
+  test('nomAjoute lit le nom et le prénom comme la commande les enregistre : le prénom, puis le nom, en NFC, sans blancs de bord', () => {
+    assert.equal(nomAjoute({ nom: ' Ombrelle ', prenom: '\tIris ' }), 'Iris Ombrelle');
+    assert.equal(nomAjoute({ nom: 'Ombre\u{0301}lle', prenom: 'Iris' }), 'Iris Ombr\u{00E9}lle');
+  });
+
+  test('un prénom vide, blanc ou absent laisse le nom seul ; les autres champs ne comptent pas', () => {
+    assert.equal(nomAjoute({ nom: 'Pervenche', prenom: '' }), 'Pervenche');
+    assert.equal(nomAjoute({ nom: 'Pervenche', prenom: '   ' }), 'Pervenche');
+    assert.equal(nomAjoute({ nom: 'Pervenche', organisation: 'Club des Merles' }), 'Pervenche');
+  });
+
+  test('le message reste cinq secondes', () => {
+    assert.equal(DUREE_MESSAGE_AJOUT_MS, 5_000);
   });
 });
 
@@ -443,14 +521,40 @@ describe('reservationsDe : les réservations d’une personne, pour la fiche (§
 });
 
 describe("les colonnes de la grille s'associent à l'export par leur champ (§ 10.2)", () => {
-  test('dix colonnes, les conflits juste après l’organisation, ceux du placement juste après, la présence juste après l’exclusion ; chacune, hors des mesures, a son champ d’export, sous son en-tête', () => {
-    assert.deepEqual(COLONNES, ['nom', 'prenom', 'organisation', 'conflits', 'conflitsPlacement', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
+  test('treize colonnes, les conflits juste après l’organisation, ceux du placement juste après, les inclusions juste après, celles du placement juste après, l’animation juste après le titre pressenti, la présence juste après l’exclusion ; chacune, hors des mesures et des inclusions, a son champ d’export, sous son en-tête', () => {
+    assert.deepEqual(COLONNES, [
+      'nom', 'prenom', 'organisation', 'conflits', 'conflitsPlacement', 'inclusions', 'inclusionsPlacement', 'courriel', 'titrePressenti', 'animation', 'exclu', 'presence', 'notes',
+    ]);
     assert.ok(Object.isFrozen(COLONNES));
-    assert.deepEqual([...CHAMP_DE_COLONNE.keys()], COLONNES.filter((colonne) => !MESURES.includes(colonne)));
+    assert.deepEqual([...CHAMP_DE_COLONNE.keys()], COLONNES.filter((colonne) => !MESURES.includes(colonne) && colonne !== 'inclusions'));
     assert.equal(CHAMP_DE_COLONNE.has('conflitsPlacement'), false);
+    assert.equal(CHAMP_DE_COLONNE.has('animation'), false);
+    assert.equal(CHAMP_DE_COLONNE.has('inclusions'), false);
+    assert.equal(CHAMP_DE_COLONNE.has('inclusionsPlacement'), false);
     assert.equal(CHAMP_DE_COLONNE.get('titrePressenti'), 'titre_pressenti');
     assert.equal(CHAMP_DE_COLONNE.get('conflits'), 'conflit_organisation');
     for (const colonne of [...CHAMP_DE_COLONNE.keys()].filter((c) => c !== 'titrePressenti' && c !== 'conflits')) assert.equal(CHAMP_DE_COLONNE.get(colonne), colonne);
+  });
+
+  test('les inclusions et celles du placement ne se montrent qu’à la demande : colonnesMontrees les écarte, sauf quand elles sont nommées, l’ordre de COLONNES gardé', () => {
+    assert.deepEqual(MASQUABLES, ['inclusions', 'inclusionsPlacement']);
+    assert.ok(Object.isFrozen(MASQUABLES));
+    assert.deepEqual(colonnesMontrees([]), COLONNES.filter((colonne) => !MASQUABLES.includes(colonne)));
+    assert.deepEqual(colonnesMontrees(new Set(MASQUABLES)), [...COLONNES]);
+    assert.deepEqual(colonnesMontrees(['inclusions']), COLONNES.filter((colonne) => colonne !== 'inclusionsPlacement'));
+    assert.notEqual(colonnesMontrees(MASQUABLES), COLONNES);
+  });
+
+  test('rangDeColonne : le rang d’une colonne montrée parmi celles de la grille ; une colonne masquée cède le sien à la première montrée qui la suit', () => {
+    const sans = colonnesMontrees([]);
+    const avec = colonnesMontrees(['inclusions']);
+    assert.equal(rangDeColonne('courriel', avec), avec.indexOf('courriel'));
+    assert.equal(rangDeColonne('courriel', sans), sans.indexOf('courriel'));
+    assert.notEqual(rangDeColonne('courriel', avec), rangDeColonne('courriel', sans));
+    assert.equal(rangDeColonne('inclusions', avec), avec.indexOf('inclusions'));
+    assert.equal(rangDeColonne('inclusions', sans), sans.indexOf('courriel'));
+    assert.equal(rangDeColonne('nom', sans), 0);
+    assert.equal(rangDeColonne('presence', ['nom', 'prenom']), 1);
   });
 
   test('la cellule exportée sous l’en-tête du champ de chaque colonne égale celle de la grille : exclu écrit « non », la présence écrite par ecrirePresence', () => {
@@ -500,13 +604,21 @@ describe("les colonnes de la grille s'associent à l'export par leur champ (§ 1
     const { texte } = decoder(exporterParticipants([p]));
     const [entete, ligne] = texte.split('\r\n');
     const cellules = ligne.split(';');
-    assert.equal(cellules.length, COLONNES.length - MESURES.length);
+    // Une cellule par champ d'export, étiquettes comprises, conflits absents.
+    assert.equal(cellules.length, CHAMP_DE_COLONNE.size);
     assert.deepEqual(entete.split(';').slice(-2), ['etiquettes', 'presence']);
     assert.deepEqual(cellules.slice(-2), ['Montréal, finance', '2, 3']);
     assert.ok(!COLONNES.includes('etiquettes'));
     const avec = decoder(exporterParticipants([{ ...p, conflits: ['Atelier Ressac'] }])).texte.split('\r\n');
     assert.deepEqual(avec[0].split(';').slice(-3), ['etiquettes', 'presence', 'conflit_organisation']);
-    assert.equal(avec[1].split(';').length, COLONNES.length - MESURES.length + 1);
+    assert.equal(avec[1].split(';').length, CHAMP_DE_COLONNE.size + 1);
+    // La colonne des inclusions s'exporte en deux colonnes, qu'aucune
+    // colonne de la grille ne porte seule.
+    const autre = { ...p, id: 2, nom: 'Pervenche', prenom: null, organisation: 'Atelier Ressac', etiquettes: [] };
+    const incluse = decoder(exporterParticipants([{ ...p, inclusionsOrganisation: ['Atelier Ressac'], inclusionsParticipant: [2] }, autre])).texte;
+    assert.deepEqual(incluse.split('\r\n')[0].split(';').slice(-2), ['inclusion_organisation', 'inclusion_participant']);
+    assert.deepEqual(incluse.split('\r\n')[1].split(';').slice(-2), ['Atelier Ressac', 'Pervenche']);
+    assert.ok(!CHAMP_DE_COLONNE.has('inclusions'));
     // Les conflits du placement, une mesure, ne s'exportent pas.
     assert.ok(!avec[0].split(';').some((champ) => champ.includes('placement')));
   });
@@ -559,10 +671,11 @@ describe('groupesGrille : la liste groupée par une colonne', () => {
     personne(1, 'Pervenche', { organisation: 'CLUB DES MERLES' }),
   ];
 
-  test('les colonnes groupables : celles de la grille hors des conflits, une liste, puis le statut calculé, chacune avec sa clé de libellé', () => {
-    assert.deepEqual(GROUPEMENTS, [...COLONNES.filter((colonne) => colonne !== 'conflits' && colonne !== 'conflitsPlacement'), 'statut']);
+  test('les colonnes groupables : celles de la grille hors des conflits et des inclusions, deux listes, puis le statut calculé, chacune avec sa clé de libellé', () => {
+    assert.deepEqual(GROUPEMENTS, [...COLONNES.filter((colonne) => !['conflits', 'inclusions'].includes(colonne) && !MESURES.includes(colonne)), 'statut']);
     assert.throws(() => groupesGrille([], ['conflits'], { tri: null, cleNormalisee, statuts: null }), RangeError);
-    assert.throws(() => groupesGrille([], ['conflitsPlacement'], { tri: null, cleNormalisee, statuts: null }), RangeError);
+    assert.throws(() => groupesGrille([], ['inclusions'], { tri: null, cleNormalisee, statuts: null }), RangeError);
+    for (const mesure of MESURES) assert.throws(() => groupesGrille([], [mesure], { tri: null, cleNormalisee, statuts: null }), RangeError);
     assert.ok(GROUPEMENTS.length > 0);
     for (const colonne of COLONNES) assert.equal(cleDeGroupement(colonne), cleDeColonne(colonne), colonne);
     assert.equal(cleDeGroupement('statut'), 'participants.groupe.statut');
@@ -634,7 +747,7 @@ describe('groupesGrille : la liste groupée par une colonne', () => {
   });
 
   test('chaque colonne de texte groupe par sa clé normalisée, le vide après toute valeur, dans les deux sens', () => {
-    const textes = COLONNES.filter((colonne) => !['conflits', 'conflitsPlacement', 'exclu', 'presence', 'nom'].includes(colonne));
+    const textes = COLONNES.filter((colonne) => !MESURES.includes(colonne) && !['conflits', 'inclusions', 'exclu', 'presence', 'nom'].includes(colonne));
     assert.ok(textes.length > 0);
     for (const colonne of textes) {
       const liste = [

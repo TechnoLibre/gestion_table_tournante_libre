@@ -35,10 +35,12 @@
 // retenuAuxPresences (presence.js), pour les seules personnes dont la
 // présence par tour change ; leur libellé le dit quand il change.
 //
-// Les listes de conflits suivent les organisations (§ 4) : modifier,
-// supprimer et importer des participants les ramènent, dans leur entrée,
-// aux organisations que la charge porte encore (suivreOrganisations) ; leur
-// libellé dit ce qui a suivi.
+// Les listes de conflits et d'inclusions d'organisation suivent les
+// organisations (§ 4) : modifier, supprimer et importer des participants les
+// ramènent, dans leur entrée, aux organisations que la charge porte encore
+// (suivreOrganisations). Une personne supprimée quitte, dans son entrée,
+// chaque liste d'inclusions de participant qui la nomme. Leur libellé dit ce
+// qui a suivi.
 import { ErreurCsv } from '../csv/erreurs.js';
 import { appliquerImport, bilanRemplacement } from '../csv/import.js';
 import { appliquerImportObjectifs } from '../csv/objectifs.js';
@@ -47,7 +49,17 @@ import { presenceCanonique } from '../moteur/presence.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { difference } from '../stockage/correctifs.js';
 import { entreeDeCourse } from '../stockage/courses.js';
-import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
+import {
+  IMAGE_BADGES_DEFAUT,
+  POSITIONS_IMAGE_BADGES,
+  SCHEMA,
+  clesRangees,
+  creerCharge,
+  etatDeduit,
+  imageBadgesDe,
+  nomsDesTours,
+  premiereFaute,
+} from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { copieDeTravail } from '../stockage/gel.js';
@@ -115,25 +127,39 @@ function saisie(valeur, champ) {
   return texte === '' ? null : texte;
 }
 
+// La marque de l'animation réservée (§ 4) : une case de la saisie, que le
+// fichier d'état n'écrit que vraie (horsDuDefaut).
+const ANIMATION_RESERVEE = 'animationReservee';
+
+// Un champ booléen d'une saisie, ou TypeError qui le nomme.
+function booleen(valeur, champ) {
+  if (typeof valeur !== 'boolean') throw new TypeError(`${champ} : booléen attendu, reçu ${JSON.stringify(valeur)}`);
+  return valeur;
+}
+
 // Les champs d'une saisie de participant : chaque champ de texte présent, lu
-// par saisie, et exclu quand admisExclu, un booléen. Un champ inconnu, ou
-// d'une autre sorte, est une faute du code.
+// par saisie, l'animation réservée, un booléen, et exclu quand admisExclu,
+// un booléen. Un champ inconnu, ou d'une autre sorte, est une faute du code.
 function lireChamps(champs, { admisExclu }) {
   if (champs === null || typeof champs !== 'object' || Array.isArray(champs)) {
     throw new TypeError(`champs : objet attendu, reçu ${JSON.stringify(champs)}`);
   }
-  const permis = admisExclu ? [...CHAMPS_DE_SAISIE, 'exclu'] : CHAMPS_DE_SAISIE;
+  const permis = [...CHAMPS_DE_SAISIE, ANIMATION_RESERVEE, ...(admisExclu ? ['exclu'] : [])];
   const inconnu = clesRangees(champs).find((cle) => !permis.includes(cle));
   if (inconnu !== undefined) throw new TypeError(`champs : ${inconnu} n'est pas un champ de cette saisie`);
   const lus = {};
   for (const champ of CHAMPS_DE_SAISIE) if (Object.hasOwn(champs, champ)) lus[champ] = saisie(champs[champ], champ);
-  if (Object.hasOwn(champs, 'exclu')) {
-    if (typeof champs.exclu !== 'boolean') {
-      throw new TypeError(`exclu : booléen attendu, reçu ${JSON.stringify(champs.exclu)}`);
-    }
-    lus.exclu = champs.exclu;
-  }
+  if (Object.hasOwn(champs, ANIMATION_RESERVEE)) lus[ANIMATION_RESERVEE] = booleen(champs[ANIMATION_RESERVEE], ANIMATION_RESERVEE);
+  if (Object.hasOwn(champs, 'exclu')) lus.exclu = booleen(champs.exclu, 'exclu');
   return lus;
+}
+
+// Le participant reçu, l'animation réservée lue posée : vraie, la marque ;
+// fausse, son absence ; non lue, celle de la personne. Rend une copie.
+function avecAnimationReservee(participant, lus) {
+  const { [ANIMATION_RESERVEE]: _marque, ...sans } = participant;
+  const marquee = lus[ANIMATION_RESERVEE] ?? participant[ANIMATION_RESERVEE] === true;
+  return marquee ? { ...sans, [ANIMATION_RESERVEE]: true } : sans;
 }
 
 // Un participant tel que la saisie le pose : nom requis (NOM_REQUIS) ; toute
@@ -188,13 +214,14 @@ function ajusterLeRetenu(avant, suivante) {
 }
 
 /**
- * ajouterParticipant {champs, presence?} : seul le nom est requis ; exclu
- * vaut faux par défaut. presence, absente ou null pour tous les tours,
- * suit la règle de changerPresence : une liste strictement croissante de
- * tours de 1 à R, sinon TypeError ; aucun tour, PRESENCE_VIDE {participant,
- * personne}, remède null ; écrite canonique. Une personne neuve n'a pas de
- * réservation : rien à contrôler. Sous un retenu, elle y attend en réserve à
- * ses tours de présence, A_PLACER_DANS_LE_RETENU.
+ * ajouterParticipant {champs, presence?} : seul le nom est requis ; exclu vaut
+ * faux par défaut, l'animation réservée aussi, qui ne s'écrit que vraie.
+ * presence, absente ou null pour tous les tours, suit la règle de
+ * changerPresence : une liste strictement croissante de tours de 1 à R, sinon
+ * TypeError ; aucun tour, PRESENCE_VIDE {participant, personne}, remède null ;
+ * écrite canonique. Une personne neuve n'a pas de réservation : rien à
+ * contrôler. Sous un retenu, elle y attend en réserve à ses tours de présence,
+ * A_PLACER_DANS_LE_RETENU.
  */
 function ajouterParticipant(charge, { champs, presence = null }) {
   exigerModifiable(charge);
@@ -216,6 +243,7 @@ function ajouterParticipant(charge, { champs, presence = null }) {
   if (tours !== null && tours.length === 0) throw refus('PRESENCE_VIDE', { participant: id, personne: nomAffiche(participant) });
   const canonique = tours === null ? undefined : presenceCanonique(tours, R);
   if (canonique !== undefined) participant.presence = canonique;
+  if (lus[ANIMATION_RESERVEE] === true) participant[ANIMATION_RESERVEE] = true;
   if (id >= IDENTIFIANT_MAX) throw refus('COMPTEUR_SATURE', { compteur: 'participant' });
   const suivante = copieDeTravail(charge);
   suivante.participants.push(participant);
@@ -228,25 +256,35 @@ function ajouterParticipant(charge, { champs, presence = null }) {
   };
 }
 
-// Ce que le libellé d'un geste dit des conflits qui ont suivi, null quand
-// rien n'a suivi.
-const conflitsSuivis = (suivi) => (rienASuivre(suivi) ? null : suivi);
+// Ce que le libellé d'un geste dit des listes qui ont suivi les
+// organisations (suivreOrganisations) : conflits et inclusions, chacun null
+// quand rien de ses listes n'a suivi.
+const listesSuivies = ({ conflits, inclusions }) => ({
+  conflits: rienASuivre(conflits) ? null : conflits,
+  inclusions: rienASuivre(inclusions) ? null : inclusions,
+});
 
 /**
- * modifierParticipant {id, champs} : les champs de texte donnés ; l'exclusion
- * a ses deux commandes. Le libellé nomme la personne d'avant et chaque champ
- * changé, puis le nouveau nom quand il change. Une organisation changée
- * fait suivre les listes de conflits (suivreOrganisations) : quand la
- * personne était la dernière de son organisation et en prend une autre, la
- * référence suit ce renommage ; sans organisation, l'ancienne quitte les
- * listes. Le libellé le dit.
+ * modifierParticipant {id, champs} : les champs de texte donnés, et la
+ * marque de l'animation réservée, posée à vrai, retirée à faux ;
+ * l'exclusion a ses deux commandes. Le libellé nomme la personne d'avant et
+ * chaque champ changé, puis le nouveau nom quand il change. Un nom changé
+ * retire la marque du nom numéroté (§ 8.9) : le nom saisi est voulu tel
+ * quel, numéro compris, et Défaire, qui rend la charge d'avant, rend la
+ * marque. Une organisation changée fait suivre les listes de conflits et
+ * d'inclusions d'organisation (suivreOrganisations) : quand la personne
+ * était la dernière de son organisation et en prend une autre, la référence
+ * suit ce renommage ; sans organisation, l'ancienne quitte les listes. Le
+ * libellé le dit.
  */
 function modifierParticipant(charge, { id, champs }) {
   exigerModifiable(charge);
   const avant = participantDe(charge, id);
-  const apres = { ...avant, ...lireChamps(champs, { admisExclu: false }) };
+  const lus = lireChamps(champs, { admisExclu: false });
+  const apres = avecAnimationReservee({ ...avant, ...lus }, lus);
+  if (apres.nom !== avant.nom) delete apres.nomNumerote;
   exigerParticipant(apres);
-  const changes = CHAMPS_DE_SAISIE.filter((champ) => apres[champ] !== avant[champ]);
+  const changes = [...CHAMPS_DE_SAISIE, ANIMATION_RESERVEE].filter((champ) => apres[champ] !== avant[champ]);
   if (changes.length === 0) throw refus('SANS_EFFET', { commande: 'modifierParticipant' });
   const renomme = apres.nom !== avant.nom || apres.prenom !== avant.prenom;
   const suivante = avecParticipant(charge, id, () => apres);
@@ -261,17 +299,18 @@ function modifierParticipant(charge, { id, champs }) {
       personne: nomAffiche(avant),
       champs: changes,
       devenu: renomme ? nomAffiche(apres) : null,
-      conflits: conflitsSuivis(suivi),
+      ...listesSuivies(suivi),
     }),
     avertissements: [],
   };
 }
 
-// L'organisation saisie d'un conflit (§ 4) : une chaîne en NFC, ses blancs
-// de bord retirés, qui doit être celle d'un participant de la charge,
-// comparée chaîne à chaîne, sinon ORGANISATION_INCONNUE {organisation},
-// remède null ; une autre valeur qu'une chaîne est une faute du code.
-function organisationDuConflit(charge, organisation) {
+// L'organisation saisie d'un conflit ou d'une inclusion (§ 4) : une chaîne
+// en NFC, ses blancs de bord retirés, qui doit être celle d'un participant
+// de la charge, comparée chaîne à chaîne, sinon ORGANISATION_INCONNUE
+// {organisation}, remède null ; une autre valeur qu'une chaîne est une faute
+// du code.
+function organisationNommee(charge, organisation) {
   if (typeof organisation !== 'string') {
     throw new TypeError(`organisation : chaîne attendue, reçu ${JSON.stringify(organisation)}`);
   }
@@ -280,10 +319,18 @@ function organisationDuConflit(charge, organisation) {
   return lue;
 }
 
+// La copie d'un participant dont la liste champ devient liste : le champ se
+// retire quand elle est vide.
+function avecListe(participant, champ, liste) {
+  const reste = { ...participant };
+  delete reste[champ];
+  return liste.length === 0 ? reste : { ...reste, [champ]: liste };
+}
+
 /**
  * ajouterConflit {id, organisation} (§ 4, § 5.3) : la personne et son
  * organisation entière évitent désormais organisation, en conflit des deux
- * côtés. organisation est celle d'un participant (organisationDuConflit).
+ * côtés. organisation est celle d'un participant (organisationNommee).
  * Refus : CONFLIT_PROPRE_ORGANISATION {personne, organisation}, remède
  * null, pour sa propre organisation ; SANS_EFFET quand sa liste la nomme
  * déjà. La liste s'écrit rangée par unités de code. Une entrée d'historique,
@@ -292,7 +339,7 @@ function organisationDuConflit(charge, organisation) {
 function ajouterConflit(charge, { id, organisation } = {}) {
   exigerModifiable(charge);
   const participant = participantDe(charge, id);
-  const nom = organisationDuConflit(charge, organisation);
+  const nom = organisationNommee(charge, organisation);
   if (nom === participant.organisation) {
     throw refus('CONFLIT_PROPRE_ORGANISATION', { personne: nomAffiche(participant), organisation: nom });
   }
@@ -322,61 +369,204 @@ function retirerConflit(charge, { id, organisation } = {}) {
   if (!avant.includes(organisation)) throw refus('SANS_EFFET', { commande: 'retirerConflit' });
   const conflits = avant.filter((nom) => nom !== organisation);
   return {
-    charge: avecParticipant(charge, id, (copie) => {
-      const reste = { ...copie };
-      delete reste.conflits;
-      return conflits.length === 0 ? reste : { ...reste, conflits };
-    }),
+    charge: avecParticipant(charge, id, (copie) => avecListe(copie, 'conflits', conflits)),
     libelle: libelle('ENTREE_RETIRER_CONFLIT', { personne: nomAffiche(participant), organisation }),
     avertissements: [],
   };
 }
 
-/**
- * changerConflits {id, organisations} (§ 4, § 8.2) : la liste de la personne
- * devient organisations, en un geste et une entrée d'historique, quel que
- * soit le nombre de noms qui changent. Chaque nom se met en NFC sans ses
- * blancs de bord ; un nom que la liste porte déjà se garde ; un nom nouveau
- * se juge comme dans ajouterConflit : celui d'un participant
- * (organisationDuConflit), sinon ORGANISATION_INCONNUE, jamais la propre
- * organisation de la personne, CONFLIT_PROPRE_ORGANISATION ; le premier
- * fautif, dans l'ordre reçu, refuse le geste entier. Deux noms égaux n'en
- * font qu'un. Une liste qui garde les mêmes noms, dans n'importe quel ordre,
- * est SANS_EFFET. La liste s'écrit rangée par unités de code, et le champ se
- * retire quand elle se vide. Le libellé nomme la personne, les
- * organisations ajoutées et les retirées, rangées. organisations qui n'est
- * pas une liste de chaînes est une faute du code.
- */
-function changerConflits(charge, { id, organisations } = {}) {
+// La liste champ de la personne id, telle que la pose organisations : la
+// règle commune à changerConflits et à changerInclusionsOrganisation. Chaque
+// nom se met en NFC sans ses blancs de bord ; un nom que la liste porte déjà
+// se garde ; un nom nouveau doit être celui d'un participant
+// (organisationNommee), sinon ORGANISATION_INCONNUE ; jamais la propre
+// organisation de la personne, le refus que rend refuserPropre({personne,
+// organisation}) ; le premier fautif, dans l'ordre reçu, refuse le geste
+// entier. Deux noms égaux n'en font qu'un. Rend la personne, la liste rangée
+// par unités de code, les organisations ajoutées et les retirées, rangées :
+// deux listes vides disent un geste sans effet. organisations qui n'est pas
+// une liste de chaînes est une faute du code.
+function organisationsPosees(charge, { id, organisations }, champ, refuserPropre) {
   exigerModifiable(charge);
   if (!Array.isArray(organisations)) {
     throw new TypeError(`organisations : liste attendue, reçu ${JSON.stringify(organisations)}`);
   }
   const participant = participantDe(charge, id);
-  const avant = participant.conflits ?? [];
+  const avant = participant[champ] ?? [];
   const noms = new Set();
   for (const organisation of organisations) {
     if (typeof organisation !== 'string') {
       throw new TypeError(`organisation : chaîne attendue, reçu ${JSON.stringify(organisation)}`);
     }
     const lue = saisie(organisation, 'organisation') ?? '';
-    const nom = avant.includes(lue) ? lue : organisationDuConflit(charge, lue);
-    if (nom === participant.organisation) {
-      throw refus('CONFLIT_PROPRE_ORGANISATION', { personne: nomAffiche(participant), organisation: nom });
-    }
+    const nom = avant.includes(lue) ? lue : organisationNommee(charge, lue);
+    if (nom === participant.organisation) throw refuserPropre({ personne: nomAffiche(participant), organisation: nom });
     noms.add(nom);
   }
-  const conflits = etiquettesRangees(noms);
-  const ajoutees = conflits.filter((nom) => !avant.includes(nom));
+  const liste = etiquettesRangees(noms);
+  const ajoutees = liste.filter((nom) => !avant.includes(nom));
   const retirees = etiquettesRangees(avant.filter((nom) => !noms.has(nom)));
+  return { participant, liste, ajoutees, retirees };
+}
+
+/**
+ * changerConflits {id, organisations} (§ 4, § 8.2) : la liste de conflits
+ * de la personne devient organisations, en un geste et une entrée
+ * d'historique, quel que soit le nombre de noms qui changent. Un nom nouveau
+ * se juge comme dans ajouterConflit : celui d'un participant, sinon
+ * ORGANISATION_INCONNUE, jamais la propre organisation de la personne,
+ * CONFLIT_PROPRE_ORGANISATION ; le premier fautif refuse le geste entier
+ * (organisationsPosees). Une liste qui garde les mêmes noms, dans n'importe
+ * quel ordre, est SANS_EFFET. La liste s'écrit rangée par unités de code, et
+ * le champ se retire quand elle se vide. Le libellé nomme la personne, les
+ * organisations ajoutées et les retirées, rangées.
+ */
+function changerConflits(charge, args = {}) {
+  const { participant, liste, ajoutees, retirees } = organisationsPosees(charge, args, 'conflits', (details) =>
+    refus('CONFLIT_PROPRE_ORGANISATION', details),
+  );
   if (ajoutees.length === 0 && retirees.length === 0) throw refus('SANS_EFFET', { commande: 'changerConflits' });
   return {
-    charge: avecParticipant(charge, id, (copie) => {
-      const reste = { ...copie };
-      delete reste.conflits;
-      return conflits.length === 0 ? reste : { ...reste, conflits };
-    }),
+    charge: avecParticipant(charge, participant.id, (copie) => avecListe(copie, 'conflits', liste)),
     libelle: libelle('ENTREE_CHANGER_CONFLITS', { personne: nomAffiche(participant), ajoutees, retirees }),
+    avertissements: [],
+  };
+}
+
+/**
+ * changerInclusionsOrganisation {id, organisations} (§ 4, § 5.9, § 8.2) :
+ * les inclusions d'organisation de la personne — les organisations dont
+ * elle doit rencontrer au moins une personne — deviennent organisations, en
+ * un geste et une entrée d'historique. Un nom nouveau est celui d'un
+ * participant, exclus compris, sinon ORGANISATION_INCONNUE, jamais la
+ * propre organisation de la personne, INCLUSION_PROPRE_ORGANISATION
+ * {personne, organisation}, remède null ; le premier fautif refuse le geste
+ * entier (organisationsPosees). Une organisation que nomme aussi un conflit
+ * de la personne s'admet. Une liste qui garde les mêmes noms, dans
+ * n'importe quel ordre, est SANS_EFFET. La liste s'écrit rangée par unités
+ * de code, et le champ se retire quand elle se vide. Le libellé nomme la
+ * personne, les organisations ajoutées et les retirées, rangées.
+ */
+function changerInclusionsOrganisation(charge, args = {}) {
+  const { participant, liste, ajoutees, retirees } = organisationsPosees(charge, args, 'inclusionsOrganisation', (details) =>
+    refus('INCLUSION_PROPRE_ORGANISATION', details),
+  );
+  if (ajoutees.length === 0 && retirees.length === 0) {
+    throw refus('SANS_EFFET', { commande: 'changerInclusionsOrganisation' });
+  }
+  return {
+    charge: avecParticipant(charge, participant.id, (copie) => avecListe(copie, 'inclusionsOrganisation', liste)),
+    libelle: libelle('ENTREE_CHANGER_INCLUSIONS_ORGANISATION', { personne: nomAffiche(participant), ajoutees, retirees }),
+    avertissements: [],
+  };
+}
+
+// La liste d'inclusions de participant de la personne id, telle que la pose
+// participants : la règle commune à changerInclusionsParticipant et à
+// changerInclusions. Chaque identifiant est celui d'un participant de la
+// charge, exclus compris, sinon PARTICIPANT_INCONNU {id}, et jamais celui de
+// la personne, INCLUSION_DE_SOI {personne}, remède null ; le premier fautif,
+// dans l'ordre reçu, refuse le geste entier. Deux identifiants égaux n'en
+// font qu'un. Rend la personne, la liste croissante, les identifiants
+// ajoutés et les retirés, croissants : deux listes vides disent un geste
+// sans effet. participants qui n'est pas une liste d'entiers est une faute
+// du code.
+function participantsPoses(charge, { id, participants }) {
+  exigerModifiable(charge);
+  if (!Array.isArray(participants)) {
+    throw new TypeError(`participants : liste attendue, reçu ${JSON.stringify(participants)}`);
+  }
+  const participant = participantDe(charge, id);
+  const avant = participant.inclusionsParticipant ?? [];
+  const cibles = new Set();
+  for (const cible of participants) {
+    if (!Number.isSafeInteger(cible)) throw new TypeError(`participants : entier attendu, reçu ${JSON.stringify(cible)}`);
+    if (cible === id) throw refus('INCLUSION_DE_SOI', { personne: nomAffiche(participant) });
+    participantDe(charge, cible);
+    cibles.add(cible);
+  }
+  const liste = [...cibles].sort((a, b) => a - b);
+  const ajoutees = liste.filter((cible) => !avant.includes(cible));
+  const retirees = avant.filter((cible) => !cibles.has(cible));
+  return { participant, liste, ajoutees, retirees };
+}
+
+// Les noms affichés des personnes ids, dans leur ordre.
+const nomsAffiches = (charge, ids) => ids.map((cible) => nomAffiche(participantDe(charge, cible)));
+
+/**
+ * changerInclusionsParticipant {id, participants} (§ 4, § 5.9, § 8.2) : les
+ * inclusions de participant de la personne — les personnes qu'elle doit
+ * rencontrer au moins une fois, par identifiant — deviennent participants,
+ * en un geste et une entrée d'historique. Chaque identifiant est celui d'un
+ * participant de la charge, exclus compris, sinon PARTICIPANT_INCONNU {id},
+ * et jamais celui de la personne, INCLUSION_DE_SOI {personne}, remède
+ * null ; le premier fautif, dans l'ordre reçu, refuse le geste entier
+ * (participantsPoses). Une liste qui garde les mêmes identifiants, dans
+ * n'importe quel ordre, est SANS_EFFET. La liste s'écrit croissante, et le
+ * champ se retire quand elle se vide. Le libellé nomme la personne, puis
+ * les personnes ajoutées et les retirées par leur nom affiché, chacune dans
+ * l'ordre des identifiants. participants qui n'est pas une liste d'entiers
+ * est une faute du code.
+ */
+function changerInclusionsParticipant(charge, args = {}) {
+  const { participant, liste, ajoutees, retirees } = participantsPoses(charge, args);
+  if (ajoutees.length === 0 && retirees.length === 0) {
+    throw refus('SANS_EFFET', { commande: 'changerInclusionsParticipant' });
+  }
+  return {
+    charge: avecParticipant(charge, participant.id, (copie) => avecListe(copie, 'inclusionsParticipant', liste)),
+    libelle: libelle('ENTREE_CHANGER_INCLUSIONS_PARTICIPANT', {
+      personne: nomAffiche(participant),
+      ajoutees: nomsAffiches(charge, ajoutees),
+      retirees: nomsAffiches(charge, retirees),
+    }),
+    avertissements: [],
+  };
+}
+
+/**
+ * changerInclusions {id, organisations?, participants?} (§ 4, § 5.9,
+ * § 8.2) : les deux listes d'inclusions de la personne, ou celle des deux
+ * que les arguments nomment, deviennent organisations et participants, en
+ * un geste et une seule entrée d'historique, que « Défaire » reprend d'un
+ * coup. Chaque liste se juge comme dans sa commande propre,
+ * changerInclusionsOrganisation et changerInclusionsParticipant
+ * (organisationsPosees, participantsPoses), les organisations d'abord : le
+ * premier fautif refuse le geste entier, et aucune liste ne s'écrit. Une
+ * liste absente des arguments ne change pas. Le geste est SANS_EFFET quand
+ * aucune liste nommée ne change. Le libellé nomme la personne et, pour
+ * chaque liste qui change, ses ajouts et ses retraits ; une liste nommée qui
+ * ne change pas ne s'y lit pas. Aucune des deux listes nommée est une faute
+ * du code.
+ */
+function changerInclusions(charge, { id, organisations, participants } = {}) {
+  if (organisations === undefined && participants === undefined) {
+    throw new TypeError('changerInclusions : organisations ou participants attendu');
+  }
+  exigerModifiable(charge);
+  const parOrganisation =
+    organisations === undefined
+      ? null
+      : organisationsPosees(charge, { id, organisations }, 'inclusionsOrganisation', (details) =>
+          refus('INCLUSION_PROPRE_ORGANISATION', details),
+        );
+  const parParticipant = participants === undefined ? null : participantsPoses(charge, { id, participants });
+  const change = (posees) => posees !== null && (posees.ajoutees.length > 0 || posees.retirees.length > 0);
+  if (!change(parOrganisation) && !change(parParticipant)) throw refus('SANS_EFFET', { commande: 'changerInclusions' });
+  const participant = participantDe(charge, id);
+  return {
+    charge: avecParticipant(charge, id, (copie) => {
+      const avecOrganisations = change(parOrganisation) ? avecListe(copie, 'inclusionsOrganisation', parOrganisation.liste) : copie;
+      return change(parParticipant) ? avecListe(avecOrganisations, 'inclusionsParticipant', parParticipant.liste) : avecOrganisations;
+    }),
+    libelle: libelle('ENTREE_CHANGER_INCLUSIONS', {
+      personne: nomAffiche(participant),
+      organisations: change(parOrganisation) ? { ajoutees: parOrganisation.ajoutees, retirees: parOrganisation.retirees } : null,
+      participants: change(parParticipant)
+        ? { ajoutees: nomsAffiches(charge, parParticipant.ajoutees), retirees: nomsAffiches(charge, parParticipant.retirees) }
+        : null,
+    }),
     avertissements: [],
   };
 }
@@ -410,6 +600,65 @@ function changerLogo(charge, { id, chemin } = {}) {
       return chemin === null ? reste : { ...reste, logo: chemin };
     }),
     libelle: libelle('ENTREE_CHANGER_LOGO', { personne: nomAffiche(participant), effet }),
+    avertissements: [],
+  };
+}
+
+// Les clés que changerImageBadges reçoit, dans l'ordre du champ.
+const CLES_IMAGE_BADGES = Object.freeze(['active', 'chemin', 'position']);
+
+// Les arguments de changerImageBadges, contrôlés : un objet qui porte au
+// moins une clé de CLES_IMAGE_BADGES, et aucune autre ; active, un booléen ;
+// chemin, celui d'un logo (estCheminLogo) ou null ; position, l'une de
+// POSITIONS_IMAGE_BADGES. Rend les clés reçues ; TypeError sinon.
+function argumentsImageBadges(args) {
+  const cles = Object.keys(args ?? {});
+  if (cles.length === 0 || cles.some((cle) => !CLES_IMAGE_BADGES.includes(cle))) {
+    throw new TypeError(`changerImageBadges : une ou plusieurs de ${CLES_IMAGE_BADGES.join(', ')} attendues, reçu ${JSON.stringify(args)}`);
+  }
+  const { active, chemin, position } = args;
+  if (cles.includes('active') && typeof active !== 'boolean') throw new TypeError(`active : booléen attendu, reçu ${JSON.stringify(active)}`);
+  if (cles.includes('chemin') && chemin !== null && !estCheminLogo(chemin)) {
+    throw new TypeError(`chemin : logo/<empreinte>.png ou null attendu, reçu ${JSON.stringify(chemin)}`);
+  }
+  if (cles.includes('position') && !POSITIONS_IMAGE_BADGES.includes(position)) {
+    throw new TypeError(`position : ${POSITIONS_IMAGE_BADGES.join(', ')} attendue, reçu ${JSON.stringify(position)}`);
+  }
+  return Object.fromEntries(cles.map((cle) => [cle, args[cle]]));
+}
+
+/**
+ * changerImageBadges {active?, chemin?, position?} (§ 8.9, § 11.4) : l'image
+ * des badges de l'événement prend les valeurs reçues — la case (active), le
+ * chemin d'un fichier logo/<empreinte>.png du dossier de l'événement
+ * (estCheminLogo), null pour aucune image, la position parmi
+ * POSITIONS_IMAGE_BADGES —, les autres restant celles de imageBadgesDe.
+ * Revenue à son défaut (IMAGE_BADGES_DEFAUT), elle retire le champ
+ * imageBadges ; sinon, il s'écrit en dernière clé de l'événement. Rien qui
+ * change : SANS_EFFET. Aucune clé, une clé inconnue ou une valeur d'une
+ * autre forme est une faute du code. La commande ne lit aucun fichier : la
+ * séance écrit l'image avant elle, et aucun geste n'en efface une. Le moteur
+ * ne lit pas le champ. Une entrée d'historique, dont le libellé dit ce qui
+ * change : la case, l'image posée, remplacée ou retirée, la position.
+ */
+function changerImageBadges(charge, args) {
+  exigerModifiable(charge);
+  const recues = argumentsImageBadges(args);
+  const avant = imageBadgesDe(charge);
+  const apres = { ...avant, ...recues };
+  if (CLES_IMAGE_BADGES.every((cle) => apres[cle] === avant[cle])) throw refus('SANS_EFFET', { commande: 'changerImageBadges' });
+  let effet = null;
+  if (apres.chemin !== avant.chemin) effet = apres.chemin === null ? 'retire' : avant.chemin === null ? 'pose' : 'remplace';
+  const suivante = copieDeTravail(charge);
+  if (CLES_IMAGE_BADGES.every((cle) => apres[cle] === IMAGE_BADGES_DEFAUT[cle])) delete suivante.evenement.imageBadges;
+  else suivante.evenement.imageBadges = apres;
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_CHANGER_IMAGE_BADGES', {
+      active: apres.active === avant.active ? null : apres.active,
+      effet,
+      position: apres.position === avant.position ? null : apres.position,
+    }),
     avertissements: [],
   };
 }
@@ -531,13 +780,32 @@ function reintegrerParticipant(charge, { id }) {
   };
 }
 
+// Les listes d'inclusions de participant de la charge suivante, privées de
+// l'identifiant id, en place : le champ se retire quand la liste se vide, et
+// chaque participant touché est remplacé par une copie (avecListe). Rend le
+// nombre de listes touchées.
+function retirerDesInclusions(suivante, id) {
+  let touchees = 0;
+  suivante.participants = suivante.participants.map((participant) => {
+    const liste = participant.inclusionsParticipant;
+    if (liste === undefined || !liste.includes(id)) return participant;
+    touchees += 1;
+    return avecListe(participant, 'inclusionsParticipant', liste.filter((cible) => cible !== id));
+  });
+  return touchees;
+}
+
 /**
  * supprimerParticipant {id} : la personne et ses réservations partent dans la
  * même entrée ; les titres restent à leurs places, les propositions restent,
  * en dérive (§ 9) ; le compteur ne recule pas. Elle quitte le retenu à
  * chaque tour, et RENCONTRES_RETIREES_DU_RETENU nomme les tours où elle y
  * était assise. La dernière personne d'une organisation emporte celle-ci de
- * chaque liste de conflits (suivreOrganisations), et le libellé le dit.
+ * chaque liste de conflits et d'inclusions d'organisation
+ * (suivreOrganisations) ; la personne quitte chaque liste d'inclusions de
+ * participant qui la nomme, le champ retiré quand la liste se vide
+ * (retirerDesInclusions). Le libellé dit l'un et l'autre, le second par le
+ * nombre de listes quittées.
  */
 function supprimerParticipant(charge, { id }) {
   exigerModifiable(charge);
@@ -553,13 +821,15 @@ function supprimerParticipant(charge, { id }) {
     titres: titresPourvus(charge) - titresPourvus(suivante),
   };
   const suivi = suivreOrganisations(charge, suivante);
+  const listesDInclusions = retirerDesInclusions(suivante, id);
   const { retires, ajuste } = ajusterLeRetenu(charge, suivante);
   return {
     charge: suivante,
     libelle: libelle('ENTREE_SUPPRIMER_PARTICIPANT', {
       personne: details.personne,
       ajuste,
-      conflits: conflitsSuivis(suivi),
+      ...listesSuivies(suivi),
+      listesDInclusions,
     }),
     avertissements: [
       ...(reservations > 0 ? [avertissement('RESERVATIONS_RETIREES', details)] : []),
@@ -590,9 +860,11 @@ function avertissementsDExclusion(avant, suivante) {
 /**
  * importerParticipants {apercu, mode} (§ 10.1) : l'aperçu appliqué selon le
  * mode (appliquerImport), en une seule entrée. Le refus du CSV — un aperçu
- * refusé ou ambigu — devient le refus de la commande, sous le même code. Le
- * résumé suit le rendu, pour le rapport d'import et le CSV des refus. Selon
- * l'état : sans avertissement en brouillon et proposé ; en retenu,
+ * refusé, ambigu ou lu sous un autre nombre de tours, un compteur qui ne
+ * suffit pas aux personnes créées, COMPTEUR_SATURE comme pour une personne
+ * saisie — devient le refus de la commande, sous le même code, remède null.
+ * Le résumé suit le rendu, pour le rapport d'import et le CSV des refus.
+ * Selon l'état : sans avertissement en brouillon et proposé ; en retenu,
  * l'avertissement de dérive IMPORT_EN_RETENU, quel que soit le mode, sur le
  * signal resume.derive d'appliquerImport ; refusé en bloqué, PLAN_BLOQUE.
  * Un remplacement qui retire des liens de logo le dit ensuite,
@@ -605,8 +877,9 @@ function avertissementsDExclusion(avant, suivante) {
  * (controlerPresence) : un refus refuse l'import entier, sous son code et
  * ses détails, remède null, puisque le fichier se corrige. Le retenu suit
  * les présences qui changent (retenuAuxPresences), et le libellé le dit ;
- * les listes de conflits suivent les organisations que l'import laisse
- * (suivreOrganisations), et le libellé le dit aussi.
+ * les listes de conflits et d'inclusions d'organisation suivent les
+ * organisations que l'import laisse (suivreOrganisations), et le libellé le
+ * dit aussi.
  *
  * Un import dont la charge ne change pas, mais qui refuse des lignes, n'est
  * pas sans effet : ses refus sont à lire et à réexporter. Il rend la charge
@@ -640,7 +913,7 @@ function importerParticipants(charge, { apercu, mode }) {
       misAJour,
       retires,
       ajuste,
-      conflits: conflitsSuivis(suivi),
+      ...listesSuivies(suivi),
     }),
     avertissements: [
       ...(derive ? [avertissement('IMPORT_EN_RETENU', {})] : []),
@@ -659,14 +932,15 @@ const REMEDES_DES_OBJECTIFS = new Map([['OBJECTIFS_SANS_TABLE', { geste: 'ouvrir
 /**
  * importerObjectifs {apercu, mode} (§ 10.4) : l'aperçu du CSV des objectifs
  * appliqué selon le mode, mettreAJour ou remplacer (appliquerImportObjectifs),
- * en une seule entrée. Le refus du CSV — un aperçu refusé ou ambigu — devient
- * le refus de la commande, sous le même code, remède null sauf OBJECTIFS_SANS_TABLE,
- * qui mène à la section des tables. Le résumé suit le rendu, pour le rapport
- * d'import et le CSV des refus. Selon l'état : sans avertissement en
- * brouillon et proposé ; en retenu, IMPORT_OBJECTIFS_RECLASSE, le classement
- * des propositions pouvant changer, sans qu'aucune passe en dérive (§ 8.9) ;
- * refusé en bloqué, PLAN_BLOQUE. Suivent, dans l'ordre d'avisObjectifs, les
- * avis OBJECTIF_SANS_CORRESPONDANT des seuls objectifs que le fichier écrit.
+ * en une seule entrée. Le refus du CSV — un aperçu refusé, ambigu ou lu sous
+ * un autre nombre de tours — devient le refus de la commande, sous le même
+ * code, remède null sauf OBJECTIFS_SANS_TABLE, qui mène à la section des
+ * tables. Le résumé suit le rendu, pour le rapport d'import et le CSV des
+ * refus. Selon l'état : sans avertissement en brouillon et proposé ; en
+ * retenu, IMPORT_OBJECTIFS_RECLASSE, le classement des propositions pouvant
+ * changer, sans qu'aucune passe en dérive (§ 8.9) ; refusé en bloqué,
+ * PLAN_BLOQUE. Suivent, dans l'ordre d'avisObjectifs, les avis
+ * OBJECTIF_SANS_CORRESPONDANT des seuls objectifs que le fichier écrit.
  *
  * Un import dont la charge ne change pas, mais qui refuse des lignes, rend la
  * charge reçue, un libellé null — aucune entrée ne s'écrit —, aucun
@@ -915,6 +1189,7 @@ function enregistrerGeneration(charge, { propositions, configuration, produitVer
             dernier,
             depart: derivation.depart,
             toursFiges: derivation.toursFiges,
+            nomsTours: nomsDesTours(charge),
           }),
     avertissements: [],
     courses,
@@ -1060,7 +1335,11 @@ export const COMMANDES = reunirCommandes(
     ['ajouterConflit', ajouterConflit],
     ['retirerConflit', retirerConflit],
     ['changerConflits', changerConflits],
+    ['changerInclusionsOrganisation', changerInclusionsOrganisation],
+    ['changerInclusionsParticipant', changerInclusionsParticipant],
+    ['changerInclusions', changerInclusions],
     ['changerLogo', changerLogo],
+    ['changerImageBadges', changerImageBadges],
     ['exclureParticipant', exclureParticipant],
     ['reintegrerParticipant', reintegrerParticipant],
     ['supprimerParticipant', supprimerParticipant],

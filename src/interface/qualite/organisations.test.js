@@ -447,20 +447,36 @@ describe('modèle des organisations à chaque table (§ 12.11, B20, D35)', () =>
     assert.equal(tableau.lignes[7].doublons, null);
   });
 
-  test('la synthèse nomme la pire table de la position et sa case la plus haute', () => {
+  test('la synthèse nomme la pire table de la position, sa case la plus haute et le nombre de cases à ce compte', () => {
     const detail = detailDe(chargeMelange());
-    assert.equal(modeleTables(detail, 'sieges', { t }).grille.synthese, t('qualite.tables.synthese', { numero: 1, valeur: 3 }));
-    assert.equal(modeleTables(detail, 'assis', { t }).grille.synthese, t('qualite.tables.synthese', { numero: 3, valeur: 3 }));
-    assert.equal(modeleTables(detail, 'doublons', { t }).grille.synthese, t('qualite.tables.synthese', { numero: 2, valeur: 2 }));
+    // Sièges : 3 aux deux tours des tables 1 et 3 ; assis : 3 aux deux tours
+    // de la table 3 ; doublons : 2 aux deux tours de la table 2.
+    assert.deepEqual(detail.tables.casesAuPire, { sieges: 4, assis: 2, doublons: 2 });
+    assert.equal(modeleTables(detail, 'sieges', { t }).grille.synthese, t('qualite.tables.synthese', { numero: 1, valeur: 3, cases: 4 }));
+    assert.equal(modeleTables(detail, 'assis', { t }).grille.synthese, t('qualite.tables.synthese', { numero: 3, valeur: 3, cases: 2 }));
+    assert.equal(modeleTables(detail, 'doublons', { t }).grille.synthese, t('qualite.tables.synthese', { numero: 2, valeur: 2, cases: 2 }));
+    assert.equal(modeleTables(detail, 'sieges', { t }).grille.synthese, 'La table 1 porte la case la plus haute : 3 ; 4 cases sont à ce compte.');
+  });
+
+  test('une case seule au plus haut compte : la synthèse le dit', () => {
+    assert.equal(t('qualite.tables.synthese', { numero: 7, valeur: 4, cases: 1 }), 'La table 7 porte la case la plus haute : 4, seule à ce compte.');
+  });
+
+  test('sans case sous aucune position, aucun effectif du pire cas', () => {
+    const detail = detailDe(chargeDe({ personnes: PERSONNES_SIX.map(([nom, prenom]) => [nom, prenom, null]), capacites: [3, 3], tours: [[[1, 3, 5], [2, 4, 6]]] }));
+    assert.equal(detail.tables.casesAuPire, null);
   });
 
   test('la synthèse prend la case la plus haute de la pire table sous la position choisie, non sous une autre', () => {
     const detail = detailDe(chargeSynthese());
     assert.deepEqual(detail.tables.lignes[0].pire, { sieges: 4, assis: 3, doublons: 1 });
-    for (const [position, valeur] of [['sieges', 4], ['assis', 3], ['doublons', 1]]) {
+    // Sièges : 4 au tour 2 de la table 1 seul ; assis : 3 au même ; doublons :
+    // 1 aux deux tours de la table 1.
+    assert.deepEqual(detail.tables.casesAuPire, { sieges: 1, assis: 1, doublons: 2 });
+    for (const [position, valeur, cases] of [['sieges', 4, 1], ['assis', 3, 1], ['doublons', 1, 2]]) {
       const modele = modeleTables(detail, position, { t });
       assert.deepEqual(numeros(modele), tables(1, 2), position);
-      assert.equal(modele.grille.synthese, t('qualite.tables.synthese', { numero: 1, valeur }), position);
+      assert.equal(modele.grille.synthese, t('qualite.tables.synthese', { numero: 1, valeur, cases }), position);
     }
   });
 

@@ -14,19 +14,26 @@
   // implémentation du dépôt. Sous des sièges non attribués, un titre et une
   // désignation se posent sans siège : l'application prend le siège (A5).
   //
-  // Toute commande passe par executerSurPlace : son refus se pose sur la
-  // place du plan, sauf LIBELLE_VIDE, refusé à côté du champ du libellé.
-  // Le menu de l'occupant suit (MenuPersonne) ; il reste celui de la même
-  // personne tant que la place reste sélectionnée, même quand elle la quitte
-  // — une exclusion —, pour qu'elle se réintègre d'où elle a été exclue.
+  // Toute commande passe par executerSurPlace : son refus se pose sur la place
+  // du plan, sauf LIBELLE_VIDE, refusé à côté du champ du libellé. Un libellé
+  // tapé que ni « Donner un titre » ni « Désigner » n'a encore appliqué est une
+  // saisie non validée : un geste ouvert (geste.js), qui suspend le compte
+  // d'inactivité de la séance (§ 8.4). La commande aboutie sur lui, une autre
+  // place sélectionnée ou le panneau refermé le rendent ; un refus le laisse
+  // ouvert, la saisie gardée. Le menu de l'occupant suit (MenuPersonne) ; il
+  // reste celui de la même personne tant que la place reste sélectionnée, même
+  // quand elle la quitte — une exclusion —, pour qu'elle se réintègre d'où elle
+  // a été exclue.
   //
   // Échap referme le panneau et rend le focus à la racine du plan. Le
   // panneau lit 'seance' et 'ui' au contexte ; etatTour, l'état des places
   // du tour affiché, que SectionPlan calcule, ou null sans événement, et le
   // passe au menu.
-  import { getContext, untrack } from 'svelte';
+  import { getContext, onDestroy, untrack } from 'svelte';
   import { libellePropose } from '../../application/places.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import Commande from '../primitives/Commande.svelte';
+  import { creerGeste } from '../primitives/geste.js';
   import { effetDe } from '../raccourcis.js';
   import { commandeDeDepot } from './depot.js';
   import { libellePlace } from './gestes.js';
@@ -42,6 +49,8 @@
   const uid = $props.id();
 
   const charge = $derived($seance.charge);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived(charge === null ? [] : nomsDesTours(charge));
   const selection = $derived($ui.selection);
   const place = $derived(charge !== null && selection !== null && (selection.siege ?? null) !== null ? selection : null);
   const etat = $derived(place === null ? null : etatTour);
@@ -52,7 +61,7 @@
   const choix = $derived($ui.choix);
   const personne = $derived(choix !== null && choix.genre === 'personne' ? choix : null);
   const actions = $derived(chaise === null ? [] : actionsPlace(chaise, choix));
-  const parties = $derived(chaise === null ? [] : partiesLigne(textesLigne(ligneListe(chaise, nomDe), t)));
+  const parties = $derived(chaise === null ? [] : partiesLigne(textesLigne(ligneListe(chaise, nomDe, null, nomsTours), t)));
   const nommee = $derived(etatTable === undefined ? null : libellePlace({ numero: etatTable.numero, siege: place.siege }));
 
   // Le libellé proposé : le titre pressenti de la personne choisie, sinon
@@ -62,11 +71,18 @@
     if (personne !== null) return libellePropose(charge, personne.participant);
     return chaise.titre === null ? libellePropose(charge, 0) : chaise.titre.libelle;
   });
-  // La saisie de l'opérateur, null tant qu'il n'a rien tapé ; la portée
-  // d'une réservation.
+  // La saisie de l'opérateur, null tant qu'il n'a rien tapé ; le dernier
+  // libellé qu'une commande aboutie a appliqué depuis le champ, null sans
+  // lui ; la portée d'une réservation.
   let saisi = $state(null);
+  let applique = $state(null);
   let portee = $state('tour');
   const libelleSaisi = $derived(saisi ?? propose);
+
+  // Le geste suit la saisie tapée que rien n'a appliquée.
+  const geste = creerGeste(seance);
+  $effect(() => geste.tenir(saisi !== null && saisi !== applique));
+  onDestroy(() => geste.liberer());
 
   // Le menu : la personne de la place au moment de sa sélection, ou la
   // première qui s'y assied ensuite.
@@ -81,6 +97,7 @@
         placeDuMenu = lue;
         menuDe = assise;
         saisi = null;
+        applique = null;
       } else if (menuDe === null) {
         menuDe = assise;
       }
@@ -119,19 +136,20 @@
     });
   }
 
+  // Exécute la commande sur le libellé du champ ; aboutie, elle l'applique.
+  async function avecLibelle(commande, args) {
+    const libelle = libelleSaisi;
+    const rendu = await executerSurPlace(dependances, place, commande, { ...args, libelle }, { locaux: ['LIBELLE_VIDE'] });
+    if (rendu !== null) applique = libelle;
+  }
+
   async function donnerTitre() {
-    await executerSurPlace(dependances, place, 'poserTitre', { table: place.table, siege: sieges(), libelle: libelleSaisi }, { locaux: ['LIBELLE_VIDE'] });
+    await avecLibelle('poserTitre', { table: place.table, siege: sieges() });
   }
 
   async function designer() {
     if (personne === null) return;
-    await executerSurPlace(
-      dependances,
-      place,
-      'designer',
-      { participant: personne.participant, table: place.table, siege: sieges(), libelle: libelleSaisi },
-      { locaux: ['LIBELLE_VIDE'] },
-    );
+    await avecLibelle('designer', { participant: personne.participant, table: place.table, siege: sieges() });
   }
 
   async function retirerReservation() {
@@ -185,7 +203,7 @@
         <label class="champ">
           <span>{t('plan.portee.etiquette')}</span>
           <select data-champ="portee" value={portee} onchange={(evenement) => (portee = evenement.currentTarget.value)}>
-            <option value="tour">{t('plan.portee.tour', { tour })}</option>
+            <option value="tour">{t('plan.portee.tour', { tour, nomsTours })}</option>
             <option value="tous">{t('plan.portee.tous')}</option>
           </select>
         </label>

@@ -143,7 +143,7 @@ function rangees(detail, position, t) {
 // Le jumeau de la grille : une ligne par table et par tour, dans l'ordre
 // de la position, les trois comptes et leurs trois pourcentages, chacun
 // suivi du compte de sa ligne, puis occupants, affiliés et capacité.
-function jumeauTables(detail, position, t) {
+function jumeauTables(detail, position, t, nomsTours) {
   const colonne = (cle, genre = 'nombre') => ({ cle, libelle: t(`qualite.tables.colonne.${cle}`), genre });
   const colonnes = [colonne('table', 'texte'), colonne('tour', 'texte')];
   for (const p of POSITIONS_MELANGE) colonnes.push(colonne(p), colonne(COLONNE_POURCENT[p], 'pourcentage'));
@@ -151,7 +151,7 @@ function jumeauTables(detail, position, t) {
   const lignes = [];
   for (const { ligne, libelle } of rangees(detail, position, t)) {
     ligne.tours.forEach((cellule, r) => {
-      const valeurs = { table: libelle, tour: t('qualite.tables.tour', { tour: r + 1 }) };
+      const valeurs = { table: libelle, tour: t('qualite.tables.tour', { tour: r + 1, nomsTours }) };
       for (const p of POSITIONS_MELANGE) {
         valeurs[p] = cellule === null ? null : cellule.comptes[p];
         valeurs[COLONNE_POURCENT[p]] = pourcentDe(t, cellule, p, ligne.capacite);
@@ -180,19 +180,22 @@ function jumeauTables(detail, position, t) {
  * comptes, les occupants, les affiliés, la capacité. Le jumeau porte les
  * trois comptes de chaque table à chaque tour, dans l'ordre de la position.
  * La synthèse nomme la pire table et sa case la plus haute sous la
- * position.
+ * position, puis le nombre de cases de la grille à ce compte, que le détail
+ * porte (casesAuPire).
  *
  * Lève RangeError sur une position hors de POSITIONS_MELANGE.
  *
  * @param {Object} detail   le détail du placement (detaillerQualite), comparable
  * @param {'sieges'|'assis'|'doublons'} position
- * @param {{t: Function}} contexte
+ * @param {{t: Function, nomsTours?: Array<string|null>}} contexte   nomsTours :
+ *        les noms des tours de l'événement (nomsDesTours), qui nomment les
+ *        colonnes de tour
  * @returns {{cas: 'uneTable'|'aucuneOrganisation'|'sansCollision'|'grille',
  *   code: string, phrase: string|null, selecteur: boolean,
  *   grille: {nom, synthese, phrase, lignes, colonnes, valeurs, infobulle}|null,
  *   tableaux: Array<{nom, colonnes, lignes}>}}
  */
-export function modeleTables(detail, position, { t }) {
+export function modeleTables(detail, position, { t, nomsTours = undefined }) {
   if (!POSITIONS_MELANGE.includes(position)) {
     throw new RangeError(`mélange des tables : position hors de ${POSITIONS_MELANGE.join(', ')}, reçu ${String(position)}`);
   }
@@ -200,7 +203,7 @@ export function modeleTables(detail, position, { t }) {
   if (detail.T === 1) return sansSelecteur('uneTable', 'tablesUneTable', 'qualite.tables.uneTable');
   if (detail.G === 0) return sansSelecteur('aucuneOrganisation', 'tablesAucuneOrganisation', 'qualite.tables.aucuneOrganisation');
 
-  const tableaux = jumeauTables(detail, position, t);
+  const tableaux = jumeauTables(detail, position, t, nomsTours);
   if (position === 'doublons' && sansCollision(detail)) {
     const phrase = t('qualite.collisions.aucune');
     return { cas: 'sansCollision', code: 'tablesSansCollision', phrase, selecteur: true, grille: null, tableaux };
@@ -221,7 +224,7 @@ export function modeleTables(detail, position, { t }) {
     lignes: lignes.flatMap(({ ligne, libelle }) =>
       ligne.tours.map((cellule, r) => ({
         table: libelle,
-        tour: t('qualite.tables.tour', { tour: r + 1 }),
+        tour: t('qualite.tables.tour', { tour: r + 1, nomsTours }),
         compte: cellule === null ? null : cellule.comptes[position],
         pourcent: pourcentDe(t, cellule, position, ligne.capacite),
         occupants: cellule?.occupants ?? null,
@@ -242,10 +245,14 @@ export function modeleTables(detail, position, { t }) {
       synthese:
         tete.ligne.pire === null
           ? t('qualite.tables.aucuneOrganisation')
-          : t('qualite.tables.synthese', { numero: detail.numerosTables[tetes[0]], valeur: tete.ligne.pire[position] }),
+          : t('qualite.tables.synthese', {
+              numero: detail.numerosTables[tetes[0]],
+              valeur: tete.ligne.pire[position],
+              cases: detail.tables.casesAuPire[position],
+            }),
       phrase: t('qualite.tables.tropLarge'),
       lignes: lignes.map(({ libelle }) => ({ libelle })),
-      colonnes: Array.from({ length: detail.R }, (_, r) => ({ libelle: t('qualite.tables.tour', { tour: r + 1 }) })),
+      colonnes: Array.from({ length: detail.R }, (_, r) => ({ libelle: t('qualite.tables.tour', { tour: r + 1, nomsTours }) })),
       valeurs: lignes.flatMap(({ ligne }) => ligne.tours.map((cellule) => (cellule === null ? null : cellule.comptes[position]))),
       infobulle,
     },

@@ -14,20 +14,21 @@
 //             module s'y résout par les mêmes greffons et réglages que dans la
 //             construction du livrable, sans seconde configuration à tenir
 //             d'accord avec la première. Il joue les épreuves de src/ et
-//             celles de l'outillage partagé de test/navigateur/.
-//             Chromium y tourne sans réseau hors de la boucle locale, au
-//             facteur d'échelle 1 (test/chromium.js). Les commandes des
-//             captures d'écran (test/navigateur/commandes_documentation.js)
-//             y sont déclarées, et le mode des captures, que GTT_CAPTURES
-//             choisit — verifier par défaut, ecrire sous make captures —,
-//             arrive à la page par provide (§ 19.5). Parmi elles, tramerPdf
+//             celles de l'outillage partagé de test/navigateur/. Chromium y
+//             tourne sans réseau hors de la boucle locale, au facteur
+//             d'échelle 1 (test/chromium.js). Les commandes des captures
+//             d'écran (test/navigateur/commandes_documentation.js) y sont
+//             déclarées, et le mode des captures, que GTT_CAPTURES choisit —
+//             verifier par défaut, ecrire sous make captures —, arrive à la
+//             page par provide (§ 19.5), avec le mode d'affichage du Chromium
+//             lancé, que GTT_CHROMIUM décide (§ 19.4). Parmi elles, tramerPdf
 //             trame sous node les pages du PDF de la planche (§ 19.6). La
 //             commande d'impression (test/navigateur/commandes_impression.js),
 //             qui imprime le document d'une épreuve en PDF par le moteur de
 //             Chromium (§ 11.7), y est déclarée aussi.
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
-import { optionsNavigateur } from './test/chromium.js';
+import { modeAffichage, optionsNavigateur } from './test/chromium.js';
 import * as commandesDocumentation from './test/navigateur/commandes_documentation.js';
 import * as commandesImpression from './test/navigateur/commandes_impression.js';
 import { coeursDisponibles, reglagesSeries } from './test/machine.js';
@@ -216,7 +217,8 @@ export default defineConfig({
         test: {
           name: 'navigateur',
           include: ['src/**/*.navigateur.test.js', 'test/**/*.navigateur.test.js'],
-          provide: { captures: { mode: commandesDocumentation.modeCaptures(process.env) } },
+          provide: { captures: { mode: commandesDocumentation.modeCaptures(process.env),
+                                 affichage: modeAffichage(process.env) } },
           browser: { enabled: true, headless: true, provider: playwright(optionsNavigateur(process.env)),
                      instances: [{ browser: 'chromium' }],
                      commands: COMMANDES_NAVIGATEUR } } },

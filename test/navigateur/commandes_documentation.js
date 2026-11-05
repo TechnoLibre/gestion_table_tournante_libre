@@ -57,11 +57,10 @@ import { hostname, tmpdir, userInfo } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  A_VENIR,
   CAPTURES,
   CHEMIN_MANIFESTE,
   DOSSIER_CAPTURES,
-  REPORTEES,
+  ETAPES,
   canoniser,
   cheminImage,
   cheminsHorsRacine as cheminsHors,
@@ -74,7 +73,7 @@ import {
 import { creerHorlogePilotee } from '../../src/application/horloge.js';
 import { libelle } from '../../src/application/libelles.js';
 import { estHorodatage } from '../../src/stockage/journal.js';
-import { MODE_AFFICHAGE, suivreRequetes } from '../chromium.js';
+import { suivreRequetes } from '../chromium.js';
 
 /** Les deux modes des captures : verifier compare au manifeste, ecrire
  *  dépose puis publie (make captures). */
@@ -183,10 +182,10 @@ export async function echecsHorsBoucle(context) {
   return suivreRequetes(context.page).releverEchecs();
 }
 
-/** Les captures déclarées (CAPTURES) et celles qui sont à venir (A_VENIR) :
- *  la page ne charge pas scripts/documentation/manifeste.js, qui est de node. */
+/** Les captures déclarées (CAPTURES), sous { captures } : la page ne charge
+ *  pas scripts/documentation/manifeste.js, qui est de node. */
 export async function declarationsCaptures() {
-  return { captures: CAPTURES.map((capture) => ({ ...capture })), aVenir: [...A_VENIR] };
+  return { captures: CAPTURES.map((capture) => ({ ...capture })) };
 }
 
 /** Les chemins hors de la racine neutre que porte le texte relevé :
@@ -365,10 +364,12 @@ function instantPilote(instant) {
 
 // Un instant écrit dans un texte, sous les formes de l'application : un
 // horodatage ISO, millisecondes et « Z » compris, que seul instantPilote
-// admet ; en lettres, la date de format.date suivie, après « , » ou « à »,
-// de l'heure de format.heure (format.horodatage, dater) ou de HH:MM:SS
-// (planche.pied.horodatage).
+// admet ; dans un nom de fichier, AAAA-MM-JJ_HH-MM-SS, le jour et l'heure
+// locale sans décalage (la planche, la corbeille) ; en lettres, la date de
+// format.date suivie, après « , » ou « à », de l'heure de format.heure
+// (format.horodatage, dater) ou de HH:MM:SS (planche.pied.horodatage).
 const INSTANT_ISO = /(?<!\d)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?(?!\d)/gu;
+const INSTANT_FICHIER = /(?<!\d)(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})(?!\d)/gu;
 const INSTANT_EN_LETTRES =
   /(?<![\p{L}\p{N}])(1er|\d{1,2})\s(\p{L}+)\s(\d{4})(?:,\s|\sà\s)(?:(\d{1,2})\sh\s(\d{2})|(\d{2}):(\d{2}):(\d{2}))(?!\p{N})/gu;
 
@@ -392,15 +393,20 @@ function cleEnLettres([, jourEcrit, nomDuMois, anneeEcrite, heureH, minuteH, heu
 }
 
 // Le premier instant d'un texte que l'horloge pilotée n'atteint pas, tel
-// qu'il s'écrit, ou null. Un instant en lettres se lit à l'heure locale du
-// départ, à la minute ou à la seconde qu'il porte : sa clé se compare au
-// même préfixe de début et de fin.
+// qu'il s'écrit, ou null. Un instant d'un nom de fichier ou en lettres se
+// lit à l'heure locale du départ, à la minute ou à la seconde qu'il porte :
+// sa clé AAAA-MM-JJTHH:MM[:SS] se compare au même préfixe de début et de
+// fin.
 function instantEtranger(texte) {
   for (const [ecrit] of texte.matchAll(INSTANT_ISO)) if (!instantPilote(ecrit)) return ecrit;
   const { debut, fin } = INSTANTS_PILOTES;
+  const horsPortee = (cle) => cle < debut.slice(0, cle.length) || cle > fin.slice(0, cle.length);
+  for (const [ecrit, jour, heure, minute, seconde] of texte.matchAll(INSTANT_FICHIER)) {
+    if (horsPortee(`${jour}T${heure}:${minute}:${seconde}`)) return ecrit;
+  }
   for (const morceaux of texte.matchAll(INSTANT_EN_LETTRES)) {
     const cle = cleEnLettres(morceaux.map((m) => m?.replace(/\s/gu, ' ')));
-    if (cle !== null && (cle < debut.slice(0, cle.length) || cle > fin.slice(0, cle.length))) return morceaux[0];
+    if (cle !== null && horsPortee(cle)) return morceaux[0];
   }
   return null;
 }
@@ -536,10 +542,13 @@ export function fautesDIdentite(manifeste, machine, { sources = [] } = {}) {
   return fautes;
 }
 
-// Le pilote du manifeste : le navigateur et sa version, le mode nommé, le
-// facteur d'échelle et le cadre, communs à toutes les captures du
-// navigateur. Une page de PDF n'en relève pas : son cadre est sa page à
-// PPP_TRAMAGE (§ 19.6). Sans capture du navigateur, aucun pilote : refus.
+// Le pilote du manifeste : le navigateur et sa version, le mode
+// d'affichage, le facteur d'échelle et le cadre, communs à toutes les
+// captures du navigateur. Le mode est celui que chaque capture inscrit, que
+// la page tient de la configuration (modeAffichage de test/chromium.js) :
+// deux modes, comme deux cadres, refusent la publication. Une page de PDF
+// n'en relève pas : son cadre est sa page à PPP_TRAMAGE (§ 19.6). Sans
+// capture du navigateur, aucun pilote : refus.
 function piloteDe(context, captures) {
   const duNavigateur = captures.filter(({ source }) => source !== 'pdf');
   const [premiere] = duNavigateur;
@@ -548,15 +557,36 @@ function piloteDe(context, captures) {
     if (capture.facteurEchelle !== premiere.facteurEchelle || canonique(capture.cadre) !== canonique(premiere.cadre)) {
       throw new Error(`publication : ${capture.fichier} n’a pas le cadre ni le facteur d’échelle de ${premiere.fichier}`);
     }
+    if (capture.mode !== premiere.mode) {
+      throw new Error(
+        `publication : ${capture.fichier} n’a pas le mode d’affichage de ${premiere.fichier}, « ${capture.mode} » contre « ${premiere.mode} »`,
+      );
+    }
   }
   const versionNavigateur = context.page.context().browser()?.version() ?? 'inconnue';
   return {
     navigateur: 'chromium',
     versionNavigateur,
-    mode: MODE_AFFICHAGE,
+    mode: premiere.mode,
     facteurEchelle: premiere.facteurEchelle,
     cadre: { largeur: premiere.cadre.largeur, hauteur: premiere.cadre.hauteur },
   };
+}
+
+/**
+ * Les étapes que le contrôle d'ordre exige d'une publication dont declarees
+ * nomme les captures, des noms de CAPTURES sans doublon : toutes celles
+ * d'ETAPES quand elle les porte toutes, comme make captures ; sinon les
+ * seules étapes de sa sélection, dans l'ordre d'ETAPES. Une publication
+ * partielle, celle des épreuves, laisse d'autres étapes sans capture, et le
+ * contrôle du niveau node refuse le manifeste qu'elle écrit.
+ * @param {readonly string[]} declarees
+ * @returns {readonly string[]}
+ */
+export function etapesExigees(declarees) {
+  if (CAPTURES.every(({ fichier }) => declarees.includes(fichier))) return ETAPES;
+  const choisies = new Set(CAPTURES.filter(({ fichier }) => declarees.includes(fichier)).map(({ etape }) => etape));
+  return ETAPES.filter((etape) => choisies.has(etape));
 }
 
 // Assemble la publication sans rien écrire : le manifeste, les images à
@@ -607,10 +637,10 @@ async function preparer(context, base, declarees, racineNeutre, machine, sources
     }
   }
 
-  const manifeste = { format: 1, pilote: piloteDe(context, captures), captures, reportees: REPORTEES.map((r) => ({ ...r })) };
-  const aVenir = CAPTURES.map(({ fichier }) => fichier).filter((fichier) => !declarees.includes(fichier));
+  // La clé reportees du format vaut toujours la liste vide (verifierOrdre).
+  const manifeste = { format: 1, pilote: piloteDe(context, captures), captures, reportees: [] };
   const fautes = [
-    ...verifierOrdre(manifeste, { aVenir }),
+    ...verifierOrdre(manifeste, { etapes: etapesExigees(declarees) }),
     ...fautesDeMachine(manifeste, racineNeutre),
     ...fautesDIdentite(manifeste, machine, { sources }),
   ];
@@ -635,11 +665,11 @@ async function preparer(context, base, declarees, racineNeutre, machine, sources
 
 /**
  * Publie d'un bloc les captures déposées (§ 19.5) : declarees, les noms de
- * CAPTURES que cette publication porte — les autres comptent comme à venir
- * au contrôle d'ordre ; racineNeutre, la racine de travail que les textes
- * relevés peuvent nommer (fautesDeMachine). Le troisième argument, que la
- * page ne passe jamais, remplace l'identité de la machine que
- * fautesDIdentite cherche, machineCourante() par défaut ; les noms que
+ * CAPTURES que cette publication porte — le contrôle d'ordre en tire les
+ * étapes qu'il exige (etapesExigees) ; racineNeutre, la racine de travail
+ * que les textes relevés peuvent nommer (fautesDeMachine). Le troisième
+ * argument, que la page ne passe jamais, remplace l'identité de la machine
+ * que fautesDIdentite cherche, machineCourante() par défaut ; les noms que
  * lireSourcesDuScenario porte déjà ne s'y cherchent pas. Le dossier
  * d'attente est jeté, que la publication réussisse ou non.
  *

@@ -54,6 +54,8 @@ export const EXEMPLES = [
   ['ANIMATEURS_RENCONTRES', { index: 4, participant: 9 }],
   ['JAMAIS_SERVIES', {}],
   ['HORS_OBJECTIF_MAX', {}],
+  ['INCLUSIONS_SATISFAITES', { index: 4, participant: 9 }],
+  ['INCLUSIONS_AVIS', {}],
   ['RESTE_NEGATIF', { groupe: 1, organisation: 'Atelier Ressac' }],
   ['RESTE_OBJECTIFS_NEGATIF', { tour: 2 }],
   ['RESTE_CONFLITS_NEGATIF', {}],
@@ -68,6 +70,17 @@ export const EXEMPLES = [
 const SUITE_DU_MANQUE = 'ajouter des tables ou des sièges, ou changer des présences, rend la génération possible.';
 
 export const TEXTES = [
+  [
+    'SURRESERVATION',
+    { table: 2, tour: 2, reservees: 9, capacite: 8, nomsTours: [null, 'Plat principal'], remede: null },
+    "La table d'identifiant 2 reçoit 9 personnes réservées au tour 2 (Plat principal), pour 8 places.",
+  ],
+  [
+    'PLACES_MANQUANTES',
+    { placesManquantes: 2, tours: [{ tour: 1, manque: 2 }], nomsTours: ['Apéritif', null] },
+    'Il manque 2 places au tour 1 (Apéritif) pour asseoir les personnes présentes : '
+      + 'ajouter des tables ou des sièges, ou changer des présences, rend la génération possible.',
+  ],
   [
     'PLACES_MANQUANTES',
     { placesManquantes: 3 },

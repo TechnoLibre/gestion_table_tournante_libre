@@ -38,6 +38,100 @@ export const TABLE = new Map([
   ['import.modele.objectifs', "Télécharger un modèle d'objectifs de table"],
   ['import.modele.enregistre', 'Modèle enregistré :'],
 
+  // --- Le guide de l'import, replié sous le modèle (§ 10.1, § 10.4) ----------
+  // Une ligne par colonne reconnue de la nature cochée : son en-tête et ses
+  // synonymes viennent de la table d'en-têtes, son texte d'ici. Un texte dit
+  // ce que la colonne contient et comment une cellule sépare plusieurs
+  // valeurs ; une liste fermée s'y donne en entier.
+  ['import.guide.titre', 'Guide import'],
+  ['import.guide.legende.participants', "Colonnes d'un fichier de participants"],
+  ['import.guide.legende.objectifs', "Colonnes d'un fichier d'objectifs de table"],
+  ['import.guide.entete', 'En-tête'],
+  ['import.guide.obligatoire', 'Obligatoire'],
+  ['import.guide.contenu', 'Contenu'],
+  ['import.guide.synonymes', 'Synonymes'],
+  ['import.guide.oui', 'oui'],
+  ['import.guide.non', 'non'],
+  ['import.guide.aucunSynonyme', 'aucun'],
+  [
+    'import.guide.consigne.entetes',
+    "Chaque colonne se reconnaît à son en-tête, sans égard à la casse, aux accents, aux espaces, à « _ » ni à « - ». " +
+      "L'ordre des colonnes est libre ; une colonne inconnue est ignorée.",
+  ],
+  [
+    'import.guide.consigne.fichier',
+    "Le séparateur des colonnes — « ; », « , » ou une tabulation — et l'encodage — UTF-8, UTF-16 avec marque " +
+      "ou windows-1252 — se détectent seuls ; l'aperçu les nomme.",
+  ],
+  ['import.guide.consigne.modele', '« Télécharger un modèle » donne un fichier aux bons en-têtes, prêt à remplir.'],
+  [
+    'import.guide.consigne.apercu',
+    "Rien ne s'importe avant l'aperçu, qui montre chaque ligne lue et chaque ligne refusée avec son motif.",
+  ],
+  ['import.guide.colonne.nom', 'Le nom de la personne ; une ligne sans nom est refusée.'],
+  ['import.guide.colonne.prenom', 'Le prénom.'],
+  [
+    'import.guide.colonne.organisation',
+    "L'organisation de la personne. Deux orthographes qui ne diffèrent que par la casse, les accents ou les espaces " +
+      "n'en font qu'une.",
+  ],
+  ['import.guide.colonne.courriel', "L'adresse de courriel."],
+  ['import.guide.colonne.titrePressenti', 'Un titre ou un rôle, pour information : il ne pourvoit aucune place.'],
+  [
+    'import.guide.colonne.exclu',
+    "« oui », « o », « vrai », « 1 » ou « x » exclut la personne ; « non », « n », « faux », « 0 » ou une cellule vide " +
+      "ne l'exclut pas. La casse et les accents ne comptent pas ; toute autre valeur refuse la ligne.",
+  ],
+  ['import.guide.colonne.notes', 'Un texte libre, jamais interprété.'],
+  [
+    'import.guide.colonne.etiquettes',
+    'Les étiquettes de la personne, séparées par « , », « ; », « | » ou un retour à la ligne dans la cellule.',
+  ],
+  [
+    'import.guide.colonne.presence',
+    'Les tours où la personne vient, en tours et en plages : « 1-3 », « 2, 3 », « tours 1 et 2 » ; « tous » vaut ' +
+      'tous les tours. Vide : tous les tours pour une personne créée, sa présence gardée en mise à jour.',
+  ],
+  [
+    'import.guide.colonne.conflits',
+    'Les organisations que celle de la personne évite à table, séparées par « ; », « | » ou un retour à la ligne ' +
+      'dans la cellule — pas par une virgule, qui reste dans le nom. Chacune doit être portée par une personne que ' +
+      "l'import laisse dans la liste, et différer de celle de la personne : sinon le fichier entier est refusé.",
+  ],
+  [
+    'import.guide.colonne.animationReservee',
+    "« oui », « o », « vrai », « 1 » ou « x » : la personne est à désigner animatrice d'une table ; « non », « n », " +
+      "« faux », « 0 » ou une cellule vide : elle ne l'est pas. En mise à jour, une cellule vide garde sa marque, " +
+      "« non » la retire. L'import ne désigne personne : « Créer les tables\u{2026} » désigne les personnes marquées " +
+      "sur les tables qu'il crée. La casse et les accents ne comptent pas ; toute autre valeur refuse la ligne.",
+  ],
+  [
+    'import.guide.colonne.inclusionsOrganisation',
+    'Les organisations que la personne doit rencontrer au moins une fois à table, séparées par « ; », « | » ou un ' +
+      'retour à la ligne dans la cellule — pas par une virgule, qui reste dans le nom. Chacune doit être portée par ' +
+      "une personne que l'import laisse dans la liste, et différer de celle de la personne : sinon le fichier entier " +
+      'est refusé.',
+  ],
+  [
+    'import.guide.colonne.inclusionsParticipant',
+    'Les personnes que la personne doit rencontrer au moins une fois à table, chacune par son prénom puis son nom, ' +
+      'séparées par « ; », « | » ou un retour à la ligne dans la cellule. Chacune doit être une seule personne que ' +
+      "l'import laisse dans la liste, sous le nom qu'il lui laisse, et une autre que la personne elle-même : sinon " +
+      'le fichier entier est refusé.',
+  ],
+  ['import.guide.colonne.table', "Le numéro de la table, tel que le plan l'affiche."],
+  ['import.guide.colonne.tour', 'Le tour, de 1 au nombre de tours ; vide pour toute la soirée.'],
+  [
+    'import.guide.colonne.objectif',
+    'Les étiquettes visées, séparées par « , », « ; », « | » ou un retour à la ligne dans la cellule. ' +
+      'Une ligne sans objectif ni règle est passée, sans refus.',
+  ],
+  [
+    'import.guide.colonne.regle',
+    "« ou », « une » ou « au moins une » : au moins une des étiquettes ; « et » ou « toutes » : toutes ; vide : " +
+      "la règle par défaut de l'événement. Toute autre valeur refuse la ligne.",
+  ],
+
   // --- La sorte d'un message de l'aperçu et du rapport (messageDuBloc) ------
   ['import.sorte.refus', 'Refus'],
   ['import.sorte.avis', 'Avis'],
@@ -84,6 +178,9 @@ export const TABLE = new Map([
   ['import.champ.etiquettes', 'étiquettes'],
   ['import.champ.presence', 'présence'],
   ['import.champ.conflits', "conflits d'organisation"],
+  ['import.champ.animationReservee', 'animation réservée'],
+  ['import.champ.inclusionsOrganisation', "inclusions d'organisation"],
+  ['import.champ.inclusionsParticipant', 'inclusions de participant'],
   ['import.champ.table', 'table'],
   ['import.champ.tour', 'tour'],
   ['import.champ.objectif', 'objectif'],
@@ -177,6 +274,71 @@ export const TABLE = new Map([
       `Retirez de la colonne des conflits, à la ligne ${ligne}, l'organisation de la personne, ` +
       'puis collez le texte de nouveau.',
   ],
+  // Une inclusion fautive se corrige comme un conflit : dans le fichier, ou
+  // dans le texte collé. Un nom que plusieurs personnes portent ne désigne
+  // aucune d'elles : ces personnes se distinguent d'abord par leur nom.
+  [
+    'import.remede.inclusionOrganisation',
+    ({ ligne }) =>
+      `Corrigez la colonne des inclusions d'organisation à la ligne ${ligne} \u{2014} ou ajoutez au fichier une ` +
+      'personne de cette organisation \u{2014}, puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.inclusionPropre',
+    ({ ligne }) =>
+      `Retirez de la colonne des inclusions d'organisation, à la ligne ${ligne}, l'organisation de la personne, ` +
+      'puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.inclusionInconnue',
+    ({ ligne }) =>
+      `Écrivez à la ligne ${ligne}, dans la colonne des inclusions de participant, le prénom puis le nom d'une ` +
+      "personne de la liste ou du fichier \u{2014} ajoutez-la au fichier, ou corrigez sa ligne si l'import la refuse " +
+      '\u{2014}, puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.inclusionAmbigue',
+    ({ ligne }) =>
+      'Distinguez par leur nom les personnes qui le portent, dans le fichier ou dans leur fiche, écrivez à la ' +
+      `ligne ${ligne} celui de la personne à rencontrer, puis importez le fichier de nouveau.`,
+  ],
+  [
+    'import.remede.inclusionSoi',
+    ({ ligne }) =>
+      `Retirez de la colonne des inclusions de participant, à la ligne ${ligne}, le nom de la personne elle-même, ` +
+      'puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.inclusionOrganisationCollage',
+    ({ ligne }) =>
+      `Corrigez la colonne des inclusions d'organisation à la ligne ${ligne} \u{2014} ou ajoutez au texte une ` +
+      'personne de cette organisation \u{2014}, puis collez-le de nouveau.',
+  ],
+  [
+    'import.remede.inclusionPropreCollage',
+    ({ ligne }) =>
+      `Retirez de la colonne des inclusions d'organisation, à la ligne ${ligne}, l'organisation de la personne, ` +
+      'puis collez le texte de nouveau.',
+  ],
+  [
+    'import.remede.inclusionInconnueCollage',
+    ({ ligne }) =>
+      `Écrivez à la ligne ${ligne}, dans la colonne des inclusions de participant, le prénom puis le nom d'une ` +
+      "personne de la liste ou du texte \u{2014} ajoutez-la au texte, ou corrigez sa ligne si l'import la refuse " +
+      '\u{2014}, puis collez-le de nouveau.',
+  ],
+  [
+    'import.remede.inclusionAmbigueCollage',
+    ({ ligne }) =>
+      'Distinguez par leur nom les personnes qui le portent, dans le texte ou dans leur fiche, écrivez à la ' +
+      `ligne ${ligne} celui de la personne à rencontrer, puis collez le texte de nouveau.`,
+  ],
+  [
+    'import.remede.inclusionSoiCollage',
+    ({ ligne }) =>
+      `Retirez de la colonne des inclusions de participant, à la ligne ${ligne}, le nom de la personne elle-même, ` +
+      'puis collez le texte de nouveau.',
+  ],
   [
     'import.remede.separateurIntrouvableCollage',
     "Séparez les colonnes par « ; », « , » ou une tabulation, ou lisez la colonne dans l'ordre de la grille : " +
@@ -203,6 +365,15 @@ export const TABLE = new Map([
     'import.remplacer.propositions',
     ({ n }) => `${n} ${accorde(n, 'proposition deviendra périmée', 'propositions deviendront périmées')}`,
   ],
+  // Les inclusions des personnes retirées, d'organisation et de
+  // participant : l'élément ne s'affiche qu'à partir de 1.
+  [
+    'import.remplacer.inclusions',
+    ({ n }) => `${n} ${accorde(n, 'inclusion sera supprimée', 'inclusions seront supprimées')}`,
+  ],
+  // Les logos des personnes retirées, que le CSV ne porte pas : l'élément
+  // ne s'affiche qu'à partir de 1.
+  ['import.remplacer.logos', ({ n }) => `${n} ${accorde(n, 'logo sera retiré', 'logos seront retirés')}`],
 
   // --- La fenêtre de « Remplacer » des objectifs (§ 10.4) ----------------------
   ['import.remplacer.titreObjectifs', 'Remplacer les objectifs des tables'],
@@ -220,6 +391,24 @@ export const TABLE = new Map([
   ['import.rapport.retires', ({ n }) => accorde(n, 'personne retirée', 'personnes retirées')],
   ['import.rapport.reservationsRetirees', ({ n }) => accorde(n, 'réservation retirée', 'réservations retirées')],
   ['import.rapport.rienEcrit', "Rien n'a changé dans la liste : seules des lignes refusées restent à lire."],
+  // Les personnes marquées « animation réservée » qui n'animent aucune table
+  // après l'import (aDesigner) : leur nombre précède le texte, puis les deux
+  // gestes qui les désignent.
+  ['import.rapport.animations', 'Animation réservée'],
+  [
+    'import.rapport.aDesigner',
+    ({ n }) =>
+      accorde(
+        n,
+        "personne porte une animation réservée sans animer de table : s'il manque des places, « Créer les " +
+          "tables\u{2026} » la désigne sur une table qu'il crée ; sinon, désignez-la dans « Tables et tours », à la " +
+          "rangée « Animateurs » d'une table. Une personne absente à un tour se désigne une fois sa présence rendue.",
+        "personnes portent une animation réservée sans animer de table : s'il manque des places, « Créer les " +
+          "tables\u{2026} » les désigne sur les tables qu'il crée ; sinon, désignez-les dans « Tables et tours », à " +
+          "la rangée « Animateurs » d'une table. Une personne absente à un tour se désigne une fois sa présence " +
+          'rendue.',
+      ),
+  ],
   ['import.rapport.objectifsAjoutes', ({ n }) => accorde(n, 'objectif ajouté', 'objectifs ajoutés')],
   ['import.rapport.objectifsRemplaces', ({ n }) => accorde(n, 'objectif remplacé', 'objectifs remplacés')],
   ['import.rapport.objectifsInchanges', ({ n }) => accorde(n, 'objectif inchangé', 'objectifs inchangés')],

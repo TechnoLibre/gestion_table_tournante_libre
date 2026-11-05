@@ -27,7 +27,11 @@
   // cette vue ne lit pas — et met en forme le détail par modeleTables
   // (organisations.js), sans rien calculer. Son <div> porte data-vue-qualite,
   // que la carte ne transmet pas : il enveloppe la carte.
+  //
+  // Les tours se nomment par les noms que leur donne la charge de la séance
+  // (nomsDesTours), sinon par « Tour 3 ».
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import Carte from '../primitives/Carte.svelte';
   import { CASE_MAX_TEXTES, modeleTables } from './organisations.js';
   import Grille from './graphiques/Grille.svelte';
@@ -36,12 +40,14 @@
   let { detail = null, ligne = null, table = null } = $props();
 
   const t = getContext('t');
+  const seance = getContext('seance');
   const ui = getContext('ui');
   const uid = $props.id();
   const nomGroupe = `${uid}-position`;
 
   const position = $derived($ui.melangeTables);
-  const modele = $derived(detail === null || detail.tables === null ? null : modeleTables(detail, position, { t }));
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
+  const modele = $derived(detail === null || detail.tables === null ? null : modeleTables(detail, position, { t, nomsTours }));
   let pointe = $state(null);
   let dessinable = $state(true);
   let ouvert = $state(false);

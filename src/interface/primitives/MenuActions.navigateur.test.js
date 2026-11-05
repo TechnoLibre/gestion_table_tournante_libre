@@ -64,11 +64,17 @@ function elementsEssai(appels, executer = {}) {
 }
 
 // Monte le menu au début du corps, suivi d'un bouton témoin, le contrôle
-// que Tab atteint après le menu, sous une horloge pilotée qu'il rend. La séance, une doublure : passerEnEcriture
-// compte ses appels, le remède « Modifier » d'un refus passe par elle.
+// que Tab atteint après le menu, sous une horloge pilotée qu'il rend. La
+// séance, une doublure : un magasin sans charge, que le refus lit, et
+// passerEnEcriture, qui compte ses appels — le remède « Modifier » d'un
+// refus passe par elle.
 function monter({ executer = {} } = {}) {
   const appels = [];
-  const seance = { ecritures: 0, passerEnEcriture: async () => (seance.ecritures += 1) };
+  const seance = {
+    ecritures: 0,
+    subscribe: (abonne) => (abonne({ charge: null }), () => {}),
+    passerEnEcriture: async () => (seance.ecritures += 1),
+  };
   const cible = document.createElement('div');
   document.body.prepend(cible);
   const horloge = creerHorlogePilotee();

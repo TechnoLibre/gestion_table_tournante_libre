@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La géométrie des graphiques de la page de qualité (§ 12.9) : module frère
-// de celui du plan, qui n'en importe aucune arithmétique. L'unité y est le
-// rang et le nombre, rendus en pixels d'écran, jamais le centimètre. Les
-// fonctions sont pures : un composant reçoit d'elles des nombres déjà rangés,
-// des pixels et des chemins, et n'en calcule aucun.
+// de celui du plan, qui n'en importe rien ; les deux ne partagent que le
+// seuil des cibles, cible.js. L'unité y est le rang et le nombre, rendus en
+// pixels d'écran, jamais le centimètre. Les fonctions sont pures : un
+// composant reçoit d'elles des nombres déjà rangés, des pixels et des
+// chemins, et n'en calcule aucun.
 //
 // Un axe des rangs va de 0 à n : le rang r occupe l'intervalle [r − 1, r],
 // son centre est r − 0,5. Un axe de comptes va de zéro à sa plus grande
 // valeur (D49). Les chemins SVG n'emploient que des commandes absolues, leurs
 // nombres arrondis au centième de pixel.
 
-import { CIBLE_MIN_PX } from './designation.js';
+import { CIBLE_MIN_PX } from './cible.js';
 
 /** Les quatre niveaux de l'échelle séquentielle : 0, 1, 2, puis 3 et plus (D33). */
 export const NIVEAUX = Object.freeze([0, 1, 2, 3]);
@@ -21,9 +22,10 @@ export const NIVEAUX = Object.freeze([0, 1, 2, 3]);
 const MANTISSES = [1, 2, 5];
 
 // m × 10ⁿ, au plus près. Recopiée de ronde (echelle.js), non importée : le
-// plan et les graphiques ne partagent pas de module (§ 12.9). Une puissance
-// négative divise par 10⁻ⁿ, que l'arithmétique flottante représente
-// exactement, plutôt que de multiplier par 10ⁿ, qu'elle arrondit.
+// plan et les graphiques ne partagent que le seuil des cibles, cible.js
+// (§ 12.9, § 14.10). Une puissance négative divise par 10⁻ⁿ, que
+// l'arithmétique flottante représente exactement, plutôt que de multiplier
+// par 10ⁿ, qu'elle arrondit.
 const ronde = (m, n) => (n >= 0 ? m * 10 ** n : m / 10 ** -n);
 
 // Tolérance des bornes d'un compte de graduations : un quotient tel que
