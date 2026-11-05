@@ -1,0 +1,635 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
+
+// Épreuves du manifeste des captures et de ses contrôles sous node (§ 19.3,
+// § 19.5, § 19.7) : la liste déclarée des captures, l'empreinte d'étape, la
+// forme canonique, l'appariement documentation, manifeste et disque, l'ordre
+// contre les étapes du § 2.1, l'en-tête PNG, l'écart de version, les chemins
+// hors de la racine neutre et la garde qui refuse un manifeste nommant sa
+// machine. Les données viennent de test/fixtures/captures/ : deux images
+// minimales de 1 366 × 700, une de 2 × 3, un guide et un manifeste inventés.
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { describe, test } from '../../test/lanceur.js';
+import { versionVoisine } from '../../test/version_voisine.js';
+import { VERSION } from '../../src/version.genere.js';
+import {
+  A_VENIR,
+  CAPTURES,
+  CHEMIN_MANIFESTE,
+  ETAPES,
+  REPORTEES,
+  canoniser,
+  cheminImage,
+  cheminsHorsRacine,
+  ecartDeVersion,
+  empreinteEtape,
+  fautesDImage,
+  fautesDeMachine,
+  imagesReferencees,
+  lireEntetePng,
+  verifierAppariement,
+  verifierOrdre,
+} from './manifeste.js';
+
+const FIXTURES = fileURLToPath(new URL('../../test/fixtures/captures/', import.meta.url));
+const lire = (chemin) => readFileSync(FIXTURES + chemin);
+
+// Racine neutre inventée : elle n'existe nulle part ailleurs dans le dépôt.
+const RACINE = 'C:\\Racine\\Tablees';
+
+const IMAGE_01 = 'doc/captures/01-premier-ecran.png';
+const IMAGE_02 = 'doc/captures/02-import-apercu.png';
+
+// Le manifeste de fixture, lu à neuf à chaque appel. Il ne porte pas la
+// version réelle, qu'aucune donnée n'écrit en clair (§ 18.5, point 6) :
+// chaque capture reçoit ici celle de la construction.
+function manifesteFixture() {
+  const manifeste = JSON.parse(lire('manifeste.json').toString('utf8'));
+  for (const capture of manifeste.captures) capture.versionReelle = VERSION.affichee;
+  return manifeste;
+}
+
+function captureFixture(rang = 0) {
+  return manifesteFixture().captures[rang];
+}
+
+function referencesFixture() {
+  return [{ document: 'guide.md', images: imagesReferencees(lire('guide.md').toString('utf8')) }];
+}
+
+// Un manifeste dont seules les entrées comptent pour l'ordre : chaque capture
+// déclarée, sauf celles qu'on écarte, et chaque reportée.
+function manifesteDeclare({ sans = [], reportees = REPORTEES } = {}) {
+  return {
+    format: 1,
+    captures: CAPTURES.filter((c) => !sans.includes(c.fichier)).map((c) => ({ fichier: c.fichier, etape: c.etape })),
+    reportees: reportees.map((r) => ({ ...r })),
+  };
+}
+
+const sha256 = (octets) => createHash('sha256').update(octets).digest('hex');
+const fautesDe = (fautes, motif) => fautes.filter((f) => motif.test(f.faute));
+
+describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
+  test('les treize étapes du § 2.1, dans leur ordre', () => {
+    assert.deepEqual(ETAPES, ['1', '1b', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']);
+    assert.ok(Object.isFrozen(ETAPES));
+  });
+
+  test('CAPTURES égale la table du contrat : cinquante-six entrées, leur étape et leur source', () => {
+    const table = CAPTURES.map((c) => [c.fichier, c.etape, c.source]);
+    assert.deepEqual(table, [
+      ['01-premier-ecran', '1', 'navigateur'],
+      ['01b-passer-en-ecriture', '1b', 'navigateur'],
+      ['02-import-apercu', '2', 'navigateur'],
+      ['02b-import-cp1252', '2', 'navigateur'],
+      ['02c-import-presence', '2', 'navigateur'],
+      ['03-import-rapport', '2', 'navigateur'],
+      ['04-grille-participants', '3', 'navigateur'],
+      ['04a-etiquettes', '3', 'navigateur'],
+      ['04b-presence-grille', '3', 'navigateur'],
+      ['04c-presence-fiche', '3', 'navigateur'],
+      ['05-tables-etat', '4', 'navigateur'],
+      ['05a-objectifs-tables', '4', 'navigateur'],
+      ['05b-import-objectifs', '4', 'navigateur'],
+      ['06-defaut-consequence', '4', 'navigateur'],
+      ['07-plan-tables', '4', 'navigateur'],
+      ['07a-cibles-sieges', '4', 'navigateur'],
+      ['07a-cibles-tables', '4', 'navigateur'],
+      ['07b-nombre-de-tours', '5', 'navigateur'],
+      ['08-animateurs-designes', '6', 'navigateur'],
+      ['09-refus-sur-place', '7', 'navigateur'],
+      ['10-diagnostic', '8', 'navigateur'],
+      ['10a-ordre-priorites', '9', 'navigateur'],
+      ['11-propositions', '9', 'navigateur'],
+      ['11a-depart-derive', '9', 'navigateur'],
+      ['11b-propositions-derivees', '9', 'navigateur'],
+      ['11c-derivee-presence', '9', 'navigateur'],
+      ['12-qualite-profil', '10', 'navigateur'],
+      ['12a-qualite-sans-placement', '10', 'navigateur'],
+      ['12b-qualite-une-table', '10', 'navigateur'],
+      ['12c-qualite-un-tour', '10', 'navigateur'],
+      ['12d-qualite-une-organisation', '10', 'navigateur'],
+      ['12e-qualite-sans-collision', '10', 'navigateur'],
+      ['12f-qualite-reserve', '10', 'navigateur'],
+      ['12g-qualite-plafond-nul', '10', 'navigateur'],
+      ['12h-qualite-absence', '10', 'navigateur'],
+      ['13-qualite-collisions', '10', 'navigateur'],
+      ['13a-qualite-tables', '10', 'navigateur'],
+      ['14-qualite-paires', '10', 'navigateur'],
+      ['14a-fiche-rencontres', '10', 'navigateur'],
+      ['15-pas-de-matrice', '10', 'navigateur'],
+      ['15a-qualite-objectifs', '10', 'navigateur'],
+      ['15b-qualite-animateurs', '10', 'navigateur'],
+      ['15c-qualite-performance', '10', 'navigateur'],
+      ['16-minimum-atteint', '10', 'navigateur'],
+      ['17-comparaison-manque', '10', 'navigateur'],
+      ['17a-comparaison-colonnes', '10', 'navigateur'],
+      ['18-comparaison-escalier', '10', 'navigateur'],
+      ['19-ajustement', '11', 'navigateur'],
+      ['19a-presence-plan', '11', 'navigateur'],
+      ['20-mode-lecture', '11', 'navigateur'],
+      ['21-historique', '11', 'navigateur'],
+      ['22-plan-brouillon', '12', 'navigateur'],
+      ['23-plan-retenu', '12', 'navigateur'],
+      ['24-badges-controle', '12', 'pdf'],
+      ['25-badges-planche', '12', 'pdf'],
+      ['25a-badge-absente', '12', 'pdf'],
+    ]);
+    for (const capture of CAPTURES) {
+      assert.deepEqual(Object.keys(capture).sort(), ['configuration', 'etape', 'fichier', 'source'], capture.fichier);
+      assert.equal(typeof capture.configuration, 'string', capture.fichier);
+      assert.ok(capture.configuration.length > 0, capture.fichier);
+      assert.ok(Object.isFrozen(capture), capture.fichier);
+    }
+    assert.ok(Object.isFrozen(CAPTURES));
+  });
+
+  test('la configuration nomme le fichier d’import ou la démonstration que la capture exige', () => {
+    const configuration = new Map(CAPTURES.map((c) => [c.fichier, c.configuration]));
+    assert.equal(configuration.get('02-import-apercu'), 'participants_cas_limites.csv');
+    assert.equal(configuration.get('02b-import-cp1252'), 'participants_cas_limites_cp1252.csv');
+    assert.equal(configuration.get('03-import-rapport'), 'participants_cas_limites.csv');
+    // L'aperçu des objectifs se prend sur l'exemple d'objectifs, importé
+    // dans l'événement que le parcours construit (A22).
+    assert.equal(configuration.get('05b-import-objectifs'), 'objectifs_cas_limites.csv');
+    for (const fichier of ['04a-etiquettes', '05a-objectifs-tables', '10a-ordre-priorites']) {
+      assert.equal(configuration.get(fichier), 'evenement-construit', fichier);
+    }
+    assert.equal(configuration.get('10-diagnostic'), 'grande');
+    // Les deux 07a, à l'étape 4, se prennent sur la grande démonstration que
+    // le parcours charge pour 10 (§ 19.3).
+    assert.equal(configuration.get('07a-cibles-sieges'), 'grande');
+    assert.equal(configuration.get('07a-cibles-tables'), 'grande');
+    // La page de qualité (B27) : chaque capture sur sa charge, la
+    // démonstration du catalogue qu'elle charge, l'événement que le parcours
+    // construit, ou une configuration qu'un scénario court construit.
+    const qualite = [
+      ['12-qualite-profil', 'grande'],
+      ['12a-qualite-sans-placement', 'petite-conflit'],
+      ['12b-qualite-une-table', 'construite-une-table'],
+      ['12c-qualite-un-tour', 'construite-un-tour'],
+      ['12d-qualite-une-organisation', 'construite-une-organisation'],
+      ['12e-qualite-sans-collision', 'construite-sans-collision'],
+      ['12f-qualite-reserve', 'petite-conflit'],
+      ['12g-qualite-plafond-nul', 'construite-plafond-nul'],
+      ['13-qualite-collisions', 'petite-conflit'],
+      ['13a-qualite-tables', 'petite-conflit'],
+      ['14-qualite-paires', 'construite-paires'],
+      ['14a-fiche-rencontres', 'construite-paires'],
+      ['15-pas-de-matrice', 'grande'],
+      ['15a-qualite-objectifs', 'evenement-construit'],
+      ['15b-qualite-animateurs', 'grande'],
+      ['15c-qualite-performance', 'grande'],
+      ['16-minimum-atteint', 'petite'],
+    ];
+    assert.deepEqual(qualite.map(([fichier]) => [fichier, configuration.get(fichier)]), qualite);
+    // La dérivée et la comparaison (D81, C26) : la grande démonstration sans
+    // exception, chargée à la fin du parcours, générée puis dérivée.
+    const derivees = ['11a-depart-derive', '11b-propositions-derivees', '17-comparaison-manque', '17a-comparaison-colonnes', '18-comparaison-escalier'];
+    for (const fichier of derivees) assert.equal(configuration.get(fichier), 'grande-sans-exception', fichier);
+    // L'étape 11 se photographie sur l'événement que le parcours construit
+    // puis retient : l'ajustement, la lecture, l'historique.
+    for (const fichier of ['19-ajustement', '20-mode-lecture', '21-historique']) assert.equal(configuration.get(fichier), 'evenement-retenu', fichier);
+    // La présence par tour : la petite démonstration générée, n° 1 retenue,
+    // une personne présente aux tours 1 et 2 et une ajoutée présente aux
+    // tours 3 et 4, chaque capture à son étape, de l'aperçu du modèle à la
+    // réédition des badges.
+    const presence = [
+      ['02c-import-presence', '2'],
+      ['04b-presence-grille', '3'],
+      ['04c-presence-fiche', '3'],
+      ['11c-derivee-presence', '9'],
+      ['12h-qualite-absence', '10'],
+      ['19a-presence-plan', '11'],
+      ['25a-badge-absente', '12'],
+    ];
+    const construite = CAPTURES.filter((c) => c.configuration === 'construite-presence').map((c) => [c.fichier, c.etape]);
+    assert.deepEqual(construite, presence);
+  });
+
+  test('REPORTEES est vide : chaque écran déclaré existe ; 17, 17a, 18 et 21 photographiées', () => {
+    assert.deepEqual(REPORTEES, []);
+    assert.ok(Object.isFrozen(REPORTEES));
+    // La vue de comparaison et la vue d'historique se photographient :
+    // chacune est déclarée dans CAPTURES, à son étape.
+    const etapes = new Map(CAPTURES.map((c) => [c.fichier, c.etape]));
+    const photographiees = ['17-comparaison-manque', '17a-comparaison-colonnes', '18-comparaison-escalier', '21-historique'];
+    assert.deepEqual(photographiees.map((fichier) => etapes.get(fichier)), ['10', '10', '10', '11']);
+  });
+
+  test('A_VENIR est vide : chaque capture déclarée est photographiée, 24, 25 et 25a tramées d’un PDF de badges', () => {
+    assert.deepEqual(A_VENIR, []);
+    assert.ok(Object.isFrozen(A_VENIR));
+    const tramees = CAPTURES.filter((c) => c.source === 'pdf').map((c) => [c.fichier, c.etape]);
+    assert.deepEqual(tramees, [['24-badges-controle', '12'], ['25-badges-planche', '12'], ['25a-badge-absente', '12']]);
+  });
+
+  test('CAPTURES ∪ REPORTEES : des noms uniques, et l’ordre des noms suit celui des étapes', () => {
+    const toutes = [...CAPTURES, ...REPORTEES];
+    assert.equal(new Set(toutes.map((e) => e.fichier)).size, toutes.length);
+    const parNom = [...toutes].sort((a, b) => (a.fichier < b.fichier ? -1 : a.fichier > b.fichier ? 1 : 0));
+    const rangs = parNom.map((e) => ETAPES.indexOf(e.etape));
+    assert.ok(rangs.every((rang) => rang >= 0));
+    for (let i = 1; i < rangs.length; i += 1) assert.ok(rangs[i - 1] <= rangs[i], `${parNom[i - 1].fichier} › ${parNom[i].fichier}`);
+    const capturesParNom = [...CAPTURES].sort((a, b) => (a.fichier < b.fichier ? -1 : 1)).map((c) => c.fichier);
+    assert.deepEqual(CAPTURES.map((c) => c.fichier), capturesParNom);
+  });
+
+  test('cheminImage et le chemin du manifeste sont sous doc/captures', () => {
+    assert.equal(cheminImage('01-premier-ecran'), IMAGE_01);
+    assert.equal(CHEMIN_MANIFESTE, 'doc/captures/manifeste.json');
+  });
+});
+
+describe('manifeste : l’empreinte d’étape (§ 19.5, amendé)', () => {
+  test('SHA-256 en hexadécimal, égale à celle que porte le manifeste de fixture', () => {
+    for (const capture of manifesteFixture().captures) {
+      assert.match(empreinteEtape(capture), /^[0-9a-f]{64}$/);
+      assert.equal(empreinteEtape(capture), capture.empreinte, capture.fichier);
+    }
+  });
+
+  test('invariante à la version réelle, à la version du navigateur, à l’image, à l’empreinte et à l’ordre des clés', () => {
+    const capture = captureFixture();
+    const reference = empreinteEtape(capture);
+    assert.equal(empreinteEtape({ ...capture, versionReelle: versionVoisine(VERSION.affichee) }), reference);
+    const { versionReelle: _version, ...sansVersion } = capture;
+    assert.equal(empreinteEtape(sansVersion), reference);
+    assert.equal(empreinteEtape({ ...capture, versionNavigateur: '141.0.1.2' }), reference);
+    assert.equal(empreinteEtape({ ...capture, pilote: { navigateur: 'chromium', versionNavigateur: '141.0.1.2' } }),
+      empreinteEtape({ ...capture, pilote: { navigateur: 'chromium', versionNavigateur: '139.0.9.9' } }));
+    assert.equal(empreinteEtape({ ...capture, image: { sha256: '0'.repeat(64), largeur: 1, hauteur: 1 } }), reference);
+    assert.equal(empreinteEtape({ ...capture, empreinte: 'f'.repeat(64) }), reference);
+    const inverse = Object.fromEntries(Object.entries(capture).reverse());
+    assert.equal(empreinteEtape(inverse), reference);
+  });
+
+  test('variable au texte, au thème, à l’état, aux styles, à la graine et au cadre', () => {
+    const capture = captureFixture();
+    const reference = empreinteEtape(capture);
+    const variantes = [
+      { ...capture, texte: [...capture.texte, 'Théo Pervenche'] },
+      { ...capture, texte: capture.texte.slice().reverse() },
+      { ...capture, theme: 'sombre' },
+      { ...capture, etat: sha256('un autre état inventé') },
+      { ...capture, styles: { ...capture.styles, clair: [{ couleur: '#000000' }] } },
+      { ...capture, graine: 7 },
+      { ...capture, cadre: { largeur: 1366, hauteur: 701 } },
+    ];
+    for (const variante of variantes) assert.notEqual(empreinteEtape(variante), reference);
+  });
+
+  test('refuse ce qui n’est pas un objet, et une valeur que JSON ne porte pas', () => {
+    assert.throws(() => empreinteEtape(null), TypeError);
+    assert.throws(() => empreinteEtape([]), TypeError);
+    assert.throws(() => empreinteEtape({ ...captureFixture(), graine: undefined }), TypeError);
+    assert.throws(() => empreinteEtape({ ...captureFixture(), graine: Number.NaN }), TypeError);
+  });
+});
+
+describe('manifeste : la forme canonique', () => {
+  test('clés triées à toute profondeur, une capture et une reportée par ligne, fin de ligne finale', () => {
+    const manifeste = manifesteFixture();
+    const texte = canoniser(manifeste);
+    assert.ok(texte.endsWith(']}\n'), texte.slice(-10));
+    const lignes = texte.split('\n');
+    assert.equal(lignes[0], '{"captures":[');
+    assert.ok(lignes[1].startsWith('{"cadre":{"hauteur":700,"largeur":1366},"empreinte":'), lignes[1]);
+    assert.ok(lignes[1].endsWith('},'), lignes[1]);
+    assert.ok(lignes[2].startsWith('{"cadre":'), lignes[2]);
+    assert.ok(lignes[2].endsWith('}'), lignes[2]);
+    assert.ok(lignes[3].startsWith('],"format":1,"pilote":{"cadre":{"hauteur":700,"largeur":1366},"facteurEchelle":1,'), lignes[3]);
+    assert.ok(lignes[3].endsWith(',"reportees":['), lignes[3]);
+    assert.equal(lignes[4], '{"etape":"10","fichier":"12-qualite-profil","raison":"iteration5"}');
+    assert.equal(lignes[5], ']}');
+    assert.equal(lignes[6], '');
+    assert.deepEqual(JSON.parse(texte), manifeste);
+  });
+
+  test('l’ordre des clés reçu ne change rien ; celui des tableaux, si', () => {
+    const manifeste = manifesteFixture();
+    const inverse = Object.fromEntries(Object.entries(manifeste).reverse());
+    inverse.captures = manifeste.captures.map((c) => Object.fromEntries(Object.entries(c).reverse()));
+    assert.equal(canoniser(inverse), canoniser(manifeste));
+    assert.notEqual(canoniser({ ...manifeste, captures: manifeste.captures.slice().reverse() }), canoniser(manifeste));
+  });
+
+  test('un tableau vide reste sur sa ligne', () => {
+    assert.equal(canoniser({ format: 1, captures: [], reportees: [] }), '{"captures":[],"format":1,"reportees":[]}\n');
+  });
+
+  test('refuse une valeur que JSON ne porte pas', () => {
+    assert.throws(() => canoniser({ format: 1, captures: [{ fichier: undefined }] }), TypeError);
+    assert.throws(() => canoniser({ format: Number.POSITIVE_INFINITY }), TypeError);
+    assert.throws(() => canoniser([]), TypeError);
+  });
+});
+
+describe('manifeste : l’appariement documentation, manifeste, disque (§ 19.7)', () => {
+  const images = [IMAGE_01, IMAGE_02];
+
+  test('imagesReferencees relève chaque image de doc/captures, une fois, dans l’ordre du texte', () => {
+    assert.deepEqual(imagesReferencees(lire('guide.md').toString('utf8')), [IMAGE_01, IMAGE_02]);
+    assert.deepEqual(imagesReferencees('![a](../doc/captures/03-import-rapport.png) et doc/captures/x.jpg'), ['doc/captures/03-import-rapport.png']);
+    assert.deepEqual(imagesReferencees('aucune image'), []);
+  });
+
+  test('la fixture appariée ne porte aucune faute', () => {
+    assert.deepEqual(verifierAppariement({ manifeste: manifesteFixture(), references: referencesFixture(), images }), []);
+  });
+
+  test('balayage vide refusé : manifeste sans capture, document sans référence, aucune documentation, aucun fichier', () => {
+    const vide = { ...manifesteFixture(), captures: [] };
+    const sansCapture = verifierAppariement({ manifeste: vide, references: referencesFixture(), images });
+    assert.equal(fautesDe(sansCapture, /aucune capture/).length, 1, JSON.stringify(sansCapture));
+    assert.equal(fautesDe(sansCapture, /aucune capture/)[0].chemin, CHEMIN_MANIFESTE);
+
+    const documentNu = verifierAppariement({
+      manifeste: manifesteFixture(),
+      references: [...referencesFixture(), { document: 'GUIDE-WINDOWS.md', images: [] }],
+      images,
+    });
+    assert.deepEqual(documentNu, [{ chemin: 'GUIDE-WINDOWS.md', faute: 'aucune image référencée' }]);
+
+    const sansDocument = verifierAppariement({ manifeste: manifesteFixture(), references: [], images });
+    assert.equal(fautesDe(sansDocument, /aucun document/).length, 1, JSON.stringify(sansDocument));
+
+    const sansFichier = verifierAppariement({ manifeste: manifesteFixture(), references: referencesFixture(), images: [] });
+    assert.equal(fautesDe(sansFichier, /aucune image sur le disque/).length, 1, JSON.stringify(sansFichier));
+  });
+
+  test('orpheline côté document, côté manifeste, côté disque : trois fautes, chacune nommée', () => {
+    const manifeste = manifesteFixture();
+    const seule = (fichier) => ({ ...manifeste.captures[0], fichier });
+    manifeste.captures.push(seule('04-grille-participants'));
+    const references = referencesFixture();
+    references[0].images.push('doc/captures/03-import-rapport.png');
+    const fautes = verifierAppariement({ manifeste, references, images: [...images, 'doc/captures/05-tables-etat.png'] });
+    assert.deepEqual(fautes, [
+      { chemin: 'doc/captures/03-import-rapport.png', faute: 'orpheline : référencée par guide.md ; absente du manifeste et du disque' },
+      { chemin: 'doc/captures/04-grille-participants.png', faute: 'orpheline : au manifeste ; absente de la documentation et du disque' },
+      { chemin: 'doc/captures/05-tables-etat.png', faute: 'orpheline : sur le disque ; absente de la documentation et du manifeste' },
+    ]);
+  });
+
+  test('une image présente de deux côtés sur trois est une orpheline du troisième', () => {
+    const fautes = verifierAppariement({ manifeste: manifesteFixture(), references: referencesFixture(), images: [IMAGE_01] });
+    assert.deepEqual(fautes, [{ chemin: IMAGE_02, faute: 'orpheline : référencée par guide.md, au manifeste ; absente du disque' }]);
+  });
+
+  test('une capture deux fois au manifeste est une faute', () => {
+    const manifeste = manifesteFixture();
+    manifeste.captures.push({ ...manifeste.captures[1] });
+    const fautes = verifierAppariement({ manifeste, references: referencesFixture(), images });
+    assert.deepEqual(fautes, [{ chemin: IMAGE_02, faute: 'deux fois au manifeste' }]);
+  });
+});
+
+describe('manifeste : l’ordre contre les étapes du § 2.1 (§ 19.3)', () => {
+  test('CAPTURES ∪ REPORTEES réel : aucune faute', () => {
+    assert.deepEqual(verifierOrdre(manifesteDeclare()), []);
+  });
+
+  test('une capture à venir, absente du manifeste, couvre son étape', () => {
+    const etape12 = ['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche', '25a-badge-absente'];
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: etape12 }), { aVenir: ['24-badges-controle'] }), []);
+  });
+
+  test('A_VENIR par défaut, vide : sans ses cinq captures, l’étape 12 est une faute', () => {
+    const etape12 = ['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche', '25a-badge-absente'];
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: etape12 })), [
+      { chemin: CHEMIN_MANIFESTE, faute: 'étape 12 : aucune capture ni reportée' },
+    ]);
+  });
+
+  test('sans reportée, 21 couvre seule l’étape 11 ; sans 19, 19a, 20 ni 21, elle manque', () => {
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: ['19-ajustement', '19a-presence-plan', '20-mode-lecture'] })), []);
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: ['19-ajustement', '19a-presence-plan', '20-mode-lecture', '21-historique'] })), [
+      { chemin: CHEMIN_MANIFESTE, faute: 'étape 11 : aucune capture ni reportée' },
+    ]);
+  });
+
+  test('sans 24 ni 25, 22 et 23 couvrent l’étape 12 : l’appariement, non l’ordre, réclame les images de la planche', () => {
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: ['24-badges-controle', '25-badges-planche'] })), []);
+  });
+
+  test('une étape sans capture ni reportée est une faute qui la nomme', () => {
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: ['07b-nombre-de-tours'] })), [
+      { chemin: CHEMIN_MANIFESTE, faute: 'étape 5 : aucune capture ni reportée' },
+    ]);
+  });
+
+  test('les captures de la page de qualité couvrent l’étape 10 sans les reportées ; sans les unes ni les autres, elle manque', () => {
+    const etape10 = CAPTURES.filter((c) => c.etape === '10').map((c) => c.fichier);
+    assert.equal(etape10.length, 21);
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [] })), []);
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: etape10 })), [
+      { chemin: CHEMIN_MANIFESTE, faute: 'étape 10 : aucune capture ni reportée' },
+    ]);
+  });
+
+  test('ordre contredit : 02 rattachée à l’étape 4 avant 03 rattachée à la 2', () => {
+    const manifeste = manifesteDeclare();
+    manifeste.captures.find((c) => c.fichier === '02-import-apercu').etape = '4';
+    assert.deepEqual(verifierOrdre(manifeste), [
+      { chemin: 'doc/captures/02b-import-cp1252.png', faute: 'étape 2 après 02-import-apercu, de l’étape 4 : l’ordre contredit les étapes' },
+    ]);
+  });
+
+  test('l’ordre se lit sur les noms, pas sur la place dans le tableau', () => {
+    const manifeste = manifesteDeclare();
+    manifeste.captures.reverse();
+    assert.deepEqual(verifierOrdre(manifeste), []);
+  });
+
+  test('une étape inconnue, un nom déclaré deux fois : des fautes', () => {
+    const inconnue = manifesteDeclare();
+    inconnue.captures.find((c) => c.fichier === '05-tables-etat').etape = '4b';
+    assert.deepEqual(verifierOrdre(inconnue), [{ chemin: 'doc/captures/05-tables-etat.png', faute: 'étape inconnue « 4b »' }]);
+
+    const double = manifesteDeclare();
+    double.reportees.push({ fichier: '19-ajustement', etape: '11', raison: 'iteration5' });
+    assert.deepEqual(verifierOrdre(double), [{ chemin: 'doc/captures/19-ajustement.png', faute: 'déclarée deux fois' }]);
+  });
+
+  test('balayage vide refusé : aucune entrée est une faute, et chaque étape manque', () => {
+    const fautes = verifierOrdre({ format: 1, captures: [], reportees: [] }, { aVenir: [] });
+    assert.equal(fautes[0].faute, 'aucune capture ni reportée');
+    assert.equal(fautes.length, 1 + ETAPES.length);
+  });
+});
+
+describe('manifeste : l’image et son en-tête', () => {
+  test('lireEntetePng lit 2 × 3 sur le PNG minimal', () => {
+    assert.deepEqual(lireEntetePng(lire('deux_par_trois.png')), { largeur: 2, hauteur: 3 });
+    assert.deepEqual(lireEntetePng(new Uint8Array(lire('doc/captures/01-premier-ecran.png'))), { largeur: 1366, hauteur: 700 });
+  });
+
+  test('lireEntetePng refuse une signature fausse, un en-tête tronqué, un premier morceau qui n’est pas IHDR', () => {
+    const octets = new Uint8Array(lire('deux_par_trois.png'));
+    const signature = octets.slice();
+    signature[1] = 0x51;
+    assert.throws(() => lireEntetePng(signature), /signature PNG/);
+    assert.throws(() => lireEntetePng(octets.slice(0, 20)), /tronqué/);
+    const autre = octets.slice();
+    autre[12] = 0x69;
+    assert.throws(() => lireEntetePng(autre), /IHDR/);
+    const nulle = octets.slice();
+    nulle.fill(0, 16, 20);
+    assert.throws(() => lireEntetePng(nulle), /largeur/);
+    assert.throws(() => lireEntetePng('PNG'), TypeError);
+  });
+
+  test('l’image de la fixture, octets et dimensions conformes : aucune faute', () => {
+    const capture = captureFixture();
+    assert.deepEqual(fautesDImage(capture, lire('doc/captures/01-premier-ecran.png')), []);
+  });
+
+  test('image remplacée par les octets d’une autre : faute', () => {
+    const fautes = fautesDImage(captureFixture(0), lire('doc/captures/02-import-apercu.png'));
+    assert.deepEqual(fautes, [{ chemin: IMAGE_01, faute: 'image remplacée : son empreinte diffère de celle du manifeste' }]);
+  });
+
+  test('dimensions ≠ cadre × facteur : faute', () => {
+    const capture = captureFixture();
+    const double = { ...capture, facteurEchelle: 2 };
+    assert.deepEqual(fautesDImage(double, lire('doc/captures/01-premier-ecran.png')), [
+      { chemin: IMAGE_01, faute: 'dimensions 1366 × 700, attendues 2732 × 1400 (cadre × facteur)' },
+    ]);
+    const autreCadre = { ...capture, cadre: { largeur: 1280, hauteur: 700 } };
+    assert.deepEqual(fautesDImage(autreCadre, lire('doc/captures/01-premier-ecran.png')), [
+      { chemin: IMAGE_01, faute: 'dimensions 1366 × 700, attendues 1280 × 700 (cadre × facteur)' },
+    ]);
+  });
+
+  test('dimensions du fichier ≠ celles que le manifeste inscrit : faute', () => {
+    const capture = captureFixture();
+    const inscrite = { ...capture, image: { ...capture.image, hauteur: 699 } };
+    assert.deepEqual(fautesDImage(inscrite, lire('doc/captures/01-premier-ecran.png')), [
+      { chemin: IMAGE_01, faute: 'dimensions 1366 × 700, le manifeste inscrit 1366 × 699' },
+    ]);
+  });
+
+  test('un fichier qui n’est pas un PNG : faute, pas d’exception', () => {
+    const capture = captureFixture();
+    const octets = new TextEncoder().encode('ceci n’est pas une image');
+    const fautes = fautesDImage({ ...capture, image: { ...capture.image, sha256: sha256(octets) } }, octets);
+    assert.equal(fautes.length, 1, JSON.stringify(fautes));
+    assert.match(fautes[0].faute, /^illisible : /);
+  });
+});
+
+describe('manifeste : les chemins hors de la racine neutre (§ 19.4)', () => {
+  test('relève C:\\Users\\…, /home/…, /tmp/… ; admet la racine elle-même et ce qui est dessous', () => {
+    const texte = [
+      `Dossier de travail : ${RACINE}`,
+      `Événement : ${RACINE}\\Bal des Grisailles.gtt.json`,
+      'Copie : C:\\Users\\Exemple\\Bureau\\x',
+      'Ailleurs : /home/exemple/x',
+      'Temporaire (/tmp/x).',
+    ].join('\n');
+    assert.deepEqual(cheminsHorsRacine(texte, RACINE), ['C:\\Users\\Exemple\\Bureau\\x', '/home/exemple/x', '/tmp/x']);
+  });
+
+  test('la racine se reconnaît sous l’autre séparateur et l’autre casse de Windows ; un nom qui la prolonge ne l’est pas', () => {
+    assert.deepEqual(cheminsHorsRacine('c:/racine/tablees/a et C:\\RACINE\\TABLEES\\b', RACINE), []);
+    assert.deepEqual(cheminsHorsRacine(`${RACINE}X\\a`, RACINE), [`${RACINE}X\\a`]);
+    assert.deepEqual(cheminsHorsRacine('D:\\Racine\\Tablees\\a', RACINE), ['D:\\Racine\\Tablees\\a']);
+  });
+
+  test('une racine qui porte une espace se reconnaît entière', () => {
+    const racine = 'C:\\Mes Tablées';
+    assert.deepEqual(cheminsHorsRacine(`ouvert depuis ${racine}\\Soirée des Merles.gtt.json`, racine), []);
+  });
+
+  test('chemin réseau, dossier personnel abrégé, racine POSIX', () => {
+    assert.deepEqual(cheminsHorsRacine('\\\\serveur\\partage\\x et ~/x', RACINE), ['\\\\serveur\\partage\\x', '~/x']);
+    assert.deepEqual(cheminsHorsRacine('/srv/neutre/a /srv/neutre /srv/neutreX/b', '/srv/neutre'), ['/srv/neutreX/b']);
+  });
+
+  test('ni une adresse web, ni une fraction, ni un chemin relatif ne sont des chemins absolus', () => {
+    assert.deepEqual(cheminsHorsRacine('http://www.example.org/a 3/4 tables, doc/captures/x.png, et/ou', RACINE), []);
+    assert.deepEqual(cheminsHorsRacine('Lien:https://exemple.invalid/a à 12:30', RACINE), []);
+  });
+
+  test('un chemin POSIX qui suit un deux-points est relevé', () => {
+    assert.deepEqual(cheminsHorsRacine('Chemin:/home/exemple/x et poste-exemple:/var/y', RACINE), ['/home/exemple/x', '/var/y']);
+  });
+
+  test('un chemin réseau aux barres obliques est relevé ; sous une racine réseau, il est admis', () => {
+    assert.deepEqual(cheminsHorsRacine('//serveur/partage/x et (//serveur/autre)', RACINE), ['//serveur/partage/x', '//serveur/autre']);
+    assert.deepEqual(cheminsHorsRacine('//serveur/partage/a', '\\\\serveur\\partage'), []);
+    assert.deepEqual(cheminsHorsRacine('//serveur/partageX/a', '\\\\serveur\\partage'), ['//serveur/partageX/a']);
+  });
+
+  test('une adresse file:// est relevée par le chemin qu’elle porte, encodage compris', () => {
+    const texte = 'file:///home/exemple/x, FILE:///C:/Users/Exemple/x et file://serveur/partage/x';
+    assert.deepEqual(cheminsHorsRacine(texte, RACINE), ['file:///home/exemple/x', 'FILE:///C:/Users/Exemple/x', 'file://serveur/partage/x']);
+    assert.deepEqual(cheminsHorsRacine('file:///c:/racine/tablees/a.gtt.json', RACINE), []);
+    assert.deepEqual(cheminsHorsRacine('file:///C:/Mes%20Tabl%C3%A9es/a.gtt.json', 'C:\\Mes Tablées'), []);
+    assert.deepEqual(cheminsHorsRacine('file:///srv/neutre/a file:///srv/neutreX/b', '/srv/neutre'), ['file:///srv/neutreX/b']);
+  });
+
+  test('chaque chemin une fois, dans l’ordre du texte ; une racine absente ou relative est refusée', () => {
+    assert.deepEqual(cheminsHorsRacine('/tmp/x puis /tmp/x puis /var/y', RACINE), ['/tmp/x', '/var/y']);
+    assert.throws(() => cheminsHorsRacine('x', ''), TypeError);
+    assert.throws(() => cheminsHorsRacine('x', 'relatif\\dossier'), TypeError);
+    assert.throws(() => cheminsHorsRacine(42, RACINE), TypeError);
+  });
+});
+
+describe('manifeste : l’écart de version (§ 19.7)', () => {
+  test('null à version égale, par défaut celle de la construction', () => {
+    assert.equal(ecartDeVersion(manifesteFixture(), VERSION.affichee), null);
+    assert.equal(ecartDeVersion(manifesteFixture()), null);
+  });
+
+  test('l’écart nommé sinon : la version du manifeste et celle de la construction', () => {
+    const voisine = versionVoisine(VERSION.affichee);
+    assert.deepEqual(ecartDeVersion(manifesteFixture(), voisine), { manifeste: VERSION.affichee, construction: voisine });
+  });
+
+  test('deux versions au manifeste : chacune nommée, une fois, dans l’ordre des captures', () => {
+    const voisine = versionVoisine(VERSION.affichee);
+    const manifeste = manifesteFixture();
+    manifeste.captures[1].versionReelle = voisine;
+    manifeste.captures.push({ ...manifeste.captures[0] });
+    assert.deepEqual(ecartDeVersion(manifeste, VERSION.affichee), { manifeste: `${VERSION.affichee}, ${voisine}`, construction: VERSION.affichee });
+  });
+
+  test('un manifeste sans capture n’établit aucune version : écart', () => {
+    assert.deepEqual(ecartDeVersion({ format: 1, captures: [] }, VERSION.affichee), { manifeste: null, construction: VERSION.affichee });
+  });
+});
+
+describe('manifeste : un relevé ne nomme pas sa machine (contrainte 27)', () => {
+  test('le manifeste de fixture passe', () => {
+    assert.deepEqual(fautesDeMachine(manifesteFixture(), RACINE), []);
+  });
+
+  test('un champ d’hôte au pilote, une clé inconnue d’une capture ou du manifeste : refusés', () => {
+    const manifeste = manifesteFixture();
+    manifeste.pilote.hote = 'poste-des-merles';
+    manifeste.captures[1].utilisateur = 'ondine';
+    manifeste.date = '2030-01-01';
+    assert.deepEqual(fautesDeMachine(manifeste, RACINE), [
+      { chemin: CHEMIN_MANIFESTE, faute: 'clé hors du contrat : « date »' },
+      { chemin: CHEMIN_MANIFESTE, faute: 'clé hors du contrat : « pilote.hote »' },
+      { chemin: IMAGE_02, faute: 'clé hors du contrat : « utilisateur »' },
+    ]);
+  });
+
+  test('un chemin de compte dans le texte relevé ou dans le pilote : refusé', () => {
+    const manifeste = manifesteFixture();
+    manifeste.captures[0].texte.push('/home/exemple/x');
+    manifeste.pilote.navigateur = 'C:\\Users\\Exemple\\chromium';
+    assert.deepEqual(fautesDeMachine(manifeste, RACINE), [
+      { chemin: CHEMIN_MANIFESTE, faute: 'chemin hors de la racine neutre : « C:\\Users\\Exemple\\chromium »' },
+      { chemin: IMAGE_01, faute: 'chemin hors de la racine neutre : « /home/exemple/x »' },
+    ]);
+  });
+});

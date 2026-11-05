@@ -1,0 +1,11 @@
+node_modules/
+www/
+dist/
+dist-electron/
+android/
+ios/
+.vite/
+.vitest/
+coverage/
+scripts/banc/sorties/
+doc/captures/.attente/

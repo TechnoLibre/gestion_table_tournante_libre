@@ -1,0 +1,243 @@
+<!-- © 2026 TechnoLibre (http://www.technolibre.ca)
+     SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
+
+<script>
+  // Une commande (§ 2.1, § 8.5) : un bouton dont le libellé est la clé cle,
+  // traduite, et qui appelle executer au clic. Avec confirmer, la clé du
+  // libellé de confirmation, un premier clic arme la commande — son libellé
+  // devient celui de confirmer — et seul un second exécute ; armée, elle se
+  // désarme au terme de DELAI_CONFIRMATION_MS, par l'horloge du contexte.
+  // La machine est celle de commande.js : le clic répété d'une série
+  // — detail supérieur à 1 — est sans effet (§ 8.5). Le clavier n'en porte
+  // pas : un appui d'Entrée ou d'Espace que la répétition automatique émet
+  // — keydown dont repeat est vrai — voit son action par défaut empêchée, et
+  // n'active pas le bouton. Une touche tenue n'active la commande qu'une
+  // fois, et ne confirme jamais celle qu'elle vient d'armer.
+  //
+  // Pendant qu'une exécution qui rend une promesse s'achève, la commande est
+  // occupée : un clic ne fait rien, et le bouton porte aria-busy et
+  // aria-disabled, dessiné d'un filet tireté. Une exécution sans promesse
+  // rend la commande aussitôt.
+  //
+  // Un refus — une erreur qui porte un code — s'affiche à côté du bouton,
+  // avec son remède, et le bouton reste actif : jamais un bouton grisé muet.
+  // Une erreur sans code n'est pas un refus et remonte. Le bouton désigne
+  // le refus affiché par aria-describedby, sur l'id que porte le refus : le
+  // remède qui le retire rend le focus au bouton (Refus).
+  //
+  // refusExterne, {code, details} ou null : un refus que le porteur tient
+  // dans son propre état, et qu'il retire en passant null — celui qui doit
+  // tomber quand l'état du porteur change, sans que la commande se remonte
+  // et perde l'exécution en cours. Il se pose à la place du refus de
+  // l'exécution, de la même façon, désigné par le bouton ; le refus de
+  // l'exécution passe devant lui. La commande ne le retire jamais : son
+  // remède abouti change l'état du porteur, qui le retire.
+  //
+  // data-commande porte nom, ou à défaut le dernier segment de la clé.
+  // nomAccessible, déjà traduit, nomme le bouton quand son libellé seul ne
+  // le distingue pas d'un homonyme ; null, le libellé le nomme. Armée, la
+  // commande se nomme par son libellé de confirmation, celui qu'elle
+  // montre. Le refus reçoit nomAccessible pour nommer son remède.
+  // confirmer se lit au montage : une commande qui change de confirmation se
+  // remonte.
+  //
+  // variante : 'secondaire', la défaut, à filet sur le fond de la carte ;
+  // 'principale', l'action à faire sur l'écran, pleine de la teinte de
+  // l'action, haute d'une cible principale ; 'discrete', sans fond ni filet
+  // au repos ; 'retrait', l'icône croixCerclee seule, de --couleur-retrait,
+  // sans fond ni filet au repos, dans une cible de --cible-minimale de côté
+  // au moins (§ 14.5) : son libellé, que rien ne montre, devient son nom
+  // accessible, à défaut de nomAccessible, et ses tracés portent la marque
+  // « retrait » du registre (marques.js). Elle ne change que l'apparence ;
+  // une variante hors de VARIANTES_COMMANDE, ou le retrait d'une commande à
+  // confirmer, lève RangeError au montage.
+  import { getContext, onDestroy, untrack } from 'svelte';
+  import { effetDe } from '../raccourcis.js';
+  import { DELAI_CONFIRMATION_MS, creerMachineCommande, exigerVariante } from './commande.js';
+  import Icone from './Icone.svelte';
+  import Refus from './Refus.svelte';
+
+  let {
+    cle,
+    executer,
+    confirmer = null,
+    details = {},
+    nom = null,
+    nomAccessible = null,
+    gestes = {},
+    variante = 'secondaire',
+    refusExterne = null,
+  } = $props();
+
+  const t = getContext('t');
+  const horloge = getContext('horloge');
+  const uid = $props.id();
+  const idRefus = `${uid}-refus`;
+  const machine = creerMachineCommande({ confirmer: untrack(() => confirmer) });
+
+  let armee = $state(false);
+  let enCours = $state(false);
+  let refus = $state(null);
+  let minuterie = null;
+
+  const libelle = $derived(armee ? t(confirmer) : t(cle, details));
+  // Le refus montré : celui de l'exécution, sinon celui du porteur ; le
+  // remède abouti du premier le retire, celui du second ne retire rien.
+  const montre = $derived(refus ?? refusExterne);
+  const lever = $derived(refus !== null ? () => (refus = null) : null);
+  const designation = $derived(nom ?? cle.slice(cle.lastIndexOf('.') + 1));
+  const forme = $derived(exigerVariante(variante, confirmer));
+  // Le nom accessible : le libellé de confirmation, montré, quand elle est
+  // armée ; sinon nomAccessible, ou le libellé d'un retrait, qui ne le
+  // montre pas.
+  const nomDuBouton = $derived(armee ? undefined : (nomAccessible ?? (forme === 'retrait' ? libelle : undefined)));
+
+  function desarmer() {
+    if (minuterie === null) return;
+    horloge.annuler(minuterie);
+    minuterie = null;
+  }
+
+  function expirer() {
+    minuterie = null;
+    machine.expirer();
+    armee = machine.armee;
+  }
+
+  async function cliquer(evenement) {
+    const { action } = machine.cliquer({ repete: evenement.detail > 1 });
+    armee = machine.armee;
+    if (action === 'aucune') return;
+    if (action === 'armer') {
+      minuterie = horloge.planifier(expirer, DELAI_CONFIRMATION_MS);
+      return;
+    }
+    desarmer();
+    refus = null;
+    try {
+      const rendu = executer();
+      if (typeof rendu?.then === 'function') {
+        enCours = true;
+        await rendu;
+      }
+    } catch (erreur) {
+      if (typeof erreur?.code !== 'string') throw erreur;
+      refus = { code: erreur.code, details: erreur.details ?? {} };
+    } finally {
+      machine.terminer();
+      enCours = false;
+    }
+  }
+
+  function surTouche(evenement) {
+    if (evenement.repeat && effetDe('commande', evenement.key) === 'activer') evenement.preventDefault();
+  }
+
+  onDestroy(desarmer);
+</script>
+
+<div class="commande">
+  <button
+    type="button"
+    data-commande={designation}
+    class:principale={forme === 'principale'}
+    class:discrete={forme === 'discrete'}
+    class:retrait={forme === 'retrait'}
+    aria-busy={enCours ? 'true' : undefined}
+    aria-disabled={enCours ? 'true' : undefined}
+    aria-label={nomDuBouton}
+    aria-describedby={montre === null ? undefined : idRefus}
+    onkeydown={surTouche}
+    onclick={cliquer}
+    >{#if forme === 'retrait'}<Icone nom="croixCerclee" taille={18} marque="retrait" />{:else}{libelle}{/if}</button
+  >
+  {#if montre !== null}
+    <Refus id={idRefus} refus={montre} {lever} objet={nomAccessible} {gestes} />
+  {/if}
+</div>
+
+<style>
+  .commande {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--espace-2);
+  }
+
+  /* La secondaire : à filet, sur le fond de la carte. */
+  button {
+    padding: var(--espace-1) var(--espace-3);
+    border: 1px solid var(--couleur-page-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
+    font: inherit;
+    font-size: var(--taille-texte);
+    cursor: pointer;
+  }
+
+  button:hover {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  /* La principale : pleine de la teinte de l'action, d'une cible
+     principale de haut. */
+  button.principale {
+    min-height: var(--hauteur-cible);
+    padding: 0 var(--espace-4);
+    border-color: var(--couleur-action-fond);
+    background-color: var(--couleur-action-fond);
+    color: var(--couleur-action-texte);
+    font-weight: bold;
+  }
+
+  /* La discrète : ni fond ni filet au repos ; le survol lui donne le fond
+     sourd de la carte. */
+  button.discrete {
+    border-color: transparent;
+    background-color: transparent;
+  }
+
+  button.discrete:hover {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  /* Le retrait : l'icône seule, de la teinte du retrait, centrée dans une
+     cible ronde de --cible-minimale de côté au moins ; ni fond ni filet au
+     repos, le fond sourd de la carte au survol. */
+  button.retrait {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-width: var(--cible-minimale);
+    min-height: var(--cible-minimale);
+    padding: 0;
+    border-color: transparent;
+    border-radius: var(--rayon-pilule);
+    background-color: transparent;
+    color: var(--couleur-retrait);
+  }
+
+  button.retrait:hover {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  button[aria-disabled='true'] {
+    border-style: dashed;
+    color: var(--couleur-page-texte-secondaire);
+    cursor: progress;
+  }
+
+  /* Occupée, la principale garde ses couleurs ; son filet tireté prend
+     l'encre de son texte. */
+  button.principale[aria-disabled='true'] {
+    border-color: var(--couleur-action-texte);
+    color: var(--couleur-action-texte);
+  }
+
+  button:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
+  }
+</style>

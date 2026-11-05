@@ -1,0 +1,46 @@
+{
+  "name": "gestion-table-tournante-libre",
+  "productName": "Gestion table tournante Libre",
+  "version": "2026.1005.1",
+  "description": "Placement tournant des participants d’un événement, hors ligne",
+  "license": "AGPL-3.0-or-later OR LiLiQ-Rplus-1.1",
+  "author": "TechnoLibre (http://www.technolibre.ca)",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite --mode developpement",
+    "build": "vite build --mode developpement",
+    "build:livraison": "node scripts/version.js controler && node scripts/documentation.js verifier --livraison && vite build --mode livraison",
+    "build:documentation": "vite build --mode documentation",
+    "test": "vitest run --project node",
+    "test:surveille": "vitest --project node",
+    "test:long": "vitest run --project node-long",
+    "test:navigateur": "vitest run --project navigateur",
+    "test:tout": "vitest run",
+    "couverture": "vitest run --project node --coverage --reporter=default",
+    "banc": "node scripts/banc/lancer.js",
+    "mutation": "node scripts/mutation/audit.js"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@pdf-lib/fontkit": "1.1.1",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@vitest/browser-playwright": "^5.0.3",
+    "@vitest/coverage-v8": "^5.0.3",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "fast-check": "^4.10.2",
+    "highs": "1.15.4",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.4.299",
+    "playwright": "^1.63.0",
+    "svelte": "^5.57.1",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  },
+  "allowScripts": {
+    "electron-winstaller": false
+  }
+}

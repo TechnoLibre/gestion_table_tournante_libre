@@ -1,0 +1,233 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
+
+// Les libellés de l'import d'une liste de participants ou d'objectifs de
+// table : nature du fichier, aperçu et rapport (§ 10.4, § 14.6). Chaque
+// clé commence par « import. ». Un nombre, un nom ou un rang s'affiche dans
+// son propre nœud de texte : les libellés qui le suivent ne reçoivent que ce
+// qui accorde le nom au compte, ou, pour la présence, les tours que
+// toursNommes met en mots, et pour un doublon, ses lignes, qu'enumeration
+// joint en une phrase.
+import { enumeration, toursNommes } from '../../application/libelles/aides.js';
+import { creerFormat } from '../../application/format.js';
+
+// Le singulier jusqu'à un, le pluriel au-delà, comme le veut le français.
+const accorde = (n, singulier, pluriel) => (n <= 1 ? singulier : pluriel);
+
+export const TABLE = new Map([
+  // --- La section et ses commandes (§ 10.1, § 10.2) ----------------------------
+  [
+    'import.consigne',
+    'Choisissez un fichier CSV ou déposez-le sur la fenêtre ; une plage collée dans la grille des participants arrive ici. ' +
+      "Rien ne s'importe avant l'aperçu.",
+  ],
+  ['import.commande.choisirFichier', 'Choisir un fichier CSV\u{2026}'],
+  ['import.commande.importer', 'Importer'],
+  ['import.commande.fermerApercu', "Fermer l'aperçu"],
+  ['import.commande.ordreDeLaGrille', "Lire les colonnes dans l'ordre de la grille"],
+  ['import.commande.enregistrerRefus', 'Enregistrer les lignes refusées'],
+  ['import.commande.fermerRapport', 'Fermer le rapport'],
+  ['import.commande.rendreNomsUniques', 'Rendre les noms uniques'],
+  ['import.refusEnregistres', 'Lignes refusées enregistrées :'],
+
+  // --- Le modèle à télécharger, de la nature cochée (§ 10.1, § 10.4) -----------
+  // Le nom accessible de la commande commence par son libellé visible, puis
+  // nomme la nature : le même texte ne désigne pas deux fichiers.
+  ['import.commande.telechargerModele', 'Télécharger un modèle'],
+  ['import.modele.participants', 'Télécharger un modèle de liste de participants'],
+  ['import.modele.objectifs', "Télécharger un modèle d'objectifs de table"],
+  ['import.modele.enregistre', 'Modèle enregistré :'],
+
+  // --- La sorte d'un message de l'aperçu et du rapport (messageDuBloc) ------
+  ['import.sorte.refus', 'Refus'],
+  ['import.sorte.avis', 'Avis'],
+  ['import.sorte.information', 'Information'],
+
+  // --- La nature du fichier, choisie avant l'aperçu (§ 10.4) --------------------
+  ['import.nature.titre', 'Contenu du fichier'],
+  ['import.nature.participants', 'Participants'],
+  ['import.nature.objectifs', 'Objectifs de table'],
+
+  // --- Le mode de l'import (§ 10.1) -------------------------------------------
+  ['import.mode.titre', "Mode de l'import"],
+  ['import.mode.ajouter', 'Ajouter'],
+  ['import.mode.mettreAJour', 'Mettre à jour'],
+  ['import.mode.remplacer', 'Remplacer'],
+
+  // --- L'aperçu : source, encodage, séparateur ---------------------------------
+  ['import.apercu.titre', 'Aperçu'],
+  ['import.apercu.fichier', 'Fichier'],
+  ['import.apercu.collage', 'Texte collé'],
+  ['import.apercu.encodage', 'Encodage'],
+  ['import.apercu.separateur', 'Séparateur'],
+  ['import.encodage.utf8Marque', 'UTF-8 avec marque'],
+  ['import.encodage.utf16le', 'UTF-16 LE'],
+  ['import.encodage.utf16be', 'UTF-16 BE'],
+  ['import.encodage.utf8', 'UTF-8'],
+  ['import.encodage.windows1252', 'windows-1252'],
+  ['import.separateur.pointVirgule', 'point-virgule'],
+  ['import.separateur.virgule', 'virgule'],
+  ['import.separateur.tabulation', 'tabulation'],
+  ['import.separateur.uneColonne', 'une seule colonne'],
+
+  // --- L'aperçu : les colonnes et leur association (§ 10.1) --------------------
+  ['import.apercu.colonnes', 'Colonnes'],
+  ['import.apercu.entete', 'En-tête'],
+  ['import.apercu.devient', 'Devient'],
+  ['import.champ.nom', 'nom'],
+  ['import.champ.prenom', 'prénom'],
+  ['import.champ.organisation', 'organisation'],
+  ['import.champ.courriel', 'courriel'],
+  ['import.champ.titrePressenti', 'titre pressenti'],
+  ['import.champ.exclu', 'exclu'],
+  ['import.champ.notes', 'notes'],
+  ['import.champ.etiquettes', 'étiquettes'],
+  ['import.champ.presence', 'présence'],
+  ['import.champ.conflits', "conflits d'organisation"],
+  ['import.champ.table', 'table'],
+  ['import.champ.tour', 'tour'],
+  ['import.champ.objectif', 'objectif'],
+  ['import.champ.regle', 'règle'],
+  ['import.tour.soiree', 'soirée'],
+  ['import.regle.ou', 'au moins une'],
+  ['import.regle.et', 'toutes'],
+  ['import.regle.defaut', 'règle par défaut'],
+  ['import.exclu.oui', 'oui'],
+  ['import.exclu.non', 'non'],
+  // La présence lue : tous les tours, les tours nommés, ou, en mise à jour,
+  // une cellule vide qui garde la présence de la personne (§ 10.1).
+  ['import.presence.tous', 'tous les tours'],
+  ['import.presence.tours', ({ tours }) => toursNommes(tours)],
+  ['import.presence.inchangee', 'présence inchangée'],
+  ['import.colonne.nonReconnue', 'non reconnue : ignorée'],
+  ['import.colonne.aTrancher', 'à trancher'],
+  ['import.colonne.ecartee', 'écartée par le choix'],
+  ['import.ambiguite.question', 'Plusieurs colonnes répondent au même champ. Laquelle vaut :'],
+
+  // --- L'aperçu : les lignes ---------------------------------------------------
+  ['import.apercu.valides', ({ n }) => accorde(n, 'ligne valide', 'lignes valides')],
+  ['import.apercu.refusees', 'Lignes refusées'],
+  ['import.apercu.ligne', 'Ligne'],
+  ['import.apercu.motif', 'Motif'],
+  ['import.apercu.fusions', 'Orthographes fondues en une organisation'],
+  ['import.apercu.orthographeLignes', ({ n }) => accorde(n, 'ligne', 'lignes')],
+  ['import.apercu.affichee', 'affichée :'],
+  ['import.apercu.fusionsEtiquettes', 'Orthographes fondues en une étiquette'],
+  ['import.apercu.retenue', 'retenue :'],
+  ['import.apercu.orthographes', 'orthographes :'],
+  ['import.apercu.lignesReecrites', ({ n }) => accorde(n, 'ligne réécrite', 'lignes réécrites')],
+  ['import.apercu.doublons', 'Doublons signalés, jamais fusionnés'],
+  // Les lignes d'un doublon, rangs du fichier en-tête compris, ceux de la
+  // colonne « Ligne » : « lignes 15, 16 et 17 ».
+  [
+    'import.apercu.doublonLignes',
+    ({ lignes }, texte) =>
+      `${accorde(lignes.length, 'ligne', 'lignes')} ${enumeration(lignes.map((ligne) => creerFormat(texte).nombre(ligne)))}`,
+  ],
+  ['import.apercu.doublonExistants', 'déjà dans la liste :'],
+  ['import.apercu.renommes', 'Noms rendus uniques'],
+  [
+    'import.apercu.nomsRendusUniques',
+    ({ n }) => accorde(n, 'nom rendu unique par un suffixe numéroté', 'noms rendus uniques par un suffixe numéroté'),
+  ],
+  ['import.apercu.homonymes', "Ajoutées à côté d'une personne de même nom"],
+  ['import.apercu.multilignes', 'Cellules sur plusieurs lignes qui portent le séparateur : à vérifier'],
+
+  // --- Les refus globaux : le remède (§ 10.1) ---------------------------------
+  ['import.remede.caractereNulCollage', 'Retirez le caractère nul du texte collé, ou importez le fichier réenregistré en UTF-8.'],
+  ['import.remede.aucunEntete', "Ajoutez une ligne d'en-tête qui nomme les colonnes, « nom » au moins."],
+  [
+    'import.remede.aucunEnteteCollage',
+    "Ajoutez une ligne d'en-tête qui nomme les colonnes, ou lisez les colonnes dans l'ordre de la grille.",
+  ],
+  ['import.remede.nomNonAssocie', 'Nommez « nom » la colonne des noms.'],
+  ['import.remede.aucunEnteteObjectifs', "Ajoutez une ligne d'en-tête qui nomme les colonnes, « table » et « objectif » au moins."],
+  ['import.remede.tableNonAssociee', 'Nommez « table » la colonne des numéros de table.'],
+  ['import.remede.objectifNonAssocie', 'Nommez « objectif » la colonne des étiquettes visées.'],
+  ['import.remede.aucuneLigneValide', 'Corrigez les lignes refusées, listées avec leur motif.'],
+  [
+    'import.remede.guillemetOuvert',
+    ({ ligne }) => `Fermez le guillemet ouvert${Number.isInteger(ligne) ? ` à la ligne ${ligne}` : ''}.`,
+  ],
+  [
+    'import.remede.separateurIntrouvable',
+    'Séparez les colonnes par « ; », « , » ou une tabulation, en même nombre à chaque ligne.',
+  ],
+  [
+    'import.remede.conflitOrganisation',
+    ({ ligne }) =>
+      `Corrigez la colonne des conflits à la ligne ${ligne} \u{2014} ou ajoutez au fichier une personne de cette ` +
+      'organisation \u{2014}, puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.conflitPropre',
+    ({ ligne }) =>
+      `Retirez de la colonne des conflits, à la ligne ${ligne}, l'organisation de la personne, ` +
+      'puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.conflitOrganisationCollage',
+    ({ ligne }) =>
+      `Corrigez la colonne des conflits à la ligne ${ligne} \u{2014} ou ajoutez au texte une personne de cette ` +
+      'organisation \u{2014}, puis collez-le de nouveau.',
+  ],
+  [
+    'import.remede.conflitPropreCollage',
+    ({ ligne }) =>
+      `Retirez de la colonne des conflits, à la ligne ${ligne}, l'organisation de la personne, ` +
+      'puis collez le texte de nouveau.',
+  ],
+  [
+    'import.remede.separateurIntrouvableCollage',
+    "Séparez les colonnes par « ; », « , » ou une tabulation, ou lisez la colonne dans l'ordre de la grille : " +
+      'chaque ligne devient un nom.',
+  ],
+
+  // --- La fenêtre de « Remplacer » (§ 10.1) ------------------------------------
+  ['import.remplacer.titre', 'Remplacer la liste des participants'],
+  [
+    'import.remplacer.participants',
+    ({ n }) => `${n} ${accorde(n, 'personne sera supprimée', 'personnes seront supprimées')}`,
+  ],
+  [
+    'import.remplacer.reservations',
+    ({ n }) => `${n} ${accorde(n, 'réservation sera supprimée', 'réservations seront supprimées')}`,
+  ],
+  [
+    'import.remplacer.titres',
+    ({ n }) =>
+      `${n} ${accorde(n, 'titre perdra la réservation qui le pourvoit', 'titres perdront la réservation qui les pourvoit')}, ` +
+      'à un tour au moins',
+  ],
+  [
+    'import.remplacer.propositions',
+    ({ n }) => `${n} ${accorde(n, 'proposition deviendra périmée', 'propositions deviendront périmées')}`,
+  ],
+
+  // --- La fenêtre de « Remplacer » des objectifs (§ 10.4) ----------------------
+  ['import.remplacer.titreObjectifs', 'Remplacer les objectifs des tables'],
+  [
+    'import.remplacer.objectifs',
+    ({ n }) => `${n} ${accorde(n, 'objectif de table sera supprimé', 'objectifs de table seront supprimés')}`,
+  ],
+  ['import.remplacer.tables', ({ n }) => `${n} ${accorde(n, 'table perdra ses objectifs', 'tables perdront leurs objectifs')}`],
+
+  // --- Le rapport (§ 10.1) ---------------------------------------------------
+  ['import.rapport.titre', "Rapport d'import"],
+  ['import.rapport.ajoutes', ({ n }) => accorde(n, 'personne ajoutée', 'personnes ajoutées')],
+  ['import.rapport.misAJour', ({ n }) => accorde(n, 'personne mise à jour', 'personnes mises à jour')],
+  ['import.rapport.inchanges', ({ n }) => accorde(n, 'personne inchangée', 'personnes inchangées')],
+  ['import.rapport.retires', ({ n }) => accorde(n, 'personne retirée', 'personnes retirées')],
+  ['import.rapport.reservationsRetirees', ({ n }) => accorde(n, 'réservation retirée', 'réservations retirées')],
+  ['import.rapport.rienEcrit', "Rien n'a changé dans la liste : seules des lignes refusées restent à lire."],
+  ['import.rapport.objectifsAjoutes', ({ n }) => accorde(n, 'objectif ajouté', 'objectifs ajoutés')],
+  ['import.rapport.objectifsRemplaces', ({ n }) => accorde(n, 'objectif remplacé', 'objectifs remplacés')],
+  ['import.rapport.objectifsInchanges', ({ n }) => accorde(n, 'objectif inchangé', 'objectifs inchangés')],
+  ['import.rapport.objectifsRetires', ({ n }) => accorde(n, 'objectif retiré', 'objectifs retirés')],
+  ['import.rapport.tablesTouchees', ({ n }) => accorde(n, 'table dont les objectifs changent', 'tables dont les objectifs changent')],
+  [
+    'import.rapport.rienEcritObjectifs',
+    "Aucun objectif de table n'a changé : seules des lignes refusées restent à lire.",
+  ],
+  ['import.rapport.designees', 'désignées :'],
+]);

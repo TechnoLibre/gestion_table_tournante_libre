@@ -1,0 +1,26 @@
+{
+  "entete": {"format":1,"produitVersion":"2026.10.05.01","revision":6,"comptes":{"participants":4,"tables":2,"reservations":1,"titres":1,"propositions":0,"retenu":0}},
+  "charge": {
+    "evenement": {"id":"evt-hiboux","nom":"Bal-des-Hiboux","date":null,"siegesParDefaut":3,"tours":2,"unite":"cm","etat":"brouillon","filiation":null},
+    "reglages": {"separerAppartenances":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},
+    "prochainsIds": {"participant":5,"table":3,"proposition":1},
+    "participants": [
+      {"id":1,"nom":"Ombrelle","prenom":"Iris","appartenance":"Cercle des Hiboux","courriel":null,"titrePressenti":null,"notes":"à la table d’accueil","exclu":false},
+      {"id":2,"nom":"Pervenche","prenom":"Théo","appartenance":null,"courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":3,"nom":"Lacasse","prenom":"Ondine","appartenance":"Cercle des Hiboux","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":4,"nom":"Brunelle","prenom":null,"appartenance":null,"courriel":null,"titrePressenti":null,"notes":"arrive au second tour","exclu":false}
+    ],
+    "tables": [
+      {"id":1,"numero":1,"sieges":null,"forme":"ronde","position":{"x":0,"y":0}},
+      {"id":2,"numero":2,"sieges":4,"forme":"ronde","position":{"x":250,"y":0}}
+    ],
+    "reservations": [
+      {"participant":2,"table":2,"siege":null,"portee":"tour","tour":1}
+    ],
+    "titres": [
+      {"table":1,"siege":1,"libelle":"animation"}
+    ],
+    "propositions": [],
+    "retenu": null
+  }
+}

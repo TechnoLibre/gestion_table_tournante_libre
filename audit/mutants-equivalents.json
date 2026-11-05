@@ -1,0 +1,1182 @@
+[
+  {
+    "cle": "src/moteur/classement.js:booleen:128841fc843aa0a1:0",
+    "raison": "classement.js, CASES_DE_REFERENCE, nouvelleTable à false : la case ne sert qu'aux rencontres répétées, cochées quand l'une de nouveauxVoisins ou nouvelleTable l'est (estCoche), et nouveauxVoisins reste cochée ; leur valeur qui classe ne lit que nouveauxVoisins (valeursQuiClassent). La compilation de référence ne change pas."
+  },
+  {
+    "cle": "src/moteur/classement.js:frontiere:d2e0232a8a610afd:0",
+    "raison": "classement.js, plusGrand, valeur >= plus : à égalité, l'affectation écrit la valeur déjà retenue."
+  },
+  {
+    "cle": "src/moteur/classement.js:frontiere:6d8294f499162f5c:0",
+    "raison": "classement.js, comparerCles, i <= a.length : a[length] et b[length] sont tous deux undefined, donc égaux ; la boucle finit et rend 0, comme sans le tour de trop."
+  },
+  {
+    "cle": "src/moteur/classement.js:frontiere:d5d8d6548f2d9d52:0",
+    "raison": "classement.js, comparerCles, a[i] <= b[i] sous a[i] !== b[i] : pour deux nombres différents, <= et < coïncident. Une clé ne mêle jamais null et nombre : le premier critère vaut null pour une liste d'écarts vide, et toutes les entrées ont des listes de même longueur (exigerMemeTaille), toutes vides ou aucune."
+  },
+  {
+    "cle": "src/moteur/classement.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "classement.js, comparerCles, −2 au lieu de −1 : le résultat ne se lit que par son signe, dans sort et dans le || du départage par identifiant."
+  },
+  {
+    "cle": "src/moteur/classement.js:nombre-plus-un:394f51f11873175b:0",
+    "raison": "classement.js, comparerCles, 2 au lieu de 1 : le résultat ne se lit que par son signe, dans sort et dans le || du départage par identifiant."
+  },
+  {
+    "cle": "src/moteur/classement.js:nombre-plus-un:256a37d2e5ed57c8:0",
+    "raison": "classement.js, sommer, somme partant de 1 au lieu de 0 : chaque composante de chaque entrée grossit de 1 ; classer et premierPalierQuiDepartage ne font que comparer ces sommes entre entrées, composante par composante, et ne les rendent pas."
+  },
+  {
+    "cle": "src/moteur/classement.js:nombre-plus-un:1bad6b8cf97131fc:1",
+    "raison": "classement.js, lirePaliers, rangSaute −2 au lieu de −1 quand rien n'est sauté : aucun palier n'a ce rang, le filtre garde tout, et classer rend null pour tout rangSaute < 0."
+  },
+  {
+    "cle": "src/moteur/configuration.js:nombre-plus-un:cf3bae39dd692048:0",
+    "raison": "configuration.js, NON_PLACE = −3 au lieu de −2 : la marque ne sert qu'à indexerPlan, qui en remplit tableDe, la compare par !== et === et la remplace par un index de table (≥ 0) ou RESERVE (−1) ; toute case encore marquée lève PLAN_NON_ASSIS, si bien que la marque n'est jamais rendue, et −3 n'égale ni RESERVE ni un index."
+  },
+  {
+    "cle": "src/moteur/configuration.js:si-vrai:b136d63b19054e6c:0",
+    "raison": "configuration.js, siegesLibresApres, if (true) au lieu de t !== LIBRE : une case libre écrit fixees[−R + r], un index négatif, hors des éléments d'un tableau typé, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:66f4a0fe878c0caf:0",
+    "raison": "configuration.js, siegesLibresApres, t <= T : le tour de trop compare undefined > undefined, faux, et écrit fixees[T × R + r], au-delà de la longueur T × R du tableau typé, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:corps-si:3ea5365b91f64a8a:0",
+    "raison": "configuration.js, deriverStatuts, if (aucune) {} : statut est un Uint8Array, dont chaque case vaut 0 à sa création, et STATUT.MOBILE vaut 0 ; la case reste à 0."
+  },
+  {
+    "cle": "src/moteur/configuration.js:nombre-plus-un:6230ba6049acd4ba:0",
+    "raison": "configuration.js, numeroterObjectifs, rangDe de longueur T × (R + 2) au lieu de T × (R + 1) : toutes les lectures et écritures visent t × (R + 1) + k avec k ≤ R, au plus T × (R + 1) − 1 ; les cases ajoutées en fin ne se lisent jamais."
+  },
+  {
+    "cle": "src/moteur/configuration.js:nombre-plus-un:6230ba6049acd4ba:2",
+    "raison": "configuration.js, numeroterObjectifs, numeroDe de longueur T × (R + 2) au lieu de T × (R + 1) : les lectures visent t × (R + 1) + k avec k ≤ R, au plus T × (R + 1) − 1 ; les cases ajoutées en fin ne se lisent jamais."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:66f4a0fe878c0caf:1",
+    "raison": "configuration.js, numeroterObjectifs, t <= T dans le calcul de objectifDe : le tour de trop écrit objectifDe[T × R + r], au-delà de la longueur T × R du tableau typé, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:afc05c8cd1dafbf3:0",
+    "raison": "configuration.js, couplesPossibles, O >= 0 && p < N : sans objectif, la boucle tourne sans rien écrire — correspond est vide, copyWithin(0, 0, 0) ne copie rien, la boucle intérieure (o < 0) ne tourne pas ; seul le temps change."
+  },
+  {
+    "cle": "src/moteur/configuration.js:si-faux:bdf915d9469e12a2:0",
+    "raison": "configuration.js, couplesPossibles, if (false) au lieu de premiere !== undefined : chaque personne recalcule sa rangée par correspondA, fonction pure des étiquettes et de l'objectif, au lieu de recopier celle de la première personne aux mêmes étiquettes, égale ; seul le temps change."
+  },
+  {
+    "cle": "src/moteur/configuration.js:corps-si:ca5e1348754f8595:0",
+    "raison": "configuration.js, couplesPossibles, corps vide du if (premiere !== undefined) : même effet que le mutant si-faux du même if — la rangée se recalcule par correspondA, pure, au lieu d'être recopiée, égale ; seul le temps change."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:66f4a0fe878c0caf:2",
+    "raison": "configuration.js, couplesPossibles, t <= T dans le marquage des objectifs offerts : le tour de trop lit objectifDe[T × R + r] et siegesLibres[T × R + r], undefined hors des tableaux typés ; undefined > 0 est faux, rien n'est marqué."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:6f32f41253f60a4b:3",
+    "raison": "configuration.js, coPresences, p <= N au remplissage des présents de chaque tour : le tour de trop lit present[N × R + r], hors des éléments du tableau typé, undefined, qui n'égale pas 1 : rien ne s'écrit."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:7678fc048ebd022a:1",
+    "raison": "configuration.js, couplesPossibles, o <= O : le tour de trop lit offert[O], undefined hors du tableau typé ; undefined === 1 est faux, oui reste faux."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:7f4ebde44fdb2913:0",
+    "raison": "configuration.js, deriverAnimateurs, ligne <= T × R : le tour de trop écrit debutAnimes[T × R + 1], au-delà de la longueur T × R + 1 du tableau typé, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:si-faux:366628d51cf58e53:0",
+    "raison": "configuration.js, bornerAnimateurs, if (false) au lieu de A === 0 : sans animateur, animes est vide et debutAnimes ne porte que des zéros ; aucune liste de rangs ne se remplit, plusGrandLibre reste à 0, aucune boucle sur les animateurs ne tourne, et chaque borne vaut min(0, 0) = 0, la valeur de la sortie anticipée ; seul le temps change."
+  },
+  {
+    "cle": "src/moteur/configuration.js:corps-si:11380125e9f41ced:0",
+    "raison": "configuration.js, bornerAnimateurs, corps vide du if (A === 0) : même effet que le mutant si-faux du même if — le calcul complet rend des bornes toutes nulles, celles de la sortie anticipée ; seul le temps change."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:8d0d1504ba708607:5",
+    "raison": "configuration.js, numeroterObjectifs, r <= R dans le calcul de objectifDe : le tour de trop de la table t écrit objectifDe[t × R + R], la case du premier tour de la table t + 1, que le tour r = 0 de cette table récrit ensuite ; pour la dernière table, l'index T × R est au-delà de la longueur T × R du tableau typé, qui n'écrit rien. La lecture numeroDe[(t + 1) × (R + 1)] ne lève pas."
+  },
+  {
+    "cle": "src/moteur/criteres.js:frontiere:d57659074b0b7139:0",
+    "raison": "criteres.js, verifierPriorites, ordre d'un palier jugé par rangDe(critere) <= rangDe(précédent) : deux entrées d'un palier de même rang nomment le même critère, et la répétition a déjà rendu critereRepete à la lecture des entrées, avant ce jugement."
+  },
+  {
+    "cle": "src/moteur/criteres.js:ternaire-faux:16f74223feea670f:0",
+    "raison": "criteres.js, completerPriorites, place du premier critère calculée par palierDe(ORDRE_PAR_DEFAUT[−1]) + 1 : ORDRE_PAR_DEFAUT[−1] vaut undefined, aucune entrée de la forme {critere, poids} du contrat, critere une chaîne, ne le porte, palierDe rend −1 et la place vaut 0, comme la branche rang === 0. Ses appelants lui passent PRIORITES_PAR_DEFAUT ou une liste que verifierPriorites a jugée : lirePriorites (configuration.js) juste avant le complément, priorites(charge) (document.js) une charge dont examinerPriorites a jugé la liste."
+  },
+  {
+    "cle": "src/moteur/criteres.js:ternaire-vrai:76c38b18f8c41d8b:0",
+    "raison": "criteres.js, familleDuPalier, famille du premier critère même pour un palier partagé : la liste compilée est valide, ses critères suivent l'ordre de CRITERES, où les deux raffinements viennent en dernier ; un palier partagé qui n'est pas tout raffinement s'ouvre donc sur un critère d'avant eux, ni l'écart (seul à son palier), ni un raffinement, soit un critère de la famille contrainte, ce que rend la branche d'origine."
+  },
+  {
+    "cle": "src/moteur/criteres.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "criteres.js, compiler, palierEcart initial −2 au lieu de −1 : la valeur ne se lit que par palierEcart < 0, ou après avoir été remplacée par un rang ≥ 0."
+  },
+  {
+    "cle": "src/moteur/criteres.js:ternaire-vrai:76c38b18f8c41d8b:1",
+    "raison": "criteres.js, compiler, largeur d'un palier partagé prise de composantesDe de son premier critère : un critère d'un palier partagé n'est pas de seulsASonPalier(mode) (verifierPriorites), et hors de ceux-là composantesDe rend une seule grandeur — l'écart (deux) est toujours seul, les tours hors objectif n'en ont plusieurs que sous les modes où ils sont seuls ; la largeur vaut 1 comme dans la branche d'origine."
+  },
+  {
+    "cle": "src/moteur/criteres.js:frontiere:3f585ad6a045e4cb:0",
+    "raison": "criteres.js, compiler, palier raffinement suivant cherché dès i >= palierEcart : le palier de l'écart, où l'écart est seul, est de la famille rencontres, jamais raffinement ; le rang palierEcart n'est jamais rendu."
+  },
+  {
+    "cle": "src/moteur/criteres.js:frontiere:76d3021e64959ef9:0",
+    "raison": "criteres.js, compiler, suivant <= 0 au lieu de suivant < 0 : suivant vaut −1 ou un rang strictement supérieur à palierEcart ≥ 0, jamais 0."
+  },
+  {
+    "cle": "src/moteur/criteres.js:nombre-plus-un:76d3021e64959ef9:0",
+    "raison": "criteres.js, compiler, suivant < 1 au lieu de suivant < 0 : suivant vaut −1 ou un rang strictement supérieur à palierEcart ≥ 0, jamais 0."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:si-faux:bfff314e410f366d:0",
+    "raison": "diagnostic.js, pairesMinimales, if (false) au lieu de if (T === 0) : sans table, membres est un Int32Array vide ; la boucle des libres écrit membres[0], hors des éléments d'un tableau typé, ce qui n'écrit rien, et la somme sur aucune table rend 0, la valeur du retour anticipé."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:corps-si:6be2e46a3d0765fd:0",
+    "raison": "diagnostic.js, pairesMinimales, if (T === 0) {} : même chemin que le mutant si-faux du même if — sans table, membres[0] += 1 n'écrit rien dans un Int32Array vide et la somme rend 0."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:nombre-zero:e8ca389f132932a8:0",
+    "raison": "diagnostic.js, pairesMinimales, boucle de la table la moins remplie partant de t = 0 : le premier tour compare membres[0] < membres[0], toujours faux ; moins ne change pas."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:66f4a0fe878c0caf:0",
+    "raison": "diagnostic.js, pairesMinimales, t <= T dans la recherche de la table la moins remplie : membres[T] est undefined, et undefined < x est faux ; moins ne change pas."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:a9ae4ec2d66a8e27:0",
+    "raison": "diagnostic.js, pairesMinimales, membres[t] <= membres[moins] : à égalité le libre va à la dernière table la moins remplie au lieu de la première ; ajouter 1 à un minimum ou à un autre donne le même multiensemble de membres par table, et Σ C(x_t, 2) ne lit que ce multiensemble."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:nombre-plus-un:9ac68b492485663f:0",
+    "raison": "diagnostic.js, planchersCollisions, distinctes initialisé à 1 : un groupe n'est écrit que si cumulees > 0, donc qu'un tour au moins a un minimum entier ≥ 1 ; max(1, …) y rend la même valeur que max(0, …), et un groupe à cumulees nul n'est pas écrit."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:6f32f41253f60a4b:3",
+    "raison": "diagnostic.js, animateursMemeOrganisation, p <= N : statut[N] est undefined, différent de STATUT.ANCRE ; le tour de trop passe par continue."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:cba81979b0566d97:0",
+    "raison": "diagnostic.js, avecTablesManquantes, enAttente avec m < l.effectif : une ligne absente de sansRemede a, à chaque tour, ses membres réservés à des tables distinctes parmi les T existantes ; ses s − k_r libres trouvent une table vide dès que T + m ≥ s, et son plancher tombe à 0 à m = s − T ≤ s − 1 (une ligne suppose T ≥ 1). Aucune ligne n'est donc en attente à m = s, où seules les deux bornes diffèrent."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:min-max:9045df4cb45ef696:0",
+    "raison": "diagnostic.js, avecTablesManquantes, tables ajoutées de la plus petite capacité au lieu de la plus grande : normaliser refuse toute capacité < 2, la plus petite présente est donc valide ; planchersCollisions ne lit ni capacite ni idsTables, et les tablesManquantes rendues ne changent pas."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:nombre-plus-un:8eaa567415750c40:0",
+    "raison": "diagnostic.js, avecTablesManquantes, premierId = max + 2 : les identifiants ajoutés restent des entiers ≥ 1 distincts de ceux de la configuration et entre eux ; aucune sortie ne les lit."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:arithmetique:4d0a5097616f60a9:0",
+    "raison": "diagnostic.js, avecTablesManquantes, id = premierId + m + 1 : identifiants toujours distincts, entiers et au-delà du plus grand ; aucune sortie ne les lit."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:nombre-zero:4d0a5097616f60a9:0",
+    "raison": "diagnostic.js, avecTablesManquantes, id = premierId + m − 0 : identifiants toujours distincts, entiers et au-delà du plus grand ; aucune sortie ne les lit."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:arithmetique:082db377e017ec67:0",
+    "raison": "diagnostic.js, avecTablesManquantes, numero = tables.length − m : normaliser ne lit pas le numéro d'une table (seuls id et capacite entrent dans l'instance) ; la sonde rend les mêmes planchers."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:4dde70975ef1508f:0",
+    "raison": "diagnostic.js, avecTablesManquantes, affectation sous m < ligne.effectif : même raison que pour enAttente — une ligne absente de sansRemede s'annule à m = s − T ≤ s − 1, avant que la borne ne joue."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:logique:c89ee3e34b443b38:0",
+    "raison": "diagnostic.js, surMoinsDeTours, tour === null && tour === undefined : un objectif de soirée à tour null passe encore par avant(null), null <= R′ étant vrai ; seul un objectif à tour absent est retiré de la sonde. La sonde ne sert qu'à redondanceMinimale et plafondsAPriori, qui ne lisent aucun objectif, et retirer un objectif déjà validé ne fait lever aucune règle de normaliser."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:logique:2560101ce1f95646:0",
+    "raison": "diagnostic.js, surMoinsDeTours, (tour nul ou absent) && avant(tour) : la sonde perd ses objectifs d'un tour désigné, et ceux à tour absent ; elle n'en gagne aucun au-delà de R′. redondanceMinimale et plafondsAPriori ne lisent aucun objectif, et en retirer un ne fait lever aucune règle de normaliser."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:arithmetique:ff01cd09cdc0bc1d:0",
+    "raison": "diagnostic.js, toursSansRedondance, départ à R + 1 : la sonde à R + 1 tours garde toutes les réservations et se normalise sans lever ; le plafond a priori, maximum exact de la formule sur les itinéraires admissibles, ne décroît pas quand un tour s'ajoute (un itinéraire prolongé d'une table ne perd ni ancré ni siège), donc la redondance y reste ≥ sa valeur à R, positive. La sonde à R est la configuration même. Seul le temps change. Un participant réservé tour par tour à la même table sur chacun des R tours, ancré à R, devient partiellement fixé à R + 1 : l'ancré perdu à sa table est compensé, pour qui y passe, par un mobile et au moins un siège de plus (A − 1 + min(n_p + 1, S + m) ≥ A + min(n_p, S))."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:nombre-zero:ff01cd09cdc0bc1d:0",
+    "raison": "diagnostic.js, toursSansRedondance, départ à R : la sonde à R tours est la configuration elle-même, dont la redondance minimale est positive à ce point ; un chiffrage de plus, aucun résultat changé."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:6f32f41253f60a4b:4",
+    "raison": "diagnostic.js, collisionPartout, p <= N dans le compte des sans appartenance : groupe[N] est undefined, différent de SANS_GROUPE (−1) ; rien n'est compté de plus."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:66f4a0fe878c0caf:2",
+    "raison": "diagnostic.js, collisionPartout, t <= T : capacite[T] est undefined, N − (places − undefined) vaut NaN, et NaN <= x est faux ; le tour de trop ne rend pas false, et la boucle rend true exactement quand les T tables réelles passent."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:si-faux:808c6fe59930a896:0",
+    "raison": "diagnostic.js, ecartItineraire, if (false) au lieu de if (mobile === -1) : sans mobile ni partiellement fixé, tous les présents sont ancrés ; Σ c_t = N et a_t ≤ c_t (SURRESERVATION sinon) forcent a_t = c_t à chaque table, chaque table est sautée par sieges === 0, et siegesToursInferieurs nul rend null, comme le retour anticipé."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "diagnostic.js, ecartItineraire, mobile === -2 : indexOf ne rend jamais −2, le retour anticipé disparaît ; même chemin que le mutant si-faux du même if, qui rend null."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:corps-si:4ad2292cb6c5c2d3:3",
+    "raison": "diagnostic.js, ecartItineraire, if (mobile === -1) {} : même chemin que le mutant si-faux du même if — chaque table pleine d'ancrés est sautée, et la fonction rend null."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:a24249598a5087fc:0",
+    "raison": "diagnostic.js, ecartItineraire, ecartPassant <= plancher : à égalité la même valeur est réécrite dans plancher."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:nombre-plus-un:810f4d1f8049b0e2:0",
+    "raison": "diagnostic.js, objectifsInevitables, parTour rempli de 1 : la boucle des tours écrit parTour[r] pour chaque r de 0 à R − 1 avant toute lecture."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:8d0d1504ba708607:1",
+    "raison": "diagnostic.js, collisionPartout, r <= R : au tour de trop, presentsParTour[R] est undefined hors du tableau typé, et presentsParTour[R] − (places − plusPetite) vaut NaN ; NaN <= x est faux, et le tour ne rend pas false. Ses lectures de present et ses écritures dans vue, aux index de groupes des présents, ne lèvent pas."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:6f32f41253f60a4b:5",
+    "raison": "diagnostic.js, objectifsInevitables, p <= N dans le marquage des personnes : possible[N·R + r] et fixe[N·R + r] sont undefined, donc la branche else écrit servieDOffice[N], hors des éléments d'un Uint8Array de longueur N, ce qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:nombre-plus-un:2a4cc0487decfbc2:0",
+    "raison": "diagnostic.js, objectifsInevitables, servieDOffice[p] = 2 : la marque ne se lit que par servieDOffice[p] === 0."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:6f32f41253f60a4b:6",
+    "raison": "diagnostic.js, objectifsInevitables, p <= N dans le compte des concernées : aUnTourLibre[N] est undefined, différent de 1 ; rien n'est compté de plus."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:6f32f41253f60a4b:7",
+    "raison": "diagnostic.js, objectifsInevitables, p <= N dans le compte par tour : possible[N·R + r] est undefined, différent de 0, et fixe[N·R + r] undefined est différent de LIBRE, donc continue ; rien n'est compté de plus."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:c87986ba8e01803b:0",
+    "raison": "diagnostic.js, etendue, valeur <= min : à égalité la même valeur est réécrite dans min."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:0e62a1e486712b45:0",
+    "raison": "diagnostic.js, etendue, valeur >= max : à égalité la même valeur est réécrite dans max."
+  },
+  {
+    "cle": "src/moteur/diversite.js:nombre-plus-un:4ab47ef7d68e4bc0:0",
+    "raison": "diversite.js, diversiteAnimateurs, debutAssis de T × R + 2 cases au lieu de T × R + 1 : la case de trop n'est jamais écrite ni lue ; les lectures s'arrêtent à debutAssis[T × R] (cumul jusqu'à ligne < T × R, taille de assis, ligne + 1 ≤ T × R au parcours)."
+  },
+  {
+    "cle": "src/moteur/diversite.js:frontiere:83f9bb18686efa4e:0",
+    "raison": "diversite.js, diversiteAnimateurs, comptage des assis jusqu'à i <= N × R : exigerPlanIndexe impose tableDe.length === N × R, donc tableDe[N × R] vaut undefined, et l'écriture se fait à l'index NaN d'un tableau typé, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/diversite.js:si-vrai:b1f0a68b06fdb06d:0",
+    "raison": "diversite.js, diversiteAnimateurs, comptage des assis sans exclure RESERVE (−1) : la case réservée vise l'index −R + r + 1, négatif, sans effet sur un tableau typé, sauf au dernier tour où il vaut 0 ; debutAssis[0] grossit alors de c, et le cumul décale de c tous les débuts, la taille de assis et rempli, si bien que chaque ligne garde ses mêmes assis, à c cases plus loin ; les c premières cases de assis ne se lisent jamais."
+  },
+  {
+    "cle": "src/moteur/diversite.js:nombre-plus-un:300fa28b08014137:0",
+    "raison": "diversite.js, diversiteAnimateurs, cumul des débuts à partir de ligne = 1 : le pas sauté ajoute debutAssis[0] à debutAssis[1], et debutAssis[0] vaut toujours 0, aucun index de table ne donnant la case 0 au comptage (tableDe[i] × R + r + 1 ≥ 1)."
+  },
+  {
+    "cle": "src/moteur/diversite.js:frontiere:7f4ebde44fdb2913:0",
+    "raison": "diversite.js, diversiteAnimateurs, cumul des débuts jusqu'à ligne <= T × R : le pas de trop écrit debutAssis[T × R + 1], hors des éléments du tableau typé, ce qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/diversite.js:nombre-plus-un:ccf15e4f87ae4337:1",
+    "raison": "diversite.js, diversiteAnimateurs, remplissage des assis à partir de i = 1 : seule la case 0 (participant 0, premier tour) est sautée ; s'il est assis, il est le plus petit index de sa ligne, les autres remplissent les cases qui suivent son début d'un cran plus tôt, et la dernière case de la ligne, jamais écrite, garde le 0 du tableau neuf, soit lui-même. La ligne garde les mêmes assis dans un autre ordre, et chaque compte (personnes, appartenances, étiquettes, par marques) ne dépend pas de l'ordre de parcours."
+  },
+  {
+    "cle": "src/moteur/diversite.js:frontiere:83f9bb18686efa4e:1",
+    "raison": "diversite.js, diversiteAnimateurs, remplissage des assis jusqu'à i <= N × R : tableDe[N × R] vaut undefined (longueur exigée par exigerPlanIndexe), la ligne vaut NaN, rempli[NaN] vaut undefined ; l'écriture assis[undefined] pose une propriété nommée « undefined » que rien ne lit, et rempli[NaN] += 1 n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/diversite.js:si-faux:cdd7c2bb4ada258b:0",
+    "raison": "diversite.js, diversiteAnimateurs, remplissage des assis sans sauter RESERVE (−1) : la ligne vaut −R + r, toujours négative ; rempli[ligne] vaut undefined, assis[undefined] pose une propriété que rien ne lit, et rempli[ligne] += 1 n'écrit rien sur un tableau typé."
+  },
+  {
+    "cle": "src/moteur/diversite.js:corps-si:0bf37874b7af9907:0",
+    "raison": "diversite.js, diversiteAnimateurs, if (tableDe[i] === RESERVE) {} au remplissage : même effet que l'absence du saut, une ligne négative dont les écritures ne touchent aucun élément lu."
+  },
+  {
+    "cle": "src/moteur/diversite.js:frontiere:66f4a0fe878c0caf:0",
+    "raison": "diversite.js, diversiteAnimateurs, tours animés jusqu'à t <= T : la ligne T × R + r dépasse les lignes de debutAnimes (T × R + 1 cases, configuration.js) ; au tour 0, debutAnimes[T × R + 1] vaut undefined, aux autres les deux bornes aussi, et k < undefined est faux : la boucle n'ajoute rien."
+  },
+  {
+    "cle": "src/moteur/diversite.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "diversite.js, diversiteAnimateurs, personneVue remplie de −2 au lieu de −1 : la marque ne se compare qu'au rang f de l'animateur, toujours ≥ 0 ; toute valeur négative la dit libre."
+  },
+  {
+    "cle": "src/moteur/diversite.js:nombre-plus-un:1bad6b8cf97131fc:1",
+    "raison": "diversite.js, diversiteAnimateurs, groupeVu rempli de −2 au lieu de −1 : la marque ne se compare qu'au rang f, toujours ≥ 0."
+  },
+  {
+    "cle": "src/moteur/diversite.js:nombre-plus-un:1bad6b8cf97131fc:2",
+    "raison": "diversite.js, diversiteAnimateurs, groupeVuAuTour rempli de −2 au lieu de −1 : la marque ne se compare qu'au jeton, augmenté avant chaque tour et donc ≥ 0 à toute comparaison."
+  },
+  {
+    "cle": "src/moteur/diversite.js:nombre-plus-un:1bad6b8cf97131fc:3",
+    "raison": "diversite.js, diversiteAnimateurs, etiquetteVue remplie de −2 au lieu de −1 : la marque ne se compare qu'au rang f, toujours ≥ 0."
+  },
+  {
+    "cle": "src/moteur/diversite.js:nombre-plus-un:1bad6b8cf97131fc:4",
+    "raison": "diversite.js, diversiteAnimateurs, etiquetteVueAuTour remplie de −2 au lieu de −1 : la marque ne se compare qu'au jeton, ≥ 0 à toute comparaison."
+  },
+  {
+    "cle": "src/moteur/diversite.js:nombre-zero:1bad6b8cf97131fc:5",
+    "raison": "diversite.js, diversiteAnimateurs, jeton initial −0 au lieu de −1 : le premier tour lit le jeton 1 au lieu de 0, chaque tour garde un jeton distinct des autres et des marques initiales (−1) ; seule l'égalité au jeton se lit."
+  },
+  {
+    "cle": "src/moteur/diversite.js:mise-a-jour:c7b73c4aa664b53a:0",
+    "raison": "diversite.js, diversiteAnimateurs, jeton -= 1 au lieu de += 1 : les jetons valent −2, −3, … ; chacun reste distinct des autres et des marques initiales (−1), et seule l'égalité au jeton se lit."
+  },
+  {
+    "cle": "src/moteur/diversite.js:nombre-plus-un:c7b73c4aa664b53a:0",
+    "raison": "diversite.js, diversiteAnimateurs, jeton += 2 au lieu de += 1 : les jetons 1, 3, 5, … restent distincts tour à tour et des marques initiales (−1) ; seule l'égalité au jeton se lit."
+  },
+  {
+    "cle": "src/moteur/diversite.js:arithmetique:528f13a3cc207ca6:0",
+    "raison": "diversite.js, diversiteAnimateurs, tri à égalité des comptes par a.p + b.p au lieu de a.p − b.p : deux lignes distinctes égales sur tous les comptes rendent un positif dans les deux sens, comparateur incohérent dont ECMAScript laisse l'ordre à l'implémentation. Le tri de V8, celui de Node et d'Electron, ne déplace un élément que sur un résultat négatif et garde, stable, l'ordre où les lignes sont poussées : f croissant, donc p croissant, les animateurs étant rangés par index croissants (deriverAnimateurs, configuration.js). Seule une ligne comparée à elle-même, p = 0, rend 0."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "indicateurs.js, parcourirTours, rencontre rempli de −2 au lieu de −1 : la marque ne se lit que par rencontre[f] === p, p ≥ 0 ; ni −1 ni −2 n'égale une personne."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:00c7051f9d2508f1:0",
+    "raison": "indicateurs.js, parcourirTours, visites[t] += 2 au lieu de 1 : visites[t] ne se lit que par visites[t] > 0 et se remet à 0 après chaque personne ; un pas de 2 garde le signe, aucune sortie ne change."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:7501d61d37d5e2f8:0",
+    "raison": "indicateurs.js, parcourirTours, reserveeAvant[t] = 2 au lieu de 1 : la marque ne se lit que par reserveeAvant[t] === 0."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:8d0d1504ba708607:1",
+    "raison": "indicateurs.js, parcourirTours, remise à zéro jusqu'à r <= R : le tour de trop lit la première case de la personne suivante, dont la table vaut 0 dans visites et reserveeAvant sauf si la personne courante l'a visitée, auquel cas la boucle la remet à 0 de toute façon ; pour la dernière personne la case est undefined, et une écriture à l'index undefined pose une propriété hors des éléments du tableau typé, que rien ne lit."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:si-faux:032af4d6881bbbc2:1",
+    "raison": "indicateurs.js, parcourirTours, remise à zéro sans le continue des cases RESERVE : la case −1 écrit visites[−1] et reserveeAvant[−1] ; un index hors des éléments d'un tableau typé n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:corps-si:0bf37874b7af9907:2",
+    "raison": "indicateurs.js, parcourirTours, remise à zéro sans le continue des cases RESERVE : la case −1 écrit visites[−1] et reserveeAvant[−1] ; un index hors des éléments d'un tableau typé n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:540d595717113ffa:0",
+    "raison": "indicateurs.js, parcourirTours, i <= liste.length : le tour de trop lit a = undefined ; revenu[NaN] et fixe[NaN] sont undefined, rien n'est poussé, et la boucle intérieure part de j = length + 1, au-delà de la liste."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:cde969d8987ccd53:0",
+    "raison": "indicateurs.js, parcourirTours, j <= liste.length : le tour de trop lit b = undefined ; k = rangPaire(N, a, undefined) vaut NaN, parPaire[NaN] et libre[NaN] n'écrivent rien sur un tableau typé, groupe[undefined] n'égale aucun groupe et parPaire[NaN] >= 2 est faux : ni collègue ni revue n'est poussé."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:227d5e978a2c6f6e:0",
+    "raison": "indicateurs.js, lirePaires, vu[p * G + g] = 2 au lieu de 1 : la marque ne se lit que par === 0."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:77965e89ec635867:0",
+    "raison": "indicateurs.js, lirePaires, i <= reunies.length : reunies a une longueur paire, le tour de trop lit a = b = undefined. rencontres[undefined] et affilies[undefined] posent une propriété « undefined » sur l'Int32Array, que Array.from (mesurer) ne lit pas ; groupe[undefined] n'égale pas SANS_GROUPE, mais vu[NaN] se lit undefined, jamais === 0 ; n = parPaire[NaN] est undefined, ni > maxRencontresPaire ni >= 2."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:d9e6e8ece30ea311:0",
+    "raison": "indicateurs.js, lirePaires, n >= maxRencontresPaire : à égalité, l'affectation écrit la valeur déjà retenue."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:arithmetique:4883685ba05bd48f:1",
+    "raison": "indicateurs.js, lireTours, nombrePaires = N(N + 1)/2 : ne dimensionne que collegueVu et revueVue, indexés par rangPaire, toujours < N(N − 1)/2 ; un tableau plus long garde les mêmes cases utiles, les autres ne se lisent jamais."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-zero:4883685ba05bd48f:1",
+    "raison": "indicateurs.js, lireTours, nombrePaires = N·N/2 : même raison que N(N + 1)/2 — une longueur au moins égale (tronquée à l'entier par le constructeur du tableau typé) pour des index rangPaire < N(N − 1)/2."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:arithmetique:9befd8786dbb9e8f:1",
+    "raison": "indicateurs.js, lireTours, nombrePaires = 2N(N − 1) : longueur au moins égale à N(N − 1)/2, mêmes cases utiles, les autres jamais lues."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:3ab1dfff408dce14:0",
+    "raison": "indicateurs.js, lireTours, collegueVu[k] = 2 au lieu de 1 : la marque ne se lit que par === 0."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:b13533cdd354d276:0",
+    "raison": "indicateurs.js, lireTours, revueVue[k] = 2 au lieu de 1 : la marque ne se lit que par === 0."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:f9d5a3175edeb71f:0",
+    "raison": "indicateurs.js, VIDE.somme = 1 : la somme de VIDE ne se lit jamais. ajouter ouvre un cumul neuf sans la lire, et conclure ne la lit que pour un effectif non nul ; VIDE a un effectif nul et rend moyenne null."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:24aaccb3ea344855:0",
+    "raison": "indicateurs.js, ajouter, valeur <= min : à égalité, le minimum retenu est la même valeur ; aucune valeur agrégée ne vaut −0 (comptes entiers, différences de comptes, quotient A/|F| à |F| > 0)."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:6f32f41253f60a4b:2",
+    "raison": "indicateurs.js, lireObjectifs, p <= N au compte des concernés : P[N] est undefined hors du tableau typé, et undefined > 0 est faux : concernes ne change pas."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:40b0eb480a6b204e:0",
+    "raison": "indicateurs.js, lireObjectifs, auMax part de 1 : quand E reste à 0, personnesAuMax vaut 0 quelle que soit la valeur ; sinon E a grandi au moins une fois, chaque croissance remet auMax à 0, et seuls comptent les incréments qui suivent la dernière : la valeur initiale ne survit jamais."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:6f32f41253f60a4b:4",
+    "raison": "indicateurs.js, lireAnimateurs, p <= N au compte des concernés : borneAnimateurs[N] est undefined, et undefined > 0 est faux ; concernes ne bouge pas."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:6f32f41253f60a4b:6",
+    "raison": "indicateurs.js, mesurer, p <= N au compte des effectifs : groupe[N] est undefined, différent de SANS_GROUPE ; effectifs[undefined] += 1 pose une propriété « undefined » sur un tableau ordinaire, et parGroupe ne lit que les index 0 à G − 1."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:si-vrai:fcd03735b3f47217:0",
+    "raison": "indicateurs.js, mesurer, if (true) au compte des effectifs : une personne sans appartenance incrémente effectifs[SANS_GROUPE], soit effectifs[−1], propriété hors des index d'un tableau ordinaire ; parGroupe ne lit que les index 0 à G − 1."
+  },
+  {
+    "cle": "src/moteur/manque.js:frontiere:616dbb8c2f18776c:0",
+    "raison": "manque.js, plusGrand, valeur >= cumul : à égalité, le cumul retenu est la même valeur."
+  },
+  {
+    "cle": "src/moteur/manque.js:arithmetique:ebfa5f19c5ac6881:0",
+    "raison": "manque.js, profilManque, départage a.id + b.id : à manque et plafond réalisé égaux, le comparateur rend un nombre positif. Le tri de V8 ne lit que « < 0 » et est stable : un positif s'y lit comme 0, et l'ordre reçu reste, celui de instance.ids, que normaliser trie par identifiant croissant et sans doublon — l'ordre de a.id − b.id. Une liste reçue dans un autre ordre ne peut pas se construire : profilManque parcourt instance.ids."
+  },
+  {
+    "cle": "src/moteur/manque.js:frontiere:a42a37da6acfc1b0:0",
+    "raison": "manque.js, comparerProfils, difference <= 0 : la ligne ne s'atteint que pour difference !== 0, où <= 0 et < 0 coïncident."
+  },
+  {
+    "cle": "src/moteur/manque.js:nombre-plus-un:a42a37da6acfc1b0:0",
+    "raison": "manque.js, comparerProfils, difference < 1 : un manque est un entier (plafond réalisé − rencontres, deux comptes), et la ligne ne s'atteint que pour difference !== 0 : < 1 et < 0 coïncident."
+  },
+  {
+    "cle": "src/moteur/manque.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "manque.js, comparerProfils, signeRang = −2 au lieu de −1 : signeRang ne se lit que par < 0 et par comparaison à signe, qui reçoit les mêmes valeurs ; signe ne se rend pas."
+  },
+  {
+    "cle": "src/moteur/manque.js:nombre-plus-un:499febce3e9d753b:0",
+    "raison": "manque.js, comparerProfils, signeRang = 2 au lieu de 1 : signeRang ne se lit que par < 0 et par comparaison à signe, qui reçoit les mêmes valeurs ; signe ne se rend pas."
+  },
+  {
+    "cle": "src/moteur/manque.js:frontiere:09493d576cddf072:0",
+    "raison": "manque.js, comparerProfils, signeRang <= 0 : signeRang vaut −1 ou 1, jamais 0."
+  },
+  {
+    "cle": "src/moteur/manque.js:nombre-plus-un:09493d576cddf072:0",
+    "raison": "manque.js, comparerProfils, signeRang < 1 : signeRang vaut −1 ou 1 ; < 1 et < 0 coïncident."
+  },
+  {
+    "cle": "src/moteur/manque.js:si-vrai:3f2ec15cfbc2d410:0",
+    "raison": "manque.js, comparerProfils, bascule posée à chaque changement : rangBascule ne la rend que pour changements === 1, où la première et la dernière affectation sont la même."
+  },
+  {
+    "cle": "src/moteur/manque.js:frontiere:fcf7cd9cc7372948:0",
+    "raison": "manque.js, plusGrandManque, manque >= plus au lieu de > : à égalité, la valeur retenue est la même. Pour des manques numériques (RangProfil), seul −0 contre 0 peut changer le signe du zéro rendu, et les deux appelants le passent par Math.max avec 0 (escalierDuManque) ou 1 (borneHaute), qui rend le même nombre ; null et NaN sont hors du type des manques."
+  },
+  {
+    "cle": "src/moteur/manque.js:nombre-plus-un:e8c6511e63adbd17:0",
+    "raison": "manque.js, effectifsParValeur, haut + 2 cases : une case de plus au-delà de haut, à 0, jamais écrite (chaque manque vaut au plus haut, le plus grand manque des deux profils) ni lue (escalierDuManque parcourt les valeurs de haut à 0)."
+  },
+  {
+    "cle": "src/moteur/manque.js:nombre-zero:4be3251ecbe8de82:0",
+    "raison": "manque.js, borneHaute, plusGrandManque(…) ?? 0 : la valeur de repli ne sert que pour deux profils vides, où Math.max(0, 1) et Math.max(1, 1) valent tous deux 1."
+  },
+  {
+    "cle": "src/moteur/paires.js:frontiere:efe1e5c7656bf0ba:0",
+    "raison": "paires.js, compte, a <= b au lieu de a < b : le choix de branche ne change qu'à a = b, où les deux branches calculent rangPaire(N, a, a) ; la valeur lue est la même pour toute entrée."
+  },
+  {
+    "cle": "src/moteur/paires.js:frontiere:a7993d06483a098c:0",
+    "raison": "paires.js, matriceRencontres, boucle extérieure jusqu'à i <= n : au tour de trop, i = n, la boucle intérieure part de j = n + 1 et ne s'exécute pas ; rien n'est écrit."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:3aa7652268e39457:0",
+    "raison": "plafond.js, affiliesDe, effectif part de 1 : N_aff grandit de 1, et il ne se lit qu'à deux places où un terme plus grand ne mord pas. Dans borne, le terme Σ a^aff_t + min(n^aff_p, S) vaut au plus N_aff − ε_p : un affilié ancré voit au plus k_aff − 1 ancrés affiliés sur ses tables distinctes et n^aff_p = n_aff ; un affilié mobile au plus k_aff, avec n^aff_p = n_aff − 1 ; un non-affilié au plus k_aff, avec n^aff_p = n_aff ; et N_aff = k_aff + n_aff, chaque membre étant ancré ou mobile. Dans borneDiversite, le troisième terme N_aff − g_p + 1 ne descend jamais sous G (chaque appartenance de instance.groupes compte au moins un présent, numeroterGroupes) : plus grand, il ne mord pas davantage. Φ_aff et A_max restent."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:97d5bf4fdd1d09b0:0",
+    "raison": "plafond.js, affiliesDe, effectif += 2 : N_aff devient 2·N_aff ≥ N_aff ; même raison que effectif partant de 1 — le premier terme de borne et le troisième terme de A_max ne mordent pas davantage en grandissant."
+  },
+  {
+    "cle": "src/moteur/plafond.js:arithmetique:44f139255a334b25:0",
+    "raison": "plafond.js, borne, min(effectif + ε, …) : le premier terme grandit ou reste, et le terme intérieur ne l'atteint déjà jamais. Pour tout le monde, il vaut au plus N − 1 : sur ses tables distinctes, un ancré voit au plus k − 1 ancrés, p exclu, avec n_p = n ; un mobile ou un partiel au plus k, avec n_p = n − 1 ; et n = N − k (configuration.js). Pour les affiliés, il vaut au plus N_aff − ε_p, par le même compte restreint aux affiliés (voir effectif partant de 1 dans affiliesDe). Le min extérieur ne mord jamais."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "plafond.js, ancrageDe, −2 au lieu de −1 pour un non-ancré : l'ancrage ne sert qu'à t === ancrage, où t est un index de table ≥ 0, et à la clé de signature, où −2 remplace −1 pour tous les non-ancrés à la fois : aucune comparaison ni aucun regroupement ne change."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:66f4a0fe878c0caf:0",
+    "raison": "plafond.js, tablesAdmissibles, t <= T : ancresParTable[T] et capacite[T] sont undefined, undefined < undefined est faux, rien ne s'ajoute."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:547b58a30bc0a997:3",
+    "raison": "plafond.js, borneDiversite, compte des effectifs à partir de p = 1 : effectifs ne se lit que dans le troisième terme de A_max, N_aff − effectifs[g] + 1. Toute mutation qui ne fait que diminuer effectifs[g] laisse ce terme au moins égal à N_aff − g_p + 1, qui ne descend jamais sous G (chaque appartenance de instance.groupes compte au moins un présent) : min(Φ_aff, G, terme) vaut min(Φ_aff, G) avant comme après. Sauter la personne 0 diminue un effectif."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:a216dbba9047bdaf:3",
+    "raison": "plafond.js, borneDiversite, compte des effectifs par pas de 2 : une personne sur deux est sautée, les effectifs ne font que diminuer ; même raison que le compte à partir de p = 1 — le troisième terme reste au moins N_aff − g_p + 1 ≥ G."
+  },
+  {
+    "cle": "src/moteur/plafond.js:si-vrai:fcd03735b3f47217:0",
+    "raison": "plafond.js, borneDiversite, if (true) au compte des effectifs : une personne sans appartenance incrémente effectifs[SANS_GROUPE], soit effectifs[−1] ; un index hors des éléments d'un tableau typé n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/plafond.js:si-faux:fcd03735b3f47217:0",
+    "raison": "plafond.js, borneDiversite, if (false) au compte des effectifs : tous les effectifs restent à 0, le troisième terme vaut N_aff + 1 ≥ N_aff − g_p + 1 ≥ G ; même raison que le compte à partir de p = 1."
+  },
+  {
+    "cle": "src/moteur/plafond.js:negation:fcd03735b3f47217:1",
+    "raison": "plafond.js, borneDiversite, groupe[p] === SANS_GROUPE au compte des effectifs : seules les personnes sans appartenance entrent, à effectifs[−1], qu'un tableau typé n'écrit pas ; les effectifs restent à 0, et le troisième terme, N_aff + 1, ne mord pas (voir if (false))."
+  },
+  {
+    "cle": "src/moteur/plafond.js:corps-si:3bcf9ce94a530fd1:0",
+    "raison": "plafond.js, borneDiversite, corps du compte des effectifs vidé : les effectifs restent à 0 ; même raison que if (false)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:mise-a-jour:3cfed13ad8960f9b:0",
+    "raison": "plafond.js, borneDiversite, effectifs[g] −= 1 : chaque effectif devient −g_p, et le troisième terme N_aff + g_p + 1 dépasse N_aff − g_p + 1 ≥ G ; même raison que le compte à partir de p = 1."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:3cfed13ad8960f9b:0",
+    "raison": "plafond.js, borneDiversite, effectifs[g] += 0 : les effectifs restent à 0 ; même raison que if (false)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:ternaire-vrai:0b6be0cb17bff5ec:0",
+    "raison": "plafond.js, borneDiversite, A_max = min(Φ_aff, G) pour chacun : pour un affilié, le troisième terme N_aff − g_p + 1 vaut au moins G, puisque chaque autre appartenance compte au moins un présent (N_aff − g_p ≥ G − 1) ; min(Φ_aff, G, terme) = min(Φ_aff, G). Le terme s'écrit pour que le code se lise contre la formule du § 5.5, comme le dit le commentaire de la fonction."
+  },
+  {
+    "cle": "src/moteur/plafond.js:arithmetique:c4b4ecb978b9b366:0",
+    "raison": "plafond.js, borneDiversite, troisième terme N_aff + g_p + 1 : il dépasse N_aff − g_p + 1, qui vaut déjà au moins G ; le min reste min(Φ_aff, G) (voir A_max = min(Φ_aff, G) pour chacun)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:332973a1512c5c76:0",
+    "raison": "plafond.js, borneDiversite, troisième terme N_aff − g_p + 2 : plus grand d'un que N_aff − g_p + 1, qui vaut déjà au moins G ; le min reste min(Φ_aff, G)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:si-vrai:4e2d29d60a734ece:0",
+    "raison": "plafond.js, signature, chaque case poussée, LIBRE comprise : le nombre de cases LIBRE vaut R moins le nombre de tours fixés, que le multiensemble des tables fixées donne déjà ; deux clés sont égales sous le mutant si et seulement si elles le sont sans lui."
+  },
+  {
+    "cle": "src/moteur/plafond.js:arithmetique:1e3e1be34f22da4b:0",
+    "raison": "plafond.js, signature, tri par x + y : le tri ne sert qu'à rendre la clé indépendante de l'ordre des tours. Un ordre faux peut séparer deux rangées de même multiensemble en deux clés, jamais réunir deux multiensembles distincts — la clé garde ses éléments — : la valeur mémoïsée reste exacte, seul le partage se perd."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:d0a020f0a45907d8:0",
+    "raison": "plafond.js, maximiser, vMax part de 1 : vMax ne sert qu'à W, qui grandit ou reste. Tout W' ≥ W rend le même plafond : sans écrêtage (W' ≥ f·vMax) la programmation dynamique est exacte, et un écrêtage à W' ≥ cap ne fond que des états où min(n_p, sieges0 + w) vaut déjà n_p."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:0bde1efec9ee24ca:0",
+    "raison": "plafond.js, maximiser, largeur = W + 2 : une colonne de plus par rangée, jamais écrite (cible ≤ W) ni lue (w ≤ W) ; chaque état garde une case distincte."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:6a44835bbd054679:0",
+    "raison": "plafond.js, maximiser, (f + 2) × largeur cases : une rangée de plus en fin de tableau, jamais lue ni écrite (s + m ≤ f)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:1bad6b8cf97131fc:1",
+    "raison": "plafond.js, maximiser, fill(−2) : le marqueur d'état inatteignable ne se lit que par < 0 et >= 0, et tout atteint + gain ≥ 0 le dépasse ; −2 se comporte comme −1."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:ebba58ec39728177:0",
+    "raison": "plafond.js, maximiser, s <= f : à s = f, la boucle sur m (s + m ≤ f) ne tourne pas."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:f0a78f7a10078a9f:0",
+    "raison": "plafond.js, maximiser, atteint + gain >= suivant[cible] : à égalité, l'affectation écrit la valeur déjà présente."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:1bad6b8cf97131fc:2",
+    "raison": "plafond.js, lireProgramme, plafond part de −2 : l'état (f, W) est toujours atteint — la table de plus grand v prise f fois — avec une somme d'ancrés ≥ 0, et sa borne vaut au moins 0 ; le maximum ne dépend pas de la valeur initiale, pourvu qu'elle ne dépasse pas 0."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:1bad6b8cf97131fc:2",
+    "raison": "plafond.js, lireProgramme, plafond part de −0 : même raison que −2 — un état atteint donne une borne x ≥ 0, et Math.max(−0, x) = x."
+  },
+  {
+    "cle": "src/moteur/plafond.js:si-vrai:717790d7ce1ce378:0",
+    "raison": "plafond.js, lireProgramme, if (true) sur ajout >= 0 : un état inatteignable porte −1, soit ancres0 − 1, à un w ≤ W ; l'état (f, W) est atteint avec une somme ≥ 0, et la borne, croissante en ses deux termes, y vaut au moins autant : un état inatteignable ne l'emporte jamais."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:1bad6b8cf97131fc:3",
+    "raison": "plafond.js, enumerer, plafond part de −2 : au moins un itinéraire s'évalue (f > 0 et A > 0), et son plafond est ≥ 0 ; la valeur initiale ne l'emporte jamais."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:1bad6b8cf97131fc:3",
+    "raison": "plafond.js, enumerer, plafond part de −0 : au moins un itinéraire s'évalue, de plafond x ≥ 0, et Math.max(−0, x) = x."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:8f48d3d06744671e:0",
+    "raison": "plafond.js, enumerer, i <= f : libres[f] est undefined ; itineraire[undefined] = … pose une propriété hors des index de l'Int32Array, que plafondItineraire ne lit pas (il lit length et les index 0 à R − 1)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:3cdd668f03bae9c9:0",
+    "raison": "plafond.js, enumerer, j = i + 0 : le premier tour écrit choix[i] = choix[i], sans effet ; les tours suivants sont ceux du code."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:2ad7eaa66ad4393a:0",
+    "raison": "plafond.js, enumerer, j <= f : choix[f] est hors d'un Int32Array de f cases ; un index hors des éléments d'un tableau typé n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/plafond.js:si-vrai:b5e28aed44dacc4e:1",
+    "raison": "plafond.js, plafondsAPrioriParEnumeration, if (true) : le plafond se recalcule pour chaque personne au lieu d'être repris de sa rangée ; même valeur, seule la mémoïsation de l'oracle se perd, et l'oracle n'a pas de budget de temps."
+  },
+  {
+    "cle": "src/moteur/qualite.js:nombre-plus-un:cb5a1a7d3b67f7bc:0",
+    "raison": "qualite.js, repartition, cumul: 1 au lieu de 0 à la création d'une ligne : la seconde boucle affecte ligne.cumul à chaque ligne avant le retour, et la clé cumul garde sa place dans l'objet ; la valeur initiale ne se lit jamais."
+  },
+  {
+    "cle": "src/moteur/qualite.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "qualite.js, barresCollisions, comparer rend -2 au lieu de -1 : la valeur ne se lit que par || (non nulle dans les deux cas) et par le tri, qui n'en retient que le signe."
+  },
+  {
+    "cle": "src/moteur/qualite.js:nombre-plus-un:f8e44d4423ca5f61:0",
+    "raison": "qualite.js, barresCollisions, comparer rend 2 au lieu de 1 : la valeur ne se lit que par || (non nulle dans les deux cas) et par le tri, qui n'en retient que le signe."
+  },
+  {
+    "cle": "src/moteur/qualite.js:nombre-plus-un:1bad6b8cf97131fc:1",
+    "raison": "qualite.js, mixTables, vu rempli de -2 au lieu de -1 : vu[b] ne se lit que par vu[b] === jeton, et jeton = t · R + r vaut 0 au moins ; ni -1 ni -2 ne l'égale."
+  },
+  {
+    "cle": "src/moteur/qualite.js:nombre-plus-un:efd34fbbc4f60d4b:0",
+    "raison": "qualite.js, objectifsParTour, pireReste initialisé à 1 au lieu de 0 : pireReste ne se lit que dans pireTour === null || reste > pireReste ; au premier tour lu pireTour vaut null, le || ne lit pas pireReste, et la même branche l'affecte à reste."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:6596dc3bba58638c:0",
+    "raison": "recherche.js, UINT16_MAX = 65 536 : seul R = 65 536 change de tableau, et un Uint16Array y reste exact. Le compte d'une paire va de 0 à R ; modifierPaire ne le lit que par avant !== 0 à un ajout et apres !== 0 à un retrait. Un compte vrai de 65 536 se range 0, mais un ajout depuis 65 536 ou un retrait depuis 65 537 exigent R ≥ 65 537 : le compte rangé modulo 2^16 donne toujours la même décision."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-zero:6596dc3bba58638c:0",
+    "raison": "recherche.js, UINT16_MAX = 0 : R ≥ 1 donne toujours un Uint32Array à paires, qui tient tout compte de 0 à R ; mêmes valeurs lues, seule la mémoire double. paires n'est pas un champ que EtatRecherche déclare lisible."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:6ebe589ea6c738da:0",
+    "raison": "recherche.js, UINT8_MAX = 256 : seul R = 256 change de tableau, et un Uint8Array y reste exact. Le compte d'un couple (personne, animateur) va de 0 au nombre de tours où l'animateur anime, ≤ R ; changerAnimateurs ne le lit que par avant === 0 à un ajout et avant === 1 à un retrait. Confondre 256 avec 0, ou 257 avec 1, exige un ajout depuis 256 ou un retrait depuis 257, donc R ≥ 257."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-zero:6ebe589ea6c738da:0",
+    "raison": "recherche.js, UINT8_MAX = 0 : R ≥ 1 donne toujours un Uint32Array à rencontresAnimees, qui tient tout compte de 0 à R ; mêmes valeurs, seule la largeur des éléments change, que rien ne lit."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:f0523190eade887a:0",
+    "raison": "recherche.js, preparer, debut de longueur T + 2 : la boucle ne remplit que debut[0..T], la case T + 1 reste 0 ; preparer, voisiner, remplisseur et etatInitial ne lisent debut[t + 1] que pour t < T. debut n'est pas un champ que EtatRecherche déclare lisible."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:66f4a0fe878c0caf:0",
+    "raison": "recherche.js, preparer, t <= T au calcul de debut : le tour de trop écrit debut[T + 1] = debut[T] + capacite[T], soit NaN à un index hors d'un Int32Array de longueur T + 1, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:85e3325768e4f4e4:1",
+    "raison": "recherche.js, preparer, tableDuSiege rempli à partir de t = 1 : les sièges de la table 0 gardent la valeur initiale d'un Int32Array neuf, 0, l'index de leur table."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:66f4a0fe878c0caf:1",
+    "raison": "recherche.js, preparer, t <= T au remplissage de tableDuSiege : le tour de trop fait fill(T, debut[T], undefined), soit de S à la fin d'un tableau de longueur S : aucune case."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:7249db31e68d9e7d:1",
+    "raison": "recherche.js, preparer, fill(t, debut[t], debut[t + 2]) : la table t déborde sur les sièges de t + 1, que l'itération suivante récrit à t + 1 ; au dernier tour, debut[T + 1] est undefined et fill va jusqu'à la fin, qui est debut[T] : mêmes cases finales."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:8d0d1504ba708607:0",
+    "raison": "recherche.js, preparer, r <= R : au tour de trop, fixe[p × R + R] lit la case du tour 0 de la personne suivante (undefined pour la dernière) ; une personne fixée y écrit siegesFixes et mobiles à des index ≥ R × S, hors des tableaux typés, qui n'écrivent rien, occupes est remis à zéro en tête de chaque tour, nombreMobiles[R] est hors du tableau, et libres reçoit une R + 1e liste que etatInitial et remplisseur ne lisent pas (r < R)."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:6f32f41253f60a4b:0",
+    "raison": "recherche.js, preparer, p <= N aux sièges fixés : fixe[N × R + r] est undefined, différent de LIBRE ; siegesFixes[r × S + debut[undefined] + occupes[undefined]] est un index NaN, qui n'écrit rien dans un tableau typé, et occupes[undefined] += 1 pose une propriété « undefined » que rien ne lit."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:6f32f41253f60a4b:1",
+    "raison": "recherche.js, preparer, p <= N au seuil des retours : fixe[N × R + r] est undefined, différent de LIBRE, et seuilRetour[N × T + undefined] += 1 vise l'index NaN, qui n'écrit rien dans un tableau typé."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:7d1bafe580984c35:0",
+    "raison": "recherche.js, preparer, i <= seuilRetour.length : seuilRetour[length] est undefined, jamais === 0, rien n'est écrit."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:53fa5760154d90e8:0",
+    "raison": "recherche.js, preparer, plusGrand part de 1 : largeurHistogramme ne vaut 2 au lieu de 1 que si tous les plafonds a priori sont nuls ; l'histogramme des écarts n'est indexé que par des écarts de 0 à aPriori[p], la case de plus reste 0 et ne se lit pas. histogramme n'est pas un champ que EtatRecherche déclare lisible."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:8136471d1947f817:0",
+    "raison": "recherche.js, preparer, largeurHistogramme = plusGrand + 2 : un histogramme d'une case de plus, jamais indexée (écarts de 0 à aPriori[p] ≤ plusGrand) ; mêmes valeurs lues."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:4964701bb9672a91:0",
+    "raison": "recherche.js, changerRencontres, apres >= ecartMax : à égalité, l'affectation écrit la valeur déjà retenue ; la branche else-if qu'elle court-circuite exige avant === ecartMax, impossible quand apres === ecartMax puisque avant = apres + sens, sens = ±1."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:f004b1ffa3dbf9fa:0",
+    "raison": "recherche.js, changerAffilie, sens >= 0 : modifierPaire ne passe que sens = 1 ou −1, jamais 0 ; les deux tests départagent les mêmes valeurs."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:efe1e5c7656bf0ba:0",
+    "raison": "recherche.js, modifierPaire, a <= b : modifierPaire n'est appelé que pour a ≠ b (voisiner saute le siège exclu, etatInitial ne lit que les sièges avant s, chacun porte une autre personne), où <= et < coïncident."
+  },
+  {
+    "cle": "src/moteur/recherche.js:negation:efe1e5c7656bf0ba:0",
+    "raison": "recherche.js, modifierPaire, k = a >= b ? a × N + b : b × N + a : chaque paire reçoit toujours la case max × N + min au lieu de min × N + max ; l'index reste canonique, et paires ne se lit et ne s'écrit que par cette ligne. paires n'est pas un champ que EtatRecherche déclare lisible."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:f004b1ffa3dbf9fa:1",
+    "raison": "recherche.js, modifierPaire, sens >= 0 : sens vaut 1 ou −1 (voisiner, etatInitial), jamais 0."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:f004b1ffa3dbf9fa:2",
+    "raison": "recherche.js, changerServis, sens >= 0 : changerTable ne l'appelle qu'avec ecart ≠ 0, différence de deux valeurs de sert dans {0, 1}, donc ±1."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:e1b36c240295a5aa:0",
+    "raison": "recherche.js, changerServis, apres >= horsObjectifMax : à égalité, l'affectation écrit la valeur déjà retenue ; la branche else-if exige avant === horsObjectifMax, impossible quand apres === horsObjectifMax puisque avant = apres + sens, sens = ±1."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:f004b1ffa3dbf9fa:3",
+    "raison": "recherche.js, changerAnimateurs, sens >= 0 : echanger, par changerTable, et etatInitial ne passent que sens = 1 ou −1."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-vrai:bba900cd29513ed9:0",
+    "raison": "recherche.js, changerTable, if (true) au lieu de etat.O > 0 : O, le nombre d'objectifs distincts, vaut 0 seulement quand la configuration n'en a aucun ; numeroterObjectifs (configuration.js) écrit alors SANS_OBJECTIF dans chaque case d'objectifDe, sert rend 0 aux deux tables, l'écart est nul et changerServis n'est pas appelé. Le test n'épargne que du temps."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:bba900cd29513ed9:0",
+    "raison": "recherche.js, changerTable, etat.O >= 0 : toujours vrai, même effet que if (true) — sans objectif, objectifDe ne porte que SANS_OBJECTIF, sert rend 0 et l'écart est nul ; seul le temps change."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-vrai:eaff393085a93deb:0",
+    "raison": "recherche.js, changerTable, changerServis appelé même pour un écart nul : avec sens = 0, avant = apres, servis et horsObjectif ne bougent pas, l'histogramme perd puis regagne la même case, jamaisServies -= 0 ; apres > max est faux (apres = avant ≤ max), le else-if ne réécrit max qu'à sa propre valeur, et personnesAuMax se recalcule des mêmes valeurs. Une personne non concernée a s(p) = 0 (une table qui la sert rendrait le tour possible) et avant = 0."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-faux:94252e040e6c3290:0",
+    "raison": "recherche.js, changerConflits, sans le saut du siège exclu : voisiner, son seul appelant, lui passe le siège exclu que echanger lui donne, celui où se tient p lui-même ; l'occupant lu est p, d'unité u, et conflitEntre[u × K + u] vaut 0 — relierConflits ne lie jamais une unité à elle-même (g !== unite), et deux unités distinctes ont des rangs distincts : rien ne s'ajoute."
+  },
+  {
+    "cle": "src/moteur/recherche.js:corps-si:0bf37874b7af9907:1",
+    "raison": "recherche.js, changerConflits, if (s === exclu) {} : même effet que le mutant si-faux du même if — l'occupant du siège exclu est p lui-même, et conflitEntre[u × K + u] vaut 0 : rien ne s'ajoute."
+  },
+  {
+    "cle": "src/moteur/recherche.js:ternaire-faux:24193ec16d54cc7c:0",
+    "raison": "recherche.js, etatInitial, paires toujours en Uint32Array : il tient tout compte de 0 à R ; mêmes valeurs lues, seule la mémoire double."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:24193ec16d54cc7c:0",
+    "raison": "recherche.js, etatInitial, R < UINT16_MAX : seul R = 65 535 passe à un Uint32Array, qui tient les mêmes comptes ; seule la mémoire change."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:6230ba6049acd4ba:0",
+    "raison": "recherche.js, etatInitial, histogrammeObjectifs de longueur R + 2 : il n'est indexé que par P(p) − s(p), de 0 à P(p) ≤ R ; la case de plus reste 0 et ne se lit pas. histogrammeObjectifs n'est pas un champ que EtatRecherche déclare lisible."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:0db2a82657de5a74:0",
+    "raison": "recherche.js, etatInitial, personnesAuMax: 1 à la création de l'état : la valeur est récrite sans condition en fin d'etatInitial, avant tout retour et toute lecture."
+  },
+  {
+    "cle": "src/moteur/recherche.js:ternaire-faux:2591280fa9900741:0",
+    "raison": "recherche.js, etatInitial, rencontresAnimees toujours en Uint32Array quand l'état suit les animateurs : il tient tout compte de 0 à R ; mêmes valeurs, seule la largeur des éléments change."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:2591280fa9900741:0",
+    "raison": "recherche.js, etatInitial, R < UINT8_MAX : seul R = 255 passe à un Uint32Array, qui tient les mêmes comptes ; seule la mémoire change."
+  },
+  {
+    "cle": "src/moteur/recherche.js:ternaire-faux:299f1004aa7ae26e:1",
+    "raison": "recherche.js, etatInitial, animateursNonRencontres part de null même quand l'état suit les animateurs : la boucle qui suit y ajoute borneAnimateurs[p] pour chaque personne, et null + n vaut n. suitAnimateurs exige le critère non sans objet, donc une borne non nulle et N ≥ 1 : la boucle tourne au moins une fois, et la valeur est la même."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-vrai:bba900cd29513ed9:1",
+    "raison": "recherche.js, etatInitial, servis[p] += sert(...) sans le test etat.O > 0 : sans objectif, objectifDe ne porte que SANS_OBJECTIF (configuration.js, numeroterObjectifs), sert rend 0 et la somme ne change pas ; seul le temps change."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:bba900cd29513ed9:1",
+    "raison": "recherche.js, etatInitial, etat.O >= 0 : toujours vrai, même effet que sans test — sans objectif, sert rend 0."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-vrai:95476e68875729dc:0",
+    "raison": "recherche.js, descendre, évaluation d'un mouvement null : rien n'a changé, le candidat égale le score courant, la première comparaison (<= 0) l'accepte, change vaut faux, courant reçoit sa propre valeur, et retenir ne change rien, la meilleure affectation n'étant jamais pire que le score courant ; defaire n'est pas atteint."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:a791d2f67ca9c95f:0",
+    "raison": "recherche.js, exigerToursFiges, i >= 0 : pour i = 0, toursFiges[−1] est undefined, et tour <= undefined est faux pour tout entier ; aucun refus de plus."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:66f4a0fe878c0caf:2",
+    "raison": "recherche.js, tableDuDepart, t <= T au contrôle des capacités : occupants[T] et capacite[T] sont undefined, et undefined > undefined est faux ; aucun refus de plus."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:6f32f41253f60a4b:5",
+    "raison": "recherche.js, tableDuDepart, p <= N au contrôle des absents et des fixés : tableDe[N × R + r] est hors du tableau, undefined, différent de NON_ASSIS ; fixe[N × R + r] aussi, et undefined !== t, t valant undefined, est faux : aucun refus de plus."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:f7c487ed95496e53:0",
+    "raison": "recherche.js, remplisseur, s <= debut[t + 1] : la boucle ne passe la fin de la table t que si chacun de ses sièges est fixé. Une telle table ne reçoit aucun libre dans un départ contrôlé : ses fixés y sont assis (tableDuDepart refuse un fixé assis ailleurs), ils la remplissent, et un libre de plus la ferait déborder, ce que tableDuDepart refuse. prochain[t] n'y est donc jamais lu."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:8af307b56c46c8de:0",
+    "raison": "recherche.js, repartirUne, graineDerivee part de 1 : exigerReglage impose rang ≥ 1, et la boucle de tirage 1 à rang la récrit au moins une fois avant toute lecture."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:8af307b56c46c8de:1",
+    "raison": "recherche.js, proposerUne, graineDerivee part de 1 : exigerReglage impose rang ≥ 1, et la boucle de tirage la récrit au moins une fois avant toute lecture."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:6b06f07fc82e91d1:2",
+    "raison": "recherche.js, regenerer, dejaFaits: 1 : dans descendre, fait ne sert qu'à la cadence de progression et de lireSignal ; regenerer ne passe ni progression ni signal, l'appel optionnel ne fait rien et lireSignal(undefined) ne lève pas. Le plan ne dépend pas de fait."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:6f32f41253f60a4b:6",
+    "raison": "recherche.js, structureDuDepart, p <= N au seuil des retours : le tour de trop lit fixe[N × R + r], undefined, différent de LIBRE, puis imposee[N × R + r], undefined hors du tableau typé, qui n'égale pas 0 : rien ne s'écrit."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-vrai:f99905fb09a97ec2:0",
+    "raison": "recherche.js, scoreComplet, occupation comptée même pour RESERVE : l'état de recherche assied chacun à chaque tour, sans réserve (en-tête, « Sièges » ; nombrePlacesManquantes nul), et tableDe ne s'écrit que dans ce module ; une case RESERVE (−1) viserait de plus l'index −R + r, négatif, qui n'écrit rien dans un Int32Array."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:7bad31856a34b5de:1",
+    "raison": "recherche.js, scoreComplet, horsObjectif: 1 par défaut : le défaut ne sert que si mesurer rend objectifs null, c'est-à-dire sans personne concernée (indicateurs.js, lireObjectifs) ; le critère des tours hors objectif est alors sans objet (configuration.js, etatDesCriteres : tous les P(p) nuls), la compilation ne pose aucun terme qui lise cette grandeur, et composer ne la lit pas."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:32d01ddae0b0c46b:1",
+    "raison": "recherche.js, scoreComplet, jamaisServies: 1 par défaut : même raison que horsObjectif — sans personne concernée, le critère des tours hors objectif est sans objet, et aucun terme ne lit jamaisServies."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:d1566443f92e848b:1",
+    "raison": "recherche.js, scoreComplet, horsObjectifMax: 1 par défaut : même raison — sans personne concernée, aucun terme ne lit horsObjectifMax."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:0db2a82657de5a74:1",
+    "raison": "recherche.js, scoreComplet, personnesAuMax: 1 par défaut : même raison — sans personne concernée, aucun terme ne lit personnesAuMax."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:d4e437d3a45ea6b4:0",
+    "raison": "recherche.js, scoreComplet, animateursNonRencontres ?? 1 : le défaut ne sert que si mesurer rend animateurs null, c'est-à-dire quand aucune borne des animateurs n'est non nulle (indicateurs.js, lireAnimateurs) ; le critère est alors sans objet (configuration.js, etatDesCriteres), et aucun terme ne lit la grandeur."
+  },
+  {
+    "cle": "src/moteur/verification.js:nombre-plus-un:cf3bae39dd692048:0",
+    "raison": "verification.js, SANS_TABLE = -3 au lieu de -2 : la constante ne se compare qu'à elle-même (t !== SANS_TABLE) et à une case de instance.fixe, Int32Array qui ne porte que LIBRE (-1) ou un index de table (0 au moins) ; ni -2 ni -3 n'en est un."
+  },
+  {
+    "cle": "src/moteur/verification.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "verification.js, verifierInvariants, compter rend -2 au lieu de -1 pour un id étranger : le résultat ne se lit que par p < 0, vrai pour les deux, et l'appel sur la réserve l'ignore."
+  },
+  {
+    "cle": "src/moteur/verification.js:ternaire-vrai:be312eab7bfc810f:0",
+    "raison": "verification.js, verifierInvariants, t = tableDeListe[i] sans le repli SANS_TABLE : pour une liste au-delà de plan.tables, t vaut undefined au lieu de -2 ; t ne se lit que par fixe[p · R + r] === t, case d'un Int32Array dans ses bornes (p < N, r < R), toujours un nombre, qui n'égale ni undefined ni -2."
+  },
+  {
+    "cle": "src/moteur/verification.js:frontiere:be312eab7bfc810f:0",
+    "raison": "verification.js, verifierInvariants, i <= tableDeListe.length au lieu de < : à i = tableDeListe.length, t vaut tableDeListe[i], undefined, au lieu de SANS_TABLE ; t ne se lit que par fixe[p · R + r] === t, case d'un Int32Array dans ses bornes, toujours un nombre, qui n'égale ni undefined ni -2."
+  },
+  {
+    "cle": "src/moteur/verification.js:si-faux:8bdf2a7e57bd9301:0",
+    "raison": "verification.js, verifierInvariants, sans le continue d'un id étranger (p = -1) : aUneTable[-1] = 1 n'écrit rien, -1 n'étant pas un index d'élément d'un Uint8Array ; fixe[-R + r], r < R, est hors des éléments et vaut undefined, qui n'égale pas t, un nombre : aSaTable n'est pas écrit."
+  },
+  {
+    "cle": "src/moteur/verification.js:corps-si:0bf37874b7af9907:0",
+    "raison": "verification.js, verifierInvariants, if (p < 0) {} : même effet que la suppression du test, p = -1 ; aUneTable[-1] = 1 n'écrit rien dans un Uint8Array, et fixe[-R + r] vaut undefined, qui n'égale pas t : aSaTable n'est pas écrit."
+  },
+  {
+    "cle": "src/moteur/verification.js:nombre-plus-un:129d7624b7199751:0",
+    "raison": "verification.js, verifierInvariants, aUneTable[p] = 2 au lieu de 1 : la marque ne se lit que par !aUneTable[p], et fill(0) la remet à zéro à chaque tour."
+  },
+  {
+    "cle": "src/moteur/verification.js:nombre-plus-un:ca1a67f9214e4e8e:0",
+    "raison": "verification.js, verifierInvariants, aSaTable[p] = 2 au lieu de 1 : la marque ne se lit que par !aSaTable[p], et fill(0) la remet à zéro à chaque tour."
+  },
+  {
+    "cle": "src/moteur/verification.js:frontiere:be312eab7bfc810f:1",
+    "raison": "verification.js, verifierInvariants, boucle des capacités jusqu'à i <= tableDeListe.length : le tour de trop n'a lieu que pour une liste au-delà de plan.tables ; t = tableDeListe[i] vaut undefined, et listes[i].length > capacite[undefined] compare à undefined (propriété absente de l'Int32Array), toujours faux : aucun CAPACITE n'est ajouté."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:615bdd17c2556f82:0",
+    "raison": "recherche.js, EN_RESERVE = −4 au lieu de −3 : la sentinelle n'est écrite que par tableDuDepart, comparée à NON_ASSIS (−2) par !== et lue par t >= 0, puis remplacée par RESERVE au même tour avant que tableDe soit rendu ; toute valeur négative distincte de −2 tient le même rôle."
+  },
+  {
+    "cle": "src/moteur/recherche.js:corps-si:0f03a506717f0ab0:0",
+    "raison": "recherche.js, tableDuDepart, corps vide pour un absent (tableDe[i] = RESERVE retiré) : la case d'un absent reste NON_ASSIS, mais aucun lecteur ne la lit — remplisseur ne lit tableDe que pour les libres présents (libres[r]), la boucle des libres en trop la compare à t ≥ 0 comme RESERVE, et l'état de recherche refait son tableDe depuis les sièges ; la sortie ne change pas."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-vrai:ef3e8835f3efc7d4:0",
+    "raison": "recherche.js, tableDuDepart, fixee !== LIBRE → true : pour une libre à asseoir, occupants[LIBRE] += 1 écrit à l'index −1 d'un Int32Array, écriture que le tableau typé ignore ; aucun compte de table ne change."
+  },
+  {
+    "cle": "src/moteur/recherche.js:arithmetique:4883685ba05bd48f:0",
+    "raison": "recherche.js, tableDuDepart, départ de la boucle des libres en trop à N + 1 au lieu de N − 1 : les deux premiers p lisent tableDe au-delà de N × R, undefined !== t, et continuent sans rien changer ; la boucle reprend à N − 1 comme l'original."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-zero:4883685ba05bd48f:0",
+    "raison": "recherche.js, tableDuDepart, départ de la boucle des libres en trop à N au lieu de N − 1 : le premier p lit tableDe au-delà de N × R, undefined !== t, et continue sans rien changer ; la boucle reprend à N − 1 comme l'original."
+  },
+  {
+    "cle": "src/moteur/recherche.js:booleen:07901d11160c8cf1:0",
+    "raison": "recherche.js, structureDuDepart, fixeeImposee = true : la copie se fait toujours. Sans réserve imposée fixée, elle égale structure champ pour champ — imposee ne marque que des libres, dont aucune case n'entre dans seuilRetour, et une animatrice est fixée au tour qu'elle anime (deriverAnimateurs), donc aucune n'est retirée des animes — : seule une allocation de plus, sortie anticipée de performance."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:83f9bb18686efa4e:0",
+    "raison": "recherche.js, structureDuDepart, i <= N × R : la case de plus lit imposee[N × R], undefined === 1 faux, et ne change pas fixeeImposee."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-vrai:149de42f9d5738c9:0",
+    "raison": "recherche.js, structureDuDepart, condition de fixeeImposee → true : la copie se fait dès que N × R > 0, toujours ; sans réserve imposée fixée elle égale structure champ pour champ (voir fixeeImposee = true) : performance seule."
+  },
+  {
+    "cle": "src/moteur/recherche.js:logique:149de42f9d5738c9:0",
+    "raison": "recherche.js, structureDuDepart, && → || dans la détection : la copie se fait aussi quand une case est fixée ou imposée sans les deux ; sans réserve imposée fixée elle égale structure champ pour champ (voir fixeeImposee = true) : performance seule."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-faux:bae95288a0938910:0",
+    "raison": "recherche.js, structureDuDepart, !fixeeImposee → false : la sortie anticipée ne joue jamais, la copie se fait toujours ; sans réserve imposée fixée elle égale structure champ pour champ (voir fixeeImposee = true) : performance seule."
+  },
+  {
+    "cle": "src/moteur/recherche.js:corps-si:34f283bafba64159:0",
+    "raison": "recherche.js, structureDuDepart, return structure retiré : la copie se fait toujours ; sans réserve imposée fixée elle égale structure champ pour champ (voir fixeeImposee = true) : performance seule."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:7d1bafe580984c35:1",
+    "raison": "recherche.js, structureDuDepart, i <= seuilRetour.length : la case de plus lit seuilRetour au-delà du tableau, undefined === 0 faux, et n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:4ab47ef7d68e4bc0:0",
+    "raison": "recherche.js, structureDuDepart, debut de T × R + 2 cases : la case de plus vaut 0 et n'est jamais lue — changerAnimateurs ne lit debutAnimes qu'aux lignes 0 à T × R, et ni bornerAnimateurs ni mesurer ne lisent la copie."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:7f4ebde44fdb2913:0",
+    "raison": "recherche.js, structureDuDepart, ligne <= T × R : la ligne de plus part de k = debutAnimes[T × R] = animes.length ; k < debutAnimes[T × R + 1], undefined, est faux, aucun animateur n'est parcouru, et debut[T × R + 1] s'écrit hors du tableau typé, écriture ignorée."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:66f4a0fe878c0caf:4",
+    "raison": "recherche.js, remplisseur, t <= T : la table de plus part de s = debut[T] = S, s < debut[T + 1] (undefined) est faux, et prochain[T], laisse[T] s'écrivent hors des Int32Array de T cases, écritures ignorées."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-zero:dd3a763eb6ae4f8b:1",
+    "raison": "recherche.js, remplisseur, laisse[t] += 0 : laisse reste sur le siège qu'il vient d'occuper ; le libre suivant de la table le trouve occupé, avance d'un siège dans la boucle while, et prend la même place que l'original."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-vrai:c4f2b94d8ec476b0:0",
+    "raison": "recherche.js, placerArrivantsFiges, choix !== a → true : quand l'arrivante garde son siège, echanger(etat, r, a, a) retire deux fois puis rajoute deux fois les mêmes voisins, les mêmes visites et les mêmes animateurs ; chaque pas défait exactement le précédent (un compte de paire à 0 passe par 2^16 − 1 ou 2^32 − 1 et revient à 0 sans toucher aux rencontres), et l'état rendu est identique : performance seule."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:8d0d1504ba708607:8",
+    "raison": "recherche.js, preparerDepart, r <= R dans le relevé des tours tirables : la case de plus lit fige[R], undefined === 0 faux, et n'ajoute aucun tour."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:6f32f41253f60a4b:7",
+    "raison": "recherche.js, scoreComplet, p <= N dans le compte des occupations : la personne de plus lit tableDe au-delà de N × R, undefined !== RESERVE, et ajoute 1 à occupation[NaN], écriture qu'un Int32Array ignore ; les réunions ne changent pas."
+  },
+  {
+    "cle": "src/moteur/configuration.js:si-faux:54d5bb04cd66257b:0",
+    "raison": "configuration.js, coPresences, if (false) au lieu de absences === 0 : sans absence, chaque rangée du masque ne porte que des 1 ; la réunion des présents des tours de chacun contient les N personnes, d'où un compte N et N − 1 co-présents, la valeur que fill écrit. Le raccourci n'épargne que le calcul."
+  },
+  {
+    "cle": "src/moteur/configuration.js:nombre-plus-un:54d5bb04cd66257b:0",
+    "raison": "configuration.js, coPresences, absences === 1 au lieu de absences === 0 : la seule absence est celle d'une personne à un tour ; chacun étant présent à un tour au moins, R vaut alors au moins 2, et cette personne est présente à un autre tour, où les N − 1 autres le sont toutes : chacun croise chacun, N − 1 co-présents pour tous, la valeur que fill écrit."
+  },
+  {
+    "cle": "src/moteur/configuration.js:arithmetique:c5604739dcb96a73:0",
+    "raison": "configuration.js, coPresences, Math.ceil(N × 32) mots au lieu de ⌈N/32⌉ : l'index d'une personne, r × mots + (p >>> 5), et les boucles sur m < mots suivent le même mots ; les mots ajoutés restent à 0, et bitsA1(0) vaut 0. Seule la mémoire change."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:6f32f41253f60a4b:1",
+    "raison": "configuration.js, relierConflits, p <= N au rang de chaque présent : le tour de trop lit groupe[N], undefined hors du tableau typé, différent de SANS_GROUPE, d'où rang[undefined], undefined, écrit dans uniteConflit[N], au-delà de la longueur N du tableau typé, qui n'écrit rien ; la relecture de uniteConflit[N] rend undefined, et undefined >= 0 est faux."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:8d0d1504ba708607:0",
+    "raison": "configuration.js, coPresences, r <= R au remplissage des présents de chaque tour : la case de trop, present[p × R + R], est le tour 1 de la personne suivante ; quand elle vaut 1, l'écriture vise presentsDuTour[R × mots + (p >>> 5)], au-delà de la longueur R × mots du tableau typé, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:arithmetique:c621ca71e6b7f974:2",
+    "raison": "configuration.js, coPresences, motif lu depuis p / R au lieu de p × R : subarray tronque le début à ⌊p/R⌋, et la clé de la Map porte la rangée de p en suffixe ; sa longueur, (p + 1) × R − ⌊p/R⌋, croît strictement avec p dès que R ≥ 2, ce qu'impose une absence : deux personnes n'ont jamais la même clé, et chacune calcule son compte depuis present[p × R + r], qui ne dépend pas de la clé. Seule la mémoïsation se perd."
+  },
+  {
+    "cle": "src/moteur/configuration.js:nombre-plus-un:722cded1530bd637:1",
+    "raison": "configuration.js, coPresences, motif lu jusqu'à (p + 2) × R au lieu de (p + 1) × R : la clé porte la rangée de p suivie de celle de p + 1, ou la seule rangée de p pour la dernière personne, de longueur R ; deux clés égales ont donc la même rangée de p en tête, et le compte retrouvé est celui de ce motif. Deux personnes au même motif peuvent recalculer le même compte : seule la mémoïsation se perd."
+  },
+  {
+    "cle": "src/moteur/configuration.js:si-vrai:97005eed87c29f05:0",
+    "raison": "configuration.js, coPresences, if (true) au lieu de compte === undefined : chaque personne recalcule la réunion des présents de ses tours au lieu de reprendre le compte de son motif, la même valeur ; seule la mémoïsation se perd."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:8d0d1504ba708607:1",
+    "raison": "configuration.js, coPresences, r <= R dans la réunion : la case de trop, present[p × R + R], est le tour 1 de la personne suivante, ou undefined pour la dernière ; quand elle n'est pas 0, reunion[m] |= presentsDuTour[R × mots + m] lit undefined hors du tableau typé, et x | undefined vaut x : la réunion ne change pas."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:b3625209606ad436:0",
+    "raison": "configuration.js, coPresences, m <= mots dans la réunion : le mot de trop écrit reunion[mots], au-delà de la longueur mots du tableau typé, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:b3625209606ad436:1",
+    "raison": "configuration.js, coPresences, m <= mots au compte : bitsA1 reçoit reunion[mots], undefined hors du tableau typé ; ses décalages et masques font du NaN un 0, et bitsA1 rend 0 : le compte ne change pas."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:6f32f41253f60a4b:4",
+    "raison": "configuration.js, coPresences, p <= N au décompte : le tour de trop prend le motif vide de present.subarray(N × R, (N + 1) × R) et écrit son compte dans coPresents[N], au-delà de la longueur N du tableau typé, qui n'écrit rien ; le motif vide n'est celui d'aucune personne, R valant au moins 1, et la Map ne le rend à personne."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:8d0d1504ba708607:7",
+    "raison": "configuration.js, bornerAnimateurs, r <= R au relevé des tables à siège libre : le tour de trop ajoute libresDuTour[R], que la boucle des personnes, sur les tours 0 à R − 1, ne lit jamais, et écrit plusGrandLibre[R], au-delà de la longueur R du tableau typé, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:6f32f41253f60a4b:9",
+    "raison": "configuration.js, couplesPossibles, p <= N : le tour de trop lit present[N × R + r], undefined, qui n'égale pas 0, puis fixe[N × R + r], undefined, différent de LIBRE ; objectifDe[NaN] vaut undefined, différent de SANS_OBJECTIF, et correspond[NaN], undefined, n'égale pas 1 : oui reste faux, rien ne s'écrit."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:9c072775f68251ac:0",
+    "raison": "configuration.js, exigerPlanIndexe, absences >= 0 au lieu de absences > 0 : le masque se lit aussi sans absence ; une instance de normaliser sans absence a present à 1 partout, absences valant Σ_p (R − toursPresents[p]), si bien que present[i] === 0 n'est jamais vrai et que rien de plus ne se lève. Seule la lecture du masque, que le raccourci épargne, s'ajoute."
+  },
+  {
+    "cle": "src/moteur/plafond.js:ternaire-vrai:3be8a8bb229ec51e:0",
+    "raison": "plafond.js, borne, premier terme effectif − ε pour tout le monde : il devient N − 1 au lieu de C(p), plus grand ou égal, et C(p) ne mord déjà jamais pour tout le monde. Chacun est présent à un tour au moins (PRESENCE_VIDE) et un ancré à chaque tour : les ancrés autres que p sont tous co-présents de p, et C(p) = n_p^C + k − [p ancré] (configuration.js, coPresences). Le terme intérieur vaut au plus Σ a_t sur des tables distinctes, soit k − [p ancré], plus n_p^C : au plus C(p), quel que soit l'itinéraire, même assis à un tour d'absence. Le min extérieur rend le terme intérieur avant comme après. Pour les affiliés, autres est déjà null."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:0b7a4bd0cf7458e3:0",
+    "raison": "plafond.js, maximiser, W = min(max(1, nPMax − sieges0), f·vMax) : W grandit ou reste (de 0 à 1 quand nPMax ≤ sieges0), sans dépasser f·vMax. Tout W' entre W et f·vMax rend le même plafond : à W = f·vMax rien n'est écrêté ; sinon un état à w ≥ W porte sieges0 + w ≥ nPMax ≥ n_p^C pour chaque membre de la signature, où min(n_p^C, sieges0 + w) vaut déjà n_p^C. L'état écrêté garde la plus grande somme d'ancrés des états qu'il fond, la lecture prend le maximum sur les cases, et la borne croît avec la somme d'ancrés : séparer ces états ne change pas le maximum."
+  },
+  {
+    "cle": "src/moteur/plafond.js:arithmetique:ffcd38fb4b00da36:0",
+    "raison": "plafond.js, maximiser, max(0, nPMax + sieges0) : sieges0 ≥ 0, chaque table fixée à p gardant c_t − 1 − a_t ≥ 0 (normaliser refuse une table qui reçoit plus de personnes fixées que de sièges, SURRESERVATION) ; W grandit ou reste, sans dépasser f·vMax ; même raison que max(1, nPMax − sieges0)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:6a44835bbd054679:1",
+    "raison": "plafond.js, maximiser, subarray(f·largeur, (f + 2)·largeur) : meilleur compte (f + 1)·largeur cases, et subarray ramène une fin au-delà de la longueur à la longueur : la même vue de la dernière rangée."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:dfdb1d2a8b47ca97:0",
+    "raison": "plafond.js, lireProgramme, mobilesRencontrables(…, 2) : lireProgramme ne reçoit que la population de tout le monde (plafondsEtProgrammes), dont mobilesVus n'est jamais null ; ε ne se lit que dans l'autre branche, et n_p^C reste mobilesVus[p]."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:dfdb1d2a8b47ca97:1",
+    "raison": "plafond.js, plafondsEtProgrammes, mobilesRencontrables(…, 2) au relevé de nPMax : la population est celle de tout le monde, mobilesVus n'est pas null, ε ne se lit pas, et n_p^C reste mobilesVus[p] ; nPMax ne change pas."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:dfdb1d2a8b47ca97:0",
+    "raison": "plafond.js, lireProgramme, mobilesRencontrables(…, 0) : même raison que (…, 2) — pour tout le monde, mobilesVus n'est pas null, ε ne se lit pas, n_p^C reste mobilesVus[p]."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:2cad7f4dd145a496:0",
+    "raison": "plafond.js, lireProgramme, borne(population, p, 2, …) sans tour libre présent ou sans table admissible : borne ne lit ε que quand population.autres est null ; pour tout le monde, autres vaut instance.coPresents, et le premier terme reste C(p)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:2cad7f4dd145a496:0",
+    "raison": "plafond.js, lireProgramme, borne(population, p, 0, …) sans tour libre présent ou sans table admissible : même raison que ε = 2 — pour tout le monde, borne ne lit pas ε, le premier terme reste C(p)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:f1d3ec176cf3d720:0",
+    "raison": "plafond.js, lireProgramme, w <= rangee.length : rangee[rangee.length] est undefined sur un tableau typé, undefined >= 0 est faux, rien ne s'ajoute."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:0445e7f41f55ac32:0",
+    "raison": "plafond.js, lireProgramme, borne(population, p, 2, …) à chaque case atteinte : borne ne lit ε que quand population.autres est null ; pour tout le monde, le premier terme reste C(p)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:0445e7f41f55ac32:0",
+    "raison": "plafond.js, lireProgramme, borne(population, p, 0, …) à chaque case atteinte : même raison que ε = 2 — pour tout le monde, borne ne lit pas ε."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:dfdb1d2a8b47ca97:1",
+    "raison": "plafond.js, plafondsEtProgrammes, mobilesRencontrables(…, 0) au relevé de nPMax : la population est celle de tout le monde, mobilesVus n'est pas null, ε ne se lit pas, et n_p^C reste mobilesVus[p] ; nPMax ne change pas."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:f4ef0e0a251f957d:0",
+    "raison": "plafond.js, plafondsEtProgrammes, nP >= connu : à égalité, set écrit la valeur déjà présente."
+  },
+  {
+    "cle": "src/moteur/plafond.js:si-vrai:b5e28aed44dacc4e:0",
+    "raison": "plafond.js, plafondsEtProgrammes, if (true) à la lecture : chaque personne relit le programme de sa signature au lieu de reprendre la lecture gardée sous la même signature, le même C(p) et le même n_p^C ; lireProgramme ne lit que ces trois données, la valeur est la même et seul le partage se perd — une performance seule. Le nombre de programmes rendu ne dépend pas des lectures."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:8d0d1504ba708607:5",
+    "raison": "plafond.js, enumerer, r <= R : itineraire[R] est undefined sur un Int32Array de R cases, qui n'égale pas LIBRE ; la conjonction s'arrête là et aucun tour libre ne s'ajoute."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:nombre-zero:e8ca389f132932a8:1",
+    "raison": "diagnostic.js, collisionPartout, recherche de la plus petite capacité partant de t = 0 : plusPetite vaut déjà capacite[0], et le tour de trop compare capacite[0] < capacite[0], faux ; plusPetite ne change pas."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:bde23dc3f8ea7d55:0",
+    "raison": "diagnostic.js, collisionPartout, capacite[t] <= plusPetite : à égalité, l'affectation écrit la capacité déjà retenue."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:nombre-plus-un:32ded87cad455aaf:0",
+    "raison": "diagnostic.js, collisionPartout, vue[g] = 2 : vue, un Uint8Array remis à 0 à chaque tour, ne se lit que par vue[g] === 0 ; 2 y est non nul comme 1, et chaque appartenance se compte une fois par tour."
+  },
+  {
+    "cle": "src/moteur/diagnostic.js:frontiere:8d0d1504ba708607:2",
+    "raison": "diagnostic.js, objectifsInevitables, r <= R dans le cumul des sièges libres par tour : au tour de trop, l'écriture vise libresAuTour[R], hors de l'Int32Array de longueur R, et un tableau typé l'ignore sans lever ; les lectures de objectifDe et siegesLibres à t × R + R ne lèvent pas, et la suite ne lit libresAuTour qu'aux r < R."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:6f32f41253f60a4b:7",
+    "raison": "indicateurs.js, assisAChaqueTourPresent, p <= N : toursAssis (mesures.toursAssis) et toursPresents (l'Int32Array de l'instance) ont N cases ; à p = N, les deux lectures valent undefined, donc égales, et la boucle finit et rend vrai comme sans le tour de trop."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:6f32f41253f60a4b:5",
+    "raison": "configuration.js, coPresences, p <= N au calcul des mobiles co-présents : le tour de trop lit coPresents[N] et statut[N], undefined hors des tableaux typés, et écrit mobilesCoPresents[N], au-delà de la longueur N du tableau typé, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:6f32f41253f60a4b:6",
+    "raison": "configuration.js, siegesLibresApres, p <= N : le tour de trop lit fixe[N × R + r], undefined, différent de LIBRE ; l'écriture fixees[NaN] += 1 vise un index hors des éléments d'un tableau typé, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:6f32f41253f60a4b:11",
+    "raison": "configuration.js, bornerAnimateurs, p <= N : le tour de trop lit present et fixe hors des tableaux typés, undefined, qui n'égale ni 0 ni LIBRE ; la boucle des animateurs va de debutAnimes[NaN] à debutAnimes[NaN], undefined < undefined est faux : rien ne se marque, et borne[N], au-delà de la longueur N du tableau typé, n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:6f32f41253f60a4b:12",
+    "raison": "configuration.js, indexerPlan, p <= N à la recherche des non-placés : le tour de trop lit tableDe[N × R + r], hors du tableau typé, undefined, différent de NON_PLACE : continue, rien ne s'écrit ni ne se lève."
+  },
+  {
+    "cle": "src/moteur/configuration.js:nombre-plus-un:1bad6b8cf97131fc:9",
+    "raison": "configuration.js, bornerAnimateurs, marque remplie de −2 au lieu de −1 : marque[f] ne se lit que par marque[f] === p, avec p ≥ 0 ; aucune des deux valeurs initiales ne l'égale."
+  },
+  {
+    "cle": "src/moteur/configuration.js:ternaire-faux:08b3de0681991350:0",
+    "raison": "configuration.js, relierConflits, numeroDe.get(organisation) même pour un exclu sans organisation : numeroDe n'a pour clés que les libellés des groupes, que des présents portent, numeroterGroupes sautant organisation null ; get(null) rend undefined, la valeur de la branche d'origine, et l'exclu ne relie rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:frontiere:594905ee09e0f897:0",
+    "raison": "configuration.js, relierConflits, u <= G + N dans la numérotation des unités : rang[G + N] est hors des éléments de l'Int32Array de longueur G + N, undefined, différent de 0 : le tour de trop passe par continue, et K ne change pas."
+  },
+  {
+    "cle": "src/moteur/configuration.js:si-vrai:d5c6d215e62badb8:0",
+    "raison": "configuration.js, relierConflits, if (true) au lieu de uniteConflit[p] >= 0 : une personne qu'aucune liste ne relie, de rang −1, écrit effectif[−1], un index hors des éléments d'un tableau typé, qui n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/configuration.js:mise-a-jour:f9cdc1e95f7da2cf:0",
+    "raison": "configuration.js, relierConflits, effectif[u] −= 1 au lieu de += 1 : chaque effectif change de signe ; effectif ne se lit qu'au produit effectif[u] × effectif[v] d'un lien, où (−a) × (−b) = a × b, et la fonction ne le rend pas : pairesEnConflit ne change pas."
+  },
+  {
+    "cle": "src/moteur/conflits.js:frontiere:ab52c21940b96353:0",
+    "raison": "conflits.js, conflitsParTable, pairesEnConflit >= 0 au lieu de > 0 : la condition ne dépend plus que de enConflit.length > 0. Une paire n'entre dans enConflit (parcourirTours) que quand conflitEntre relie les unités des deux personnes ; un lien relie l'unité d'un présent, ou le groupe d'un exclu que des présents portent, à un groupe de présents (relierConflits), et ajoute à pairesEnConflit le produit de deux effectifs ≥ 1 : enConflit non vide implique pairesEnConflit > 0."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:d74e7499624f2757:0",
+    "raison": "recherche.js, CONFLITS = 13 au lieu de 12 : le code n'est comparé qu'à lui-même — CODE_DE le pose pour conflitsOrganisation, lire le reconnaît par case CONFLITS — ; 13, distinct des douze autres codes (0 à 11), garde sa branche, et suitAnimateurs ne compare qu'à ANIMATEURS (10)."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-faux:94252e040e6c3290:1",
+    "raison": "recherche.js, voisiner, sans le saut du siège exclu : avant l'échange, le siège exclu porte p, qui modifie la paire (p, p) de −1 ; après, il porte p de nouveau à son siège d'arrivée, qui la modifie de +1. Le tableau non signé passe de 0 au maximum puis revient à 0 ; à −1, apres = −1 ≠ 0 compte une répétition retirée, à +1, avant ≠ 0 en rend une : excedentPaires, et collisions cumulées et excédent pour une personne à organisation, reviennent à leur valeur dans le même échange, avant toute lecture du score, et rencontres comme affiliés ne bougent pas."
+  },
+  {
+    "cle": "src/moteur/recherche.js:corps-si:0bf37874b7af9907:3",
+    "raison": "recherche.js, voisiner, if (s === exclu) {} : même effet que la suppression du test — la paire (p, p) reçoit −1 avant l'échange et +1 après, dans le même échange ; le tableau non signé revient à 0 et chaque compteur à sa valeur avant toute lecture."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-faux:6bd4508de3880b72:0",
+    "raison": "recherche.js, changerConflits, sans le saut des places fantômes : FANTOME vaut −1, uniteConflit[−1] est undefined hors du tableau typé, et undefined >= 0 est faux : rien ne s'ajoute."
+  },
+  {
+    "cle": "src/moteur/recherche.js:corps-si:0bf37874b7af9907:2",
+    "raison": "recherche.js, changerConflits, if (q === FANTOME) {} : même effet que le mutant si-faux du même if — uniteConflit[−1] vaut undefined, et undefined >= 0 est faux."
+  },
+  {
+    "cle": "src/moteur/recherche.js:si-vrai:0fa1b03927a25e5f:0",
+    "raison": "recherche.js, voisiner, if (true) au lieu de u >= 0 : changerConflits reçoit u = −1 ; pour un occupant d'unité v, 0 ≤ v < K, l'index u × K + v = v − K est négatif, hors des éléments du tableau typé conflitEntre, undefined, qui n'égale pas 1 : rien ne s'ajoute. Seul le temps change."
+  },
+  {
+    "cle": "src/moteur/recherche.js:frontiere:4f0fa2c06bdb19fb:1",
+    "raison": "recherche.js, etatInitial, voisin <= s dans le compte des conflits au départ : le siège de trop est celui de p lui-même, d'unité u ; conflitEntre[u × K + u] vaut 0, relierConflits ne liant jamais une unité à elle-même et deux unités distinctes ayant des rangs distincts : rien ne s'ajoute."
+  },
+  {
+    "cle": "src/moteur/recherche.js:ternaire-faux:6bd4508de3880b72:0",
+    "raison": "recherche.js, etatInitial, v lu par uniteConflit[q] même pour une place fantôme : FANTOME vaut −1, uniteConflit[−1] est undefined hors du tableau typé, et undefined >= 0 est faux, comme −1 >= 0."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:1bad6b8cf97131fc:6",
+    "raison": "recherche.js, etatInitial, v = −2 au lieu de −1 pour une place fantôme : v ne se lit que par v >= 0, faux pour l'un comme pour l'autre."
+  },
+  {
+    "cle": "src/moteur/recherche.js:nombre-plus-un:52c2c44809db7f2b:0",
+    "raison": "recherche.js, scoreComplet, conflitsOrganisation ?? 1 au lieu de ?? 0 : mesurer ne rend null que pour une instance sans paire en conflit (pairesEnConflit nul) ; le critère y est alors sans objet (etatDesCriteres, configuration.js), compilationDe ne le compile pas, et aucun terme de la composition ne porte le code CONFLITS : composer ne lit pas la grandeur."
+  }
+]

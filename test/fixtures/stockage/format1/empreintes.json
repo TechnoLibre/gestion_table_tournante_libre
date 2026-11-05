@@ -1,0 +1,12 @@
+{
+  "calcul": "sha256 du texte UTF-8 de serialiserCharge(reconstruire(journal, revision)), par le code du format 1",
+  "base": "Bal-des-Hiboux",
+  "revisions": {
+    "1": "1cc9e6738c0eea7eb0afeefcc4a6cb7423509dfaac045173d7185cd39ef85d25",
+    "2": "ce6f7f49520b74d4e1a4313c3a31f8e7a9262ad63e3fdb787313292fdd0648d3",
+    "3": "6700fc683ed730ae41dd0778c486ea11a7d1ef607c3c7cb4f8ff852817c54ab8",
+    "4": "86519fc9f2dccc95658adda676b6dc499f0bf4df54f16aeb25ef04aa83e9e935",
+    "5": "13ca4cf502cda8ef905e5c90e9875384e2e2cdc704cde2e751fcad982d35908e",
+    "6": "694d215b6c6d571dec083246987f9961b650dd829000f91bc3d93f44270878ef"
+  }
+}

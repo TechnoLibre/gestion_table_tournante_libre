@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.cmd text eol=crlf
+test/fixtures/csv/** -text
+src/demo/livrees/*.gtt.json -text
+exemples/*.csv -text

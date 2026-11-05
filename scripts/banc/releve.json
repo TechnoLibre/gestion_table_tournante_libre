@@ -1,0 +1,1587 @@
+{
+  "format": 1,
+  "configuration": {
+    "cadre": {
+      "largeur": 1366,
+      "hauteur": 700
+    },
+    "facteurEchelle": 1,
+    "navigateur": "Chromium 153.0.8010.12",
+    "node": "v26.10.0",
+    "processeursLogiques": 16,
+    "ralentissementCpu": 4,
+    "police": "Noto Sans"
+  },
+  "mesures": [
+    {
+      "nom": "SEUIL_SIEGES_LISIBLES",
+      "unite": "places",
+      "valeurProposee": 18,
+      "critere": "le plus grand nombre de places d’une table seule, ronde puis carrée, dont le bas de la liste de noms reste dans la hauteur du <svg data-plan> au zoom ajusté ; le plus petit des deux, dichotomie sur [2, 200]",
+      "police": "Noto Sans",
+      "ralentissementCpu": 1,
+      "formes": [
+        {
+          "forme": "ronde",
+          "seuil": 60
+        },
+        {
+          "forme": "carree",
+          "seuil": 18
+        }
+      ],
+      "sondes": [
+        {
+          "forme": "ronde",
+          "places": 2,
+          "basListePx": 489.5,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "ronde",
+          "places": 200,
+          "basListePx": 643.0318603515625,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "ronde",
+          "places": 2,
+          "basListePx": 489.5,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "ronde",
+          "places": 200,
+          "basListePx": 643.0318603515625,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "ronde",
+          "places": 101,
+          "basListePx": 639.2146606445312,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "ronde",
+          "places": 51,
+          "basListePx": 632.26318359375,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "ronde",
+          "places": 76,
+          "basListePx": 636.6631469726562,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "ronde",
+          "places": 63,
+          "basListePx": 634.8416137695312,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "ronde",
+          "places": 57,
+          "basListePx": 633.673828125,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "ronde",
+          "places": 60,
+          "basListePx": 634.08349609375,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "ronde",
+          "places": 61,
+          "basListePx": 634.475341796875,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "ronde",
+          "places": 59,
+          "basListePx": 634.0867919921875,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "ronde",
+          "places": 60,
+          "basListePx": 634.08349609375,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "ronde",
+          "places": 61,
+          "basListePx": 634.475341796875,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "carree",
+          "places": 2,
+          "basListePx": 478.16387939453125,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "carree",
+          "places": 200,
+          "basListePx": 723.527099609375,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "carree",
+          "places": 2,
+          "basListePx": 478.16387939453125,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "carree",
+          "places": 200,
+          "basListePx": 723.527099609375,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "carree",
+          "places": 101,
+          "basListePx": 703.1007690429688,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "carree",
+          "places": 51,
+          "basListePx": 689.400634765625,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "carree",
+          "places": 26,
+          "basListePx": 648.41357421875,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "carree",
+          "places": 14,
+          "basListePx": 606.1143798828125,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "carree",
+          "places": 20,
+          "basListePx": 652.8040161132812,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "carree",
+          "places": 17,
+          "basListePx": 609.8591918945312,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "carree",
+          "places": 18,
+          "basListePx": 624.1741333007812,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "carree",
+          "places": 19,
+          "basListePx": 638.4890747070312,
+          "basPlanPx": 634.21875,
+          "tient": false
+        },
+        {
+          "forme": "carree",
+          "places": 17,
+          "basListePx": 609.8591918945312,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "carree",
+          "places": 18,
+          "basListePx": 624.1741333007812,
+          "basPlanPx": 634.21875,
+          "tient": true
+        },
+        {
+          "forme": "carree",
+          "places": 19,
+          "basListePx": 638.4890747070312,
+          "basPlanPx": 634.21875,
+          "tient": false
+        }
+      ],
+      "refus": null
+    },
+    {
+      "nom": "TOLERANCE_CHAINE_TEMOIN",
+      "unite": "rapport",
+      "valeurProposee": 0.011,
+      "critere": "le quart de l’écart relatif du repli (system-ui, sans-serif) à la longueur des avances de Noto Sans, et au moins trois fois la gigue de 10 mesures ; chaîne témoin à 16 px, graisse 400, crénage et ligatures coupés",
+      "police": "Noto Sans",
+      "ralentissementCpu": 1,
+      "corpsPx": 16,
+      "attenduePx": 213.264,
+      "embarqueePx": [
+        214,
+        214,
+        214,
+        214,
+        214,
+        214,
+        214,
+        214,
+        214,
+        214
+      ],
+      "repliPx": [
+        204.0625,
+        204.0625,
+        204.0625,
+        204.0625,
+        204.0625,
+        204.0625,
+        204.0625,
+        204.0625,
+        204.0625,
+        204.0625
+      ],
+      "ecartRepli": 0.0431460537175,
+      "gigue": 0,
+      "biais": 0.00345112161452,
+      "refus": null
+    },
+    {
+      "nom": "RALENTISSEMENT_PLEINE_CHARGE",
+      "unite": "×",
+      "valeurProposee": 2.98,
+      "critere": "t(L) / t(1), médianes de 3 répétitions ou plus : une génération de W propositions sur W travailleurs, grande démonstration, arret 200000, graine 1",
+      "courbe": [
+        {
+          "coeurs": 1,
+          "dureesMs": [
+            430.1,
+            447.4,
+            433.2
+          ],
+          "medianeMs": 433.2,
+          "ralentissement": 1,
+          "modele": 1
+        },
+        {
+          "coeurs": 2,
+          "dureesMs": [
+            477.4,
+            484.9,
+            476.1
+          ],
+          "medianeMs": 477.4,
+          "ralentissement": 1.102,
+          "modele": 1.132
+        },
+        {
+          "coeurs": 4,
+          "dureesMs": [
+            591.1,
+            592.2,
+            576.8
+          ],
+          "medianeMs": 591.1,
+          "ralentissement": 1.364,
+          "modele": 1.396
+        },
+        {
+          "coeurs": 8,
+          "dureesMs": [
+            803.9,
+            829.3,
+            807.6
+          ],
+          "medianeMs": 807.6,
+          "ralentissement": 1.864,
+          "modele": 1.924
+        },
+        {
+          "coeurs": 16,
+          "dureesMs": [
+            1290.6,
+            1277.1,
+            1302.7
+          ],
+          "medianeMs": 1290.6,
+          "ralentissement": 2.979,
+          "modele": 2.979
+        }
+      ],
+      "bruite": false,
+      "ralentissementCpu": 1
+    },
+    {
+      "nom": "SEUIL_MATRICE_PARTICIPANTS",
+      "unite": "participants",
+      "valeurProposee": 44,
+      "critere": "le plus grand nombre de participants dont la matrice se dessine, chaque case d’au moins 24 px, la dernière colonne et les intitulés dans la carte de la vue des paires, un nom de référence en tête ; ⌈n / 4⌉ tables de quatre places, trois tours ; dichotomie sur [8, 120]",
+      "police": "Noto Sans",
+      "ralentissementCpu": 1,
+      "sondes": [
+        {
+          "participants": 8,
+          "dessinee": true,
+          "cotePx": 134,
+          "largeurCartePx": 1310,
+          "tient": true
+        },
+        {
+          "participants": 120,
+          "dessinee": false,
+          "cotePx": null,
+          "largeurCartePx": 1310,
+          "tient": false
+        },
+        {
+          "participants": 8,
+          "dessinee": true,
+          "cotePx": 134,
+          "largeurCartePx": 1310,
+          "tient": true
+        },
+        {
+          "participants": 120,
+          "dessinee": false,
+          "cotePx": null,
+          "largeurCartePx": 1310,
+          "tient": false
+        },
+        {
+          "participants": 64,
+          "dessinee": false,
+          "cotePx": null,
+          "largeurCartePx": 1310,
+          "tient": false
+        },
+        {
+          "participants": 36,
+          "dessinee": true,
+          "cotePx": 29,
+          "largeurCartePx": 1310,
+          "tient": true
+        },
+        {
+          "participants": 50,
+          "dessinee": false,
+          "cotePx": null,
+          "largeurCartePx": 1310,
+          "tient": false
+        },
+        {
+          "participants": 43,
+          "dessinee": true,
+          "cotePx": 24,
+          "largeurCartePx": 1310,
+          "tient": true
+        },
+        {
+          "participants": 46,
+          "dessinee": false,
+          "cotePx": null,
+          "largeurCartePx": 1310,
+          "tient": false
+        },
+        {
+          "participants": 44,
+          "dessinee": true,
+          "cotePx": 24,
+          "largeurCartePx": 1310,
+          "tient": true
+        },
+        {
+          "participants": 45,
+          "dessinee": false,
+          "cotePx": null,
+          "largeurCartePx": 1310,
+          "tient": false
+        },
+        {
+          "participants": 43,
+          "dessinee": true,
+          "cotePx": 24,
+          "largeurCartePx": 1310,
+          "tient": true
+        },
+        {
+          "participants": 44,
+          "dessinee": true,
+          "cotePx": 24,
+          "largeurCartePx": 1310,
+          "tient": true
+        },
+        {
+          "participants": 45,
+          "dessinee": false,
+          "cotePx": null,
+          "largeurCartePx": 1310,
+          "tient": false
+        }
+      ],
+      "refus": null
+    },
+    {
+      "nom": "LARGEUR_TRONCATURE_NOM_PX",
+      "unite": "px",
+      "valeurProposee": 168,
+      "critere": "la largeur rendue de 14 fois le glyphe le plus large de l’alphabet visé — lettres latines de base, supplément Latin-1, Œ, œ, Ÿ —, intitulé entier d’une ligne de la vue des collisions, arrondie au pixel supérieur",
+      "police": "Noto Sans",
+      "ralentissementCpu": 1,
+      "glyphe": "M",
+      "largeurGlyphePx": 12,
+      "nomReference": "MMMMMMMMMMMMMM",
+      "largeurNomPx": 168,
+      "largeurRenduePx": 168,
+      "droiteIntitulePx": 188,
+      "axePx": 198,
+      "refus": null
+    },
+    {
+      "nom": "DUREE_GENERATION_PAR_DEFAUT",
+      "unite": "ms",
+      "valeurProposee": 676.5,
+      "critere": "médiane de 3 générations au réglage par défaut, 5 × 200000 mouvements sur 5 travailleurs, grande démonstration",
+      "courbe": [
+        {
+          "coeurs": 5,
+          "dureesMs": [
+            676.5,
+            678.3,
+            658.1
+          ],
+          "medianeMs": 676.5
+        }
+      ],
+      "ralentissementCpu": 1
+    },
+    {
+      "nom": "TEMPS_IMAGE_LISTES",
+      "unite": "ms",
+      "valeurProposee": null,
+      "critere": "p95 du temps par image d’un glissement de 60 pas, médiane de 3 glissements, grande démonstration, 33 listes dessinées à tout k ; tenu quand il vaut au plus 33 ms à ×4, à tout k de l’ajusté à 1",
+      "critereMs": 33,
+      "ralentissementCpu": 4,
+      "seuil": {
+        "k": 0.16745825320593202,
+        "tenuPartout": true,
+        "jamaisTenu": false
+      },
+      "pireP95Ms": 20.80000000000291,
+      "courbe": [
+        {
+          "k": 0.16745825320593202,
+          "ralentissementCpu": 1,
+          "p95Ms": 11.600000000000364,
+          "glissements": [
+            {
+              "images": 66,
+              "medianeMs": 9.25,
+              "p95Ms": 11,
+              "maxMs": 12.100000000000136
+            },
+            {
+              "images": 67,
+              "medianeMs": 8,
+              "p95Ms": 12.5,
+              "maxMs": 15.899999999999864
+            },
+            {
+              "images": 63,
+              "medianeMs": 7.2999999999999545,
+              "p95Ms": 11.600000000000364,
+              "maxMs": 13.200000000000273
+            }
+          ]
+        },
+        {
+          "k": 0.16745825320593202,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.199999999999818,
+          "glissements": [
+            {
+              "images": 361,
+              "medianeMs": 2,
+              "p95Ms": 20.199999999999818,
+              "maxMs": 34.100000000000364
+            },
+            {
+              "images": 329,
+              "medianeMs": 2.199999999999818,
+              "p95Ms": 20.199999999999818,
+              "maxMs": 71.19999999999982
+            },
+            {
+              "images": 331,
+              "medianeMs": 2.2000000000007276,
+              "p95Ms": 20.19999999999891,
+              "maxMs": 54.399999999999636
+            }
+          ]
+        },
+        {
+          "k": 0.18420407852652523,
+          "ralentissementCpu": 1,
+          "p95Ms": 11.599999999998545,
+          "glissements": [
+            {
+              "images": 64,
+              "medianeMs": 8.899999999999636,
+              "p95Ms": 11.599999999998545,
+              "maxMs": 14.699999999998909
+            },
+            {
+              "images": 66,
+              "medianeMs": 8.850000000000364,
+              "p95Ms": 12.199999999998909,
+              "maxMs": 15.600000000000364
+            },
+            {
+              "images": 72,
+              "medianeMs": 8.600000000000364,
+              "p95Ms": 11.100000000000364,
+              "maxMs": 17.099999999998545
+            }
+          ]
+        },
+        {
+          "k": 0.18420407852652523,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.299999999999272,
+          "glissements": [
+            {
+              "images": 337,
+              "medianeMs": 2.2000000000007276,
+              "p95Ms": 20.399999999999636,
+              "maxMs": 54.80000000000109
+            },
+            {
+              "images": 318,
+              "medianeMs": 2.25,
+              "p95Ms": 20.200000000000728,
+              "maxMs": 52.80000000000291
+            },
+            {
+              "images": 376,
+              "medianeMs": 2.2000000000007276,
+              "p95Ms": 20.299999999999272,
+              "maxMs": 53.70000000000073
+            }
+          ]
+        },
+        {
+          "k": 0.20262448637917777,
+          "ralentissementCpu": 1,
+          "p95Ms": 12.400000000001455,
+          "glissements": [
+            {
+              "images": 66,
+              "medianeMs": 8.650000000001455,
+              "p95Ms": 10.200000000000728,
+              "maxMs": 15.299999999999272
+            },
+            {
+              "images": 66,
+              "medianeMs": 8.450000000000728,
+              "p95Ms": 12.400000000001455,
+              "maxMs": 15.099999999998545
+            },
+            {
+              "images": 66,
+              "medianeMs": 8.399999999997817,
+              "p95Ms": 14.399999999997817,
+              "maxMs": 15.299999999999272
+            }
+          ]
+        },
+        {
+          "k": 0.20262448637917777,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.200000000000728,
+          "glissements": [
+            {
+              "images": 298,
+              "medianeMs": 2.2999999999992724,
+              "p95Ms": 20.200000000000728,
+              "maxMs": 53.20000000000073
+            },
+            {
+              "images": 342,
+              "medianeMs": 2.2999999999992724,
+              "p95Ms": 20.200000000000728,
+              "maxMs": 51.80000000000291
+            },
+            {
+              "images": 391,
+              "medianeMs": 2.2000000000007276,
+              "p95Ms": 20.399999999997817,
+              "maxMs": 53.70000000000073
+            }
+          ]
+        },
+        {
+          "k": 0.22288693501709556,
+          "ralentissementCpu": 1,
+          "p95Ms": 12,
+          "glissements": [
+            {
+              "images": 67,
+              "medianeMs": 9.100000000002183,
+              "p95Ms": 12,
+              "maxMs": 13
+            },
+            {
+              "images": 64,
+              "medianeMs": 8.299999999995634,
+              "p95Ms": 9.700000000004366,
+              "maxMs": 16.400000000001455
+            },
+            {
+              "images": 66,
+              "medianeMs": 8.750000000003638,
+              "p95Ms": 12.299999999995634,
+              "maxMs": 16.400000000001455
+            }
+          ]
+        },
+        {
+          "k": 0.22288693501709556,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.19999999999709,
+          "glissements": [
+            {
+              "images": 341,
+              "medianeMs": 2.099999999998545,
+              "p95Ms": 20.10000000000582,
+              "maxMs": 69.69999999999709
+            },
+            {
+              "images": 308,
+              "medianeMs": 2.400000000001455,
+              "p95Ms": 20.200000000004366,
+              "maxMs": 55.299999999995634
+            },
+            {
+              "images": 301,
+              "medianeMs": 2.5,
+              "p95Ms": 20.19999999999709,
+              "maxMs": 55.599999999998545
+            }
+          ]
+        },
+        {
+          "k": 0.24517562851880514,
+          "ralentissementCpu": 1,
+          "p95Ms": 12.599999999998545,
+          "glissements": [
+            {
+              "images": 66,
+              "medianeMs": 8.599999999998545,
+              "p95Ms": 12.700000000004366,
+              "maxMs": 15.39999999999418
+            },
+            {
+              "images": 64,
+              "medianeMs": 8.900000000001455,
+              "p95Ms": 12,
+              "maxMs": 14.099999999998545
+            },
+            {
+              "images": 65,
+              "medianeMs": 9.299999999995634,
+              "p95Ms": 12.599999999998545,
+              "maxMs": 13.299999999995634
+            }
+          ]
+        },
+        {
+          "k": 0.24517562851880514,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.099999999998545,
+          "glissements": [
+            {
+              "images": 300,
+              "medianeMs": 2.3000000000029104,
+              "p95Ms": 20.099999999998545,
+              "maxMs": 53.400000000001455
+            },
+            {
+              "images": 325,
+              "medianeMs": 2.3000000000029104,
+              "p95Ms": 20.099999999998545,
+              "maxMs": 54.10000000000582
+            },
+            {
+              "images": 335,
+              "medianeMs": 2.400000000001455,
+              "p95Ms": 20.099999999998545,
+              "maxMs": 54.80000000000291
+            }
+          ]
+        },
+        {
+          "k": 0.2696931913706857,
+          "ralentissementCpu": 1,
+          "p95Ms": 9.400000000001455,
+          "glissements": [
+            {
+              "images": 79,
+              "medianeMs": 8.299999999995634,
+              "p95Ms": 13.400000000001455,
+              "maxMs": 17.19999999999709
+            },
+            {
+              "images": 134,
+              "medianeMs": 0.75,
+              "p95Ms": 9.39999999999418,
+              "maxMs": 17.30000000000291
+            },
+            {
+              "images": 164,
+              "medianeMs": 0.4000000000014552,
+              "p95Ms": 9.400000000001455,
+              "maxMs": 14.19999999999709
+            }
+          ]
+        },
+        {
+          "k": 0.2696931913706857,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.299999999995634,
+          "glissements": [
+            {
+              "images": 318,
+              "medianeMs": 2.25,
+              "p95Ms": 20.299999999995634,
+              "maxMs": 54.19999999999709
+            },
+            {
+              "images": 311,
+              "medianeMs": 2.2999999999956344,
+              "p95Ms": 20.299999999995634,
+              "maxMs": 54.60000000000582
+            },
+            {
+              "images": 296,
+              "medianeMs": 2.2000000000043656,
+              "p95Ms": 20.099999999998545,
+              "maxMs": 53.599999999998545
+            }
+          ]
+        },
+        {
+          "k": 0.2966625105077543,
+          "ralentissementCpu": 1,
+          "p95Ms": 13.5,
+          "glissements": [
+            {
+              "images": 69,
+              "medianeMs": 8.80000000000291,
+              "p95Ms": 11.799999999995634,
+              "maxMs": 16.299999999995634
+            },
+            {
+              "images": 69,
+              "medianeMs": 8.299999999995634,
+              "p95Ms": 13.5,
+              "maxMs": 15.69999999999709
+            },
+            {
+              "images": 74,
+              "medianeMs": 8.69999999999709,
+              "p95Ms": 13.5,
+              "maxMs": 14.900000000001455
+            }
+          ]
+        },
+        {
+          "k": 0.2966625105077543,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.10000000000582,
+          "glissements": [
+            {
+              "images": 309,
+              "medianeMs": 2.3999999999941792,
+              "p95Ms": 20.099999999998545,
+              "maxMs": 53.30000000000291
+            },
+            {
+              "images": 290,
+              "medianeMs": 2.5,
+              "p95Ms": 20.29999999998836,
+              "maxMs": 53.59999999999127
+            },
+            {
+              "images": 301,
+              "medianeMs": 3.599999999991269,
+              "p95Ms": 20.10000000000582,
+              "maxMs": 55
+            }
+          ]
+        },
+        {
+          "k": 0.32632876155852975,
+          "ralentissementCpu": 1,
+          "p95Ms": 11.89999999999418,
+          "glissements": [
+            {
+              "images": 69,
+              "medianeMs": 8.5,
+              "p95Ms": 12.200000000011642,
+              "maxMs": 16.09999999999127
+            },
+            {
+              "images": 69,
+              "medianeMs": 8.200000000011642,
+              "p95Ms": 11.89999999999418,
+              "maxMs": 15.89999999999418
+            },
+            {
+              "images": 72,
+              "medianeMs": 8.10000000000582,
+              "p95Ms": 11.60000000000582,
+              "maxMs": 15.39999999999418
+            }
+          ]
+        },
+        {
+          "k": 0.32632876155852975,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.19999999999709,
+          "glissements": [
+            {
+              "images": 303,
+              "medianeMs": 2.2999999999883585,
+              "p95Ms": 19.89999999999418,
+              "maxMs": 53
+            },
+            {
+              "images": 331,
+              "medianeMs": 2.1999999999970896,
+              "p95Ms": 20.19999999999709,
+              "maxMs": 54.59999999999127
+            },
+            {
+              "images": 330,
+              "medianeMs": 2.2000000000116415,
+              "p95Ms": 20.20000000001164,
+              "maxMs": 54.19999999999709
+            }
+          ]
+        },
+        {
+          "k": 0.3589616377143828,
+          "ralentissementCpu": 1,
+          "p95Ms": 11.60000000000582,
+          "glissements": [
+            {
+              "images": 71,
+              "medianeMs": 8.200000000011642,
+              "p95Ms": 12,
+              "maxMs": 14.900000000008731
+            },
+            {
+              "images": 69,
+              "medianeMs": 8.5,
+              "p95Ms": 9.900000000008731,
+              "maxMs": 14.5
+            },
+            {
+              "images": 75,
+              "medianeMs": 8.30000000000291,
+              "p95Ms": 11.60000000000582,
+              "maxMs": 15.10000000000582
+            }
+          ]
+        },
+        {
+          "k": 0.3589616377143828,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.09999999999127,
+          "glissements": [
+            {
+              "images": 275,
+              "medianeMs": 2.2000000000116415,
+              "p95Ms": 20.19999999999709,
+              "maxMs": 55.10000000000582
+            },
+            {
+              "images": 311,
+              "medianeMs": 2.400000000008731,
+              "p95Ms": 19.90000000000873,
+              "maxMs": 54.69999999999709
+            },
+            {
+              "images": 282,
+              "medianeMs": 2.400000000008731,
+              "p95Ms": 20.09999999999127,
+              "maxMs": 53.39999999999418
+            }
+          ]
+        },
+        {
+          "k": 0.39485780148582106,
+          "ralentissementCpu": 1,
+          "p95Ms": 11.69999999999709,
+          "glissements": [
+            {
+              "images": 70,
+              "medianeMs": 8.10000000000582,
+              "p95Ms": 11.60000000000582,
+              "maxMs": 15.10000000000582
+            },
+            {
+              "images": 79,
+              "medianeMs": 8.099999999991269,
+              "p95Ms": 11.69999999999709,
+              "maxMs": 15.5
+            },
+            {
+              "images": 72,
+              "medianeMs": 7.900000000008731,
+              "p95Ms": 12.39999999999418,
+              "maxMs": 15.19999999999709
+            }
+          ]
+        },
+        {
+          "k": 0.39485780148582106,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.10000000000582,
+          "glissements": [
+            {
+              "images": 298,
+              "medianeMs": 2.3000000000029104,
+              "p95Ms": 20.19999999999709,
+              "maxMs": 53.30000000000291
+            },
+            {
+              "images": 298,
+              "medianeMs": 2.5,
+              "p95Ms": 19.90000000000873,
+              "maxMs": 71.19999999999709
+            },
+            {
+              "images": 347,
+              "medianeMs": 2.1999999999970896,
+              "p95Ms": 20.10000000000582,
+              "maxMs": 53.69999999999709
+            }
+          ]
+        },
+        {
+          "k": 0.4343435816344032,
+          "ralentissementCpu": 1,
+          "p95Ms": 11.5,
+          "glissements": [
+            {
+              "images": 76,
+              "medianeMs": 8.69999999999709,
+              "p95Ms": 11.5,
+              "maxMs": 17.19999999999709
+            },
+            {
+              "images": 147,
+              "medianeMs": 0.8999999999941792,
+              "p95Ms": 11.19999999999709,
+              "maxMs": 15.400000000008731
+            },
+            {
+              "images": 137,
+              "medianeMs": 1.4000000000087311,
+              "p95Ms": 12.10000000000582,
+              "maxMs": 15.5
+            }
+          ]
+        },
+        {
+          "k": 0.4343435816344032,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.40000000000873,
+          "glissements": [
+            {
+              "images": 268,
+              "medianeMs": 2.7000000000043656,
+              "p95Ms": 20.40000000000873,
+              "maxMs": 71.40000000000873
+            },
+            {
+              "images": 320,
+              "medianeMs": 2.750000000007276,
+              "p95Ms": 20.39999999999418,
+              "maxMs": 88.09999999999127
+            },
+            {
+              "images": 287,
+              "medianeMs": 2.6000000000058208,
+              "p95Ms": 20.60000000000582,
+              "maxMs": 88.39999999999418
+            }
+          ]
+        },
+        {
+          "k": 0.47777793979784355,
+          "ralentissementCpu": 1,
+          "p95Ms": 10.19999999999709,
+          "glissements": [
+            {
+              "images": 73,
+              "medianeMs": 8.80000000000291,
+              "p95Ms": 13.39999999999418,
+              "maxMs": 17.69999999999709
+            },
+            {
+              "images": 179,
+              "medianeMs": 1.5,
+              "p95Ms": 9.30000000000291,
+              "maxMs": 17
+            },
+            {
+              "images": 187,
+              "medianeMs": 1.5,
+              "p95Ms": 10.19999999999709,
+              "maxMs": 18.89999999999418
+            }
+          ]
+        },
+        {
+          "k": 0.47777793979784355,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.80000000000291,
+          "glissements": [
+            {
+              "images": 294,
+              "medianeMs": 2.6000000000058208,
+              "p95Ms": 20.80000000000291,
+              "maxMs": 107
+            },
+            {
+              "images": 341,
+              "medianeMs": 2.6999999999970896,
+              "p95Ms": 20.5,
+              "maxMs": 88.69999999999709
+            },
+            {
+              "images": 340,
+              "medianeMs": 2.4500000000043656,
+              "p95Ms": 20.80000000000291,
+              "maxMs": 89.39999999999418
+            }
+          ]
+        },
+        {
+          "k": 0.525555733777628,
+          "ralentissementCpu": 1,
+          "p95Ms": 11.19999999999709,
+          "glissements": [
+            {
+              "images": 94,
+              "medianeMs": 8.19999999999709,
+              "p95Ms": 13.10000000000582,
+              "maxMs": 17.30000000000291
+            },
+            {
+              "images": 162,
+              "medianeMs": 0.6999999999970896,
+              "p95Ms": 11.19999999999709,
+              "maxMs": 17.5
+            },
+            {
+              "images": 182,
+              "medianeMs": 1.5,
+              "p95Ms": 9.099999999991269,
+              "maxMs": 17.30000000000291
+            }
+          ]
+        },
+        {
+          "k": 0.525555733777628,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.60000000000582,
+          "glissements": [
+            {
+              "images": 276,
+              "medianeMs": 2.5500000000029104,
+              "p95Ms": 20.59999999999127,
+              "maxMs": 89.39999999999418
+            },
+            {
+              "images": 309,
+              "medianeMs": 2.8999999999941792,
+              "p95Ms": 20.60000000000582,
+              "maxMs": 88.5
+            },
+            {
+              "images": 305,
+              "medianeMs": 2.3999999999941792,
+              "p95Ms": 20.60000000000582,
+              "maxMs": 90.10000000000582
+            }
+          ]
+        },
+        {
+          "k": 0.5781113071553908,
+          "ralentissementCpu": 1,
+          "p95Ms": 12.5,
+          "glissements": [
+            {
+              "images": 70,
+              "medianeMs": 9.80000000000291,
+              "p95Ms": 13.10000000000582,
+              "maxMs": 17.60000000000582
+            },
+            {
+              "images": 147,
+              "medianeMs": 0.8000000000174623,
+              "p95Ms": 12.300000000017462,
+              "maxMs": 17.60000000000582
+            },
+            {
+              "images": 140,
+              "medianeMs": 0.6999999999970896,
+              "p95Ms": 12.5,
+              "maxMs": 18
+            }
+          ]
+        },
+        {
+          "k": 0.5781113071553908,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.5,
+          "glissements": [
+            {
+              "images": 284,
+              "medianeMs": 2.5,
+              "p95Ms": 20.29999999998836,
+              "maxMs": 88.80000000001746
+            },
+            {
+              "images": 357,
+              "medianeMs": 2.5,
+              "p95Ms": 20.5,
+              "maxMs": 88.69999999998254
+            },
+            {
+              "images": 315,
+              "medianeMs": 2.599999999976717,
+              "p95Ms": 20.70000000001164,
+              "maxMs": 105.80000000001746
+            }
+          ]
+        },
+        {
+          "k": 0.63592243787093,
+          "ralentissementCpu": 1,
+          "p95Ms": 10.799999999988358,
+          "glissements": [
+            {
+              "images": 68,
+              "medianeMs": 9.60000000000582,
+              "p95Ms": 14.89999999999418,
+              "maxMs": 17.60000000000582
+            },
+            {
+              "images": 154,
+              "medianeMs": 1.0500000000029104,
+              "p95Ms": 10.799999999988358,
+              "maxMs": 17.20000000001164
+            },
+            {
+              "images": 217,
+              "medianeMs": 1.5,
+              "p95Ms": 8.799999999988358,
+              "maxMs": 19.39999999999418
+            }
+          ]
+        },
+        {
+          "k": 0.63592243787093,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.599999999976717,
+          "glissements": [
+            {
+              "images": 340,
+              "medianeMs": 2.5,
+              "p95Ms": 20.599999999976717,
+              "maxMs": 88.70000000001164
+            },
+            {
+              "images": 326,
+              "medianeMs": 2.5,
+              "p95Ms": 20.60000000000582,
+              "maxMs": 89.29999999998836
+            },
+            {
+              "images": 352,
+              "medianeMs": 2.5,
+              "p95Ms": 20.5,
+              "maxMs": 88.10000000000582
+            }
+          ]
+        },
+        {
+          "k": 0.699514681658023,
+          "ralentissementCpu": 1,
+          "p95Ms": 10.200000000011642,
+          "glissements": [
+            {
+              "images": 77,
+              "medianeMs": 8.39999999999418,
+              "p95Ms": 13.5,
+              "maxMs": 17.29999999998836
+            },
+            {
+              "images": 191,
+              "medianeMs": 0.7999999999883585,
+              "p95Ms": 10.200000000011642,
+              "maxMs": 17.5
+            },
+            {
+              "images": 179,
+              "medianeMs": 0.7999999999883585,
+              "p95Ms": 10,
+              "maxMs": 17.29999999998836
+            }
+          ]
+        },
+        {
+          "k": 0.699514681658023,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.39999999999418,
+          "glissements": [
+            {
+              "images": 344,
+              "medianeMs": 2.5499999999883585,
+              "p95Ms": 20.39999999999418,
+              "maxMs": 88.20000000001164
+            },
+            {
+              "images": 341,
+              "medianeMs": 2.5,
+              "p95Ms": 20.5,
+              "maxMs": 88.39999999999418
+            },
+            {
+              "images": 306,
+              "medianeMs": 2.5,
+              "p95Ms": 20.39999999999418,
+              "maxMs": 88.60000000000582
+            }
+          ]
+        },
+        {
+          "k": 0.7694661498238253,
+          "ralentissementCpu": 1,
+          "p95Ms": 10.199999999982538,
+          "glissements": [
+            {
+              "images": 71,
+              "medianeMs": 8.89999999999418,
+              "p95Ms": 13.400000000023283,
+              "maxMs": 16.89999999999418
+            },
+            {
+              "images": 206,
+              "medianeMs": 0.7000000000116415,
+              "p95Ms": 9.699999999982538,
+              "maxMs": 17.60000000000582
+            },
+            {
+              "images": 197,
+              "medianeMs": 0.6000000000058208,
+              "p95Ms": 10.199999999982538,
+              "maxMs": 18.20000000001164
+            }
+          ]
+        },
+        {
+          "k": 0.7694661498238253,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.300000000017462,
+          "glissements": [
+            {
+              "images": 338,
+              "medianeMs": 2.3999999999941792,
+              "p95Ms": 20.5,
+              "maxMs": 89.39999999999418
+            },
+            {
+              "images": 342,
+              "medianeMs": 2.3000000000029104,
+              "p95Ms": 20.300000000017462,
+              "maxMs": 88.89999999999418
+            },
+            {
+              "images": 325,
+              "medianeMs": 2.3000000000174623,
+              "p95Ms": 20.20000000001164,
+              "maxMs": 88.20000000001164
+            }
+          ]
+        },
+        {
+          "k": 0.846412764806208,
+          "ralentissementCpu": 1,
+          "p95Ms": 10.799999999988358,
+          "glissements": [
+            {
+              "images": 77,
+              "medianeMs": 8.39999999999418,
+              "p95Ms": 12.39999999999418,
+              "maxMs": 17.60000000000582
+            },
+            {
+              "images": 185,
+              "medianeMs": 0.7999999999883585,
+              "p95Ms": 10.799999999988358,
+              "maxMs": 18.5
+            },
+            {
+              "images": 181,
+              "medianeMs": 0.7999999999883585,
+              "p95Ms": 10,
+              "maxMs": 17.60000000000582
+            }
+          ]
+        },
+        {
+          "k": 0.846412764806208,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.5,
+          "glissements": [
+            {
+              "images": 292,
+              "medianeMs": 2.6000000000058208,
+              "p95Ms": 20.60000000000582,
+              "maxMs": 89.10000000000582
+            },
+            {
+              "images": 359,
+              "medianeMs": 2.3999999999941792,
+              "p95Ms": 20.5,
+              "maxMs": 88.60000000000582
+            },
+            {
+              "images": 327,
+              "medianeMs": 2.2999999999883585,
+              "p95Ms": 20.39999999999418,
+              "maxMs": 89.5
+            }
+          ]
+        },
+        {
+          "k": 0.9310540412868289,
+          "ralentissementCpu": 1,
+          "p95Ms": 10,
+          "glissements": [
+            {
+              "images": 72,
+              "medianeMs": 8.55000000000291,
+              "p95Ms": 12.199999999982538,
+              "maxMs": 17.599999999976717
+            },
+            {
+              "images": 187,
+              "medianeMs": 0.7000000000116415,
+              "p95Ms": 10,
+              "maxMs": 17.39999999999418
+            },
+            {
+              "images": 196,
+              "medianeMs": 0.5,
+              "p95Ms": 9.199999999982538,
+              "maxMs": 18.099999999976717
+            }
+          ]
+        },
+        {
+          "k": 0.9310540412868289,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.39999999999418,
+          "glissements": [
+            {
+              "images": 341,
+              "medianeMs": 2.5,
+              "p95Ms": 20.60000000000582,
+              "maxMs": 90.29999999998836
+            },
+            {
+              "images": 330,
+              "medianeMs": 2.5,
+              "p95Ms": 20.39999999999418,
+              "maxMs": 88.5
+            },
+            {
+              "images": 309,
+              "medianeMs": 2.5,
+              "p95Ms": 20.39999999999418,
+              "maxMs": 88.39999999999418
+            }
+          ]
+        },
+        {
+          "k": 1.0241594454155118,
+          "ralentissementCpu": 1,
+          "p95Ms": 10.10000000000582,
+          "glissements": [
+            {
+              "images": 72,
+              "medianeMs": 8.900000000008731,
+              "p95Ms": 13,
+              "maxMs": 17.5
+            },
+            {
+              "images": 206,
+              "medianeMs": 0.6999999999825377,
+              "p95Ms": 10.10000000000582,
+              "maxMs": 18.10000000000582
+            },
+            {
+              "images": 187,
+              "medianeMs": 0.7000000000116415,
+              "p95Ms": 9.699999999982538,
+              "maxMs": 17.89999999999418
+            }
+          ]
+        },
+        {
+          "k": 1.0241594454155118,
+          "ralentissementCpu": 4,
+          "p95Ms": 20.5,
+          "glissements": [
+            {
+              "images": 317,
+              "medianeMs": 2.2999999999883585,
+              "p95Ms": 20.5,
+              "maxMs": 87.60000000000582
+            },
+            {
+              "images": 322,
+              "medianeMs": 2.3999999999941792,
+              "p95Ms": 20.60000000000582,
+              "maxMs": 89
+            },
+            {
+              "images": 317,
+              "medianeMs": 2.400000000023283,
+              "p95Ms": 20.5,
+              "maxMs": 86.5
+            }
+          ]
+        }
+      ],
+      "verdict": "tenu"
+    }
+  ],
+  "plafondAPriori": [
+    {
+      "cle": "grande",
+      "N": 260,
+      "T": 33,
+      "R": 4,
+      "msPlafonds": 0.131,
+      "msDiagnostic": 1.33
+    },
+    {
+      "cle": "grande-sans-exception",
+      "N": 260,
+      "T": 33,
+      "R": 4,
+      "msPlafonds": 0.046,
+      "msDiagnostic": 0.479
+    },
+    {
+      "cle": "pessimiste",
+      "N": 260,
+      "T": 33,
+      "R": 10,
+      "msPlafonds": 11.862,
+      "msDiagnostic": 12.34
+    }
+  ],
+  "parallele": [
+    {
+      "coeurs": 1,
+      "dureesMs": [
+        430.1,
+        447.4,
+        433.2
+      ],
+      "medianeMs": 433.2,
+      "ralentissement": 1,
+      "modele": 1
+    },
+    {
+      "coeurs": 2,
+      "dureesMs": [
+        477.4,
+        484.9,
+        476.1
+      ],
+      "medianeMs": 477.4,
+      "ralentissement": 1.102,
+      "modele": 1.132
+    },
+    {
+      "coeurs": 4,
+      "dureesMs": [
+        591.1,
+        592.2,
+        576.8
+      ],
+      "medianeMs": 591.1,
+      "ralentissement": 1.364,
+      "modele": 1.396
+    },
+    {
+      "coeurs": 8,
+      "dureesMs": [
+        803.9,
+        829.3,
+        807.6
+      ],
+      "medianeMs": 807.6,
+      "ralentissement": 1.864,
+      "modele": 1.924
+    },
+    {
+      "coeurs": 16,
+      "dureesMs": [
+        1290.6,
+        1277.1,
+        1302.7
+      ],
+      "medianeMs": 1290.6,
+      "ralentissement": 2.979,
+      "modele": 2.979
+    }
+  ]
+}

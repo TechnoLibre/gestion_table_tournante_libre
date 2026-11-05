@@ -1,0 +1,72 @@
+/* © 2026 TechnoLibre (http://www.technolibre.ca)
+   SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 */
+
+/* La feuille d'impression de l'aperçu (§ 11.7). Le document imprimé est
+   l'élément [data-impression] : une feuille [data-feuille] par page, aux
+   dimensions du papier en mm, qui demande par sa propriété page l'une des
+   quatre pages nommées ci-dessous — un papier, une orientation, à la taille
+   du papier, sans marge : la feuille porte elle-même sa marge. La
+   pagination est explicite, une feuille par page, et rien n'est laissé au
+   moteur : chaque feuille se termine par un saut de page.
+
+   À l'impression, seul le document se peint. Le masquage est gardé par
+   body:has([data-impression]) : sans aperçu ouvert, rien n'est masqué, et
+   l'impression d'un autre écran par le navigateur le rend tel qu'il est,
+   jamais en page blanche. Sous l'aperçu, tout élément qui n'est ni le
+   document, ni dans lui, ni l'un de ses ancêtres, disparaît : le bandeau,
+   la barre de l'aperçu, la feuille gabarit. Les ancêtres du document
+   perdent marges, retraits, bords et hauteurs imposées : la première
+   feuille commence au coin de la première page, et la hauteur d'un
+   ancêtre ne tronque jamais le document à une page. */
+
+@page gtt-a4-portrait {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@page gtt-a4-paysage {
+  size: A4 landscape;
+  margin: 0;
+}
+
+@page gtt-lettre-portrait {
+  size: letter portrait;
+  margin: 0;
+}
+
+@page gtt-lettre-paysage {
+  size: letter landscape;
+  margin: 0;
+}
+
+@media print {
+  body:has([data-impression]) *:not([data-impression], [data-impression] *, :has([data-impression])) {
+    display: none !important;
+  }
+
+  body:has([data-impression]),
+  body:has([data-impression]) :has([data-impression]) {
+    display: block !important;
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: visible !important;
+  }
+
+  [data-impression] {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  [data-impression] [data-feuille] {
+    margin: 0 !important;
+    outline: none !important;
+    box-shadow: none !important;
+    break-after: page;
+  }
+}
